@@ -44,7 +44,11 @@ class Detector(ABC):
 DEFAULT_MODEL_PATH = str(Path(__file__).parent.parent / "models/portiloop_model_quant.tflite")
 # print(DEFAULT_MODEL_PATH)
 DEMO_MODEL_PATH = str(Path(__file__).parent.parent / "models/demo_model.tflite")
-
+def sigmoid(x):
+    if x > -4.05384:
+        return 0.978
+    else:
+        return 0.014
 
 class DataBuffer:
     """
@@ -75,18 +79,21 @@ class DemoDetector(Detector):
         self.window_size = 1250
         self.buffer = DataBuffer(self.window_size, 4)
         self.index = 0
+        self.threshold = threshold
         
     def detect(self, datapoints):
+        out_positive = []
         for point in datapoints:
             window = self.buffer.step(point)
             self.index += 1
             if self.index > self.window_size and self.index % 50 == 0:
                 output = [self.forward_tflite(np.expand_dims(wind, -1)) for wind in window]
                 for idx, out in enumerate(output):
-                    if out > -4.053:
-                        print(idx)
+                    out = sigmoid(out)
+                    if out > self.threshold:
+                        out_positive.append(idx)
+        return out_positive
                     
-                
     def forward_tflite(self, input):
         # convert input to int 
         input_scale, input_zero_point = self.input_details[0]["quantization"]
@@ -105,7 +112,7 @@ class DemoDetector(Detector):
         output_data_y = self.interpreter.get_tensor(self.output_details[0]['index'])
 
         output_scale, output_zero_point = self.output_details[0]["quantization"]
-        output_data_y = float(output_data_y - output_zero_point) * output_scale
+        output_data_y = (int(output_data_y) - output_zero_point) * output_scale
 
         return output_data_y
 

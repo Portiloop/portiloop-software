@@ -41,6 +41,21 @@ class Stimulator(ABC):
         pass
 
         
+class DemoStimulator(Stimulator):
+    def __init__(self, soundname=None, lsl_streamer=None):
+        pass
+    
+    def stimulate(self, detection_signal):
+        for i in detection_signal:
+            print(f"Stimulating on channel {i+1}")
+            
+    def test_stimulus(self):
+        print(f"TESTING_STIMULUS")
+        
+    def add_delayer(self, delayer):
+        pass
+
+        
 # Example implementation for sleep spindles
 
 class SleepSpindleRealTimeStimulator(Stimulator):
