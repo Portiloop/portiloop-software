@@ -43,6 +43,72 @@ class Detector(ABC):
         
 DEFAULT_MODEL_PATH = str(Path(__file__).parent.parent / "models/portiloop_model_quant.tflite")
 # print(DEFAULT_MODEL_PATH)
+DEMO_MODEL_PATH = str(Path(__file__).parent.parent / "models/demo_model.tflite")
+
+
+class DataBuffer:
+    """
+    A class to get the data in the right format for the model from a stream of data
+    """
+    def __init__(self, window_size, num_channels):
+        self.window_size = window_size
+
+        # Compute the total number of points to keep in memory as the buffer
+        self.data = np.zeros((num_channels, window_size))
+
+    def step(self, point):
+        # Shift the data
+        self.data[:, :-1] = self.data.copy()[:, 1:]
+        self.data[:, -1] = point
+        current_data = self.data.copy()
+        current_data = np.expand_dims(current_data, 1)
+        return current_data
+
+
+class DemoDetector(Detector):
+    def __init__(self, threshold=0.5, channel=None, model_path=None):
+        model_path = DEMO_MODEL_PATH if model_path is None else model_path
+        self.interpreter = edgetpu.make_interpreter(model_path)
+        self.interpreter.allocate_tensors()
+        self.input_details = self.interpreter.get_input_details()
+        self.output_details = self.interpreter.get_output_details()
+        self.window_size = 1250
+        self.buffer = DataBuffer(self.window_size, 4)
+        self.index = 0
+        
+    def detect(self, datapoints):
+        for point in datapoints:
+            window = self.buffer.step(point)
+            self.index += 1
+            if self.index > self.window_size and self.index % 50 == 0:
+                output = [self.forward_tflite(np.expand_dims(wind, -1)) for wind in window]
+                for idx, out in enumerate(output):
+                    if out > -4.053:
+                        print(idx)
+                    
+                
+    def forward_tflite(self, input):
+        # convert input to int 
+        input_scale, input_zero_point = self.input_details[0]["quantization"]
+        input = np.asarray(input) / input_scale + input_zero_point
+        input_data_x = input.astype(self.input_details[0]["dtype"])
+
+        # Test the model on random input data.
+        input_shape_x = self.input_details[0]['shape']
+
+        self.interpreter.set_tensor(self.input_details[0]['index'], input_data_x)
+
+        self.interpreter.invoke()
+
+        # The function `get_tensor()` returns a copy of the tensor data.
+        # Use `tensor()` in order to get a pointer to the tensor.
+        output_data_y = self.interpreter.get_tensor(self.output_details[0]['index'])
+
+        output_scale, output_zero_point = self.output_details[0]["quantization"]
+        output_data_y = float(output_data_y - output_zero_point) * output_scale
+
+        return output_data_y
+
 
 class SleepSpindleRealTimeDetector(Detector):
     def __init__(self,
