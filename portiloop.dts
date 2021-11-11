@@ -1,0 +1,141 @@
+/dts-v1/;
+/plugin/;
+
+///include/ "fsl-imx8mq-phanbell.dtb";
+
+/ {
+	compatible = "fsl,imx8mq-phanbell", "fsl,imx8mq";
+
+	fragment@0 {
+		target-path = "/hdmi@32c00000";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@1 {
+		target-path = "/dcss@0x32e00000";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@2 {
+		target-path = "/mipi_csi1@30a70000";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@3 {
+		target-path = "/mipi_csi2@30b60000";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@4 {
+		target-path = "/dsi_phy@30A00300";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@5 {
+		target-path = "/mipi_dsi@30A00000";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@6 {
+		target-path = "/csi1_bridge@30a90000";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@7 {
+		target-path = "/sound-rt5645";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@8 {
+		target-path = "/i2c@30a40000/rt5645@1a/";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@9 {
+		target-path = "/i2c@30a30000";
+		__overlay__ {
+			status = "okay";
+			
+			sgtl5000: audio-codec@a {
+				#sound-dai-cells = <0>;
+				compatible = "fsl,sgtl5000";
+				reg = <0x0a>;
+
+				clocks = <&clk IMX8MQ_CLK_SAI2_ROOT>;
+				assigned-clocks = <&clk IMX8MQ_CLK_SAI2>;
+				assigned-clock-parents = <&clk IMX8MQ_AUDIO_PLL1_OUT>;
+				assigned-clock-rates = <24576000>;
+
+				status = "okay";
+			};
+		};
+	};
+
+	fragment@a {
+		target-path = "/sai@308b0000";
+		__overlay__ {
+			#sound-dai-cells = <0>;
+			fsl,sai-mclk-direction-output;
+		};
+	};
+
+	fragment@b {
+		target-path = "/";
+		__overlay__ {
+			sound-sgtl5000 {
+				compatible = "simple-audio-card";
+				
+				simple-audio-card,name = "sgtl5000";
+				simple-audio-card,format = "i2s";
+				simple-audio-card,widgets = "Headphone", "Headphones";
+				simple-audio-card,routing = "Headphones", "HPOUTL",
+				                            "Headphones", "HPOUTR";
+
+				status = "okay";
+		
+				simple-audio-card,cpu {
+					sound-dai = <&sai2>;
+				};
+		
+				audio_codec: simple-audio-card,codec {
+					sound-dai = <&sgtl5000>;
+					clocks = <&clk IMX8MQ_CLK_SAI2_ROOT>;
+					frame-master;
+					bitclock-master;
+				};
+			};
+		};
+	};
+
+	fragment@c {
+		target-path = "/dummy-dai";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@d {
+		target-path = "/sound-header";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+};
