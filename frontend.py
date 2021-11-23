@@ -15,7 +15,7 @@ RREG = 0x20
 WREG = 0x40
 
 class Frontend:
-    def __init__():
+    def __init__(self):
         self.nrst = GPIO("/dev/gpiochip2", 9, "out")
         self.npwdn = GPIO("/dev/gpiochip2", 12, "out")
         self.start = GPIO("/dev/gpiochip3", 29, "out")
@@ -29,38 +29,38 @@ class Frontend:
         self.reset()
         self.stop_continuous()
 
-    def powerup():
+    def powerup(self):
         self.pwdn.write(True)
         sleep(0.1)
 
-    def powerdown():
+    def powerdown(self):
         self.pwdn.write(False)
 
-    def reset():
+    def reset(self):
         self.nrst.write(False)
         sleep(0.01)
         self.nrst.write(True)
         sleep(0.1)
 
-    def read_regs(start, len):
+    def read_regs(self, start, len):
         values = self.dev.xfer([RREG | (start & 0x1F), (len - 1) & 0x1F] + [0x00] * len)
         return values[2:]
 
-    def write_regs(start, values):
+    def write_regs(self, start, values):
         self.dev.xfer([WREG | (start & 0x1F), (len(values) - 1) & 0x1F] + values)
 
-    def read(len):
+    def read(self, len):
         values = self.dev.xfer([RDATA] + [0x00] * len)
         return values[1:]
 
-    def start_continuous():
+    def start_continuous(self):
         self.dev.xfer([RDATAC])
 
-    def stop_continuous():
+    def stop_continuous(self):
         self.dev.xfer([SDATAC])
 
-    def read_continuous(len):
+    def read_continuous(self, len):
         values = self.dev.xfer([0x00] * len)
 
-    def close():
+    def close(self):
         self.dev.close()

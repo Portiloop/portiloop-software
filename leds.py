@@ -1,7 +1,7 @@
 from periphery import GPIO, PWM
 
 class LEDs:
-    def __init__():
+    def __init__(self):
         self.led1_R = PWM(0, 0)
         self.led1_B = PWM(2, 0)
         self.led1_gnd = PWM(1, 0)
@@ -40,15 +40,15 @@ class LEDs:
         #self.led3_B.write(False)
         self.led3_gnd.write(False)
 
-    def aquisition(val):
+    def aquisition(self, val):
         self.aquisition.write(val)
 
     # red, green & blue are between 0 and 100 inclusively
-    def led1(red, green, blue):
+    def led1(self, red, green, blue):
         self.led1_R.duty_cycle = red / 100
         self.led1_B.duty_cycle = blue / 100
 
-    def led2(value):
+    def led2(self, value):
         if value == RED:
             self.led2_R.write(True)
             self.led2_B.write(False)
@@ -64,7 +64,7 @@ class LEDs:
         else:
             assert False, "Unknown color"
 
-    def led3(value):
+    def led3(self, value):
         if value == RED:
             self.led3_R.write(True)
         elif value == CLOSED:
@@ -72,7 +72,7 @@ class LEDs:
         else:
             assert False, "Unknown color"
 
-    def close():
+    def close(self):
         # LED1
         self.led1_R.disable()
         self.led1_B.disable()
