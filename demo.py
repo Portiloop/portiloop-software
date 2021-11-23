@@ -2,7 +2,7 @@ from time import sleep
 from playsound import playsound
 
 from frontend import Frontend
-from leds import LEDs
+from leds import LEDs, Color
 
 frontend = Frontend()
 leds = LEDs()
