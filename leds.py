@@ -59,25 +59,25 @@ class LEDs:
         self.led1_B.duty_cycle = blue / 100
 
     def led2(self, value: Color):
-        if value == RED:
+        if value == Color.RED:
             self.led2_R.write(True)
             self.led2_B.write(False)
-        elif value == BLUE:
+        elif value == Color.BLUE:
             self.led2_R.write(False)
             self.led2_B.write(True)
-        elif value == PURPLE:
+        elif value == Color.PURPLE:
             self.led2_R.write(True)
             self.led2_B.write(True)
-        elif value == CLOSED:
+        elif value == Color.CLOSED:
             self.led2_R.write(False)
             self.led2_B.write(False)
         else:
             assert False, "Unknown color"
 
     def led3(self, value: Color):
-        if value == RED:
+        if value == Color.RED:
             self.led3_R.write(True)
-        elif value == CLOSED:
+        elif value == Color.CLOSED:
             self.led3_R.write(False)
         else:
             assert False, "Unknown color"
