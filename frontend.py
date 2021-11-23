@@ -15,6 +15,36 @@ RDATA = 0x12
 RREG = 0x20
 WREG = 0x40
 
+class Reading:
+    def __init__(self, values: [int]):
+        print(values)
+        assert values[0] & 0xF0 == 0xC0, "Invalid readback"
+        self.loff_statp = (values[0] & 0x0F) << 4 | (values[1] & 0xF0) >> 4
+        self.loff_statn = (values[1] & 0x0F) << 4 | (values[2] & 0xF0) >> 4
+        self.gpios = values[2] & 0x0F
+
+        self._channels = [
+            (values[3 + i * 3] << 16) | (values[4 + i * 3] << 8) | values[5 + i * 3]
+            for i in range(8)
+        ]
+
+        print(self.loff_statp, self.loff_statn, self.gpios, self._channels)
+
+    def channels(self):
+        return self._channels
+
+    def gpio(idx: int):
+        assert 0 <= idx <= 3, "Invalid gpio index"
+        return (self.gpios >> idx) & 0x01 == 0x01
+
+    def loff_p(idx: int):
+        assert 0 <= idx <= 7, "Invalid loff index"
+        return (self.loff_statp >> idx) & 0x01 == 0x01
+
+    def loff_n(idx: int):
+        assert 0 <= idx <= 7, "Invalid loff index"
+        return (self.loff_statn >> idx) & 0x01 == 0x01
+
 class Frontend:
     def __init__(self):
         self.nrst = GPIO("/dev/gpiochip2", 9, "out")
@@ -50,9 +80,9 @@ class Frontend:
     def write_regs(self, start, values):
         self.dev.xfer([WREG | (start & 0x1F), (len(values) - 1) & 0x1F] + values)
 
-    def read(self, len):
-        values = self.dev.xfer([RDATA] + [0x00] * len)
-        return values[1:]
+    def read(self):
+        values = self.dev.xfer([RDATA] + [0x00] * 27)
+        return Reading(values[1:])
 
     def start_continuous(self):
         self.dev.xfer([RDATAC])
@@ -60,8 +90,9 @@ class Frontend:
     def stop_continuous(self):
         self.dev.xfer([SDATAC])
 
-    def read_continuous(self, len):
-        values = self.dev.xfer([0x00] * len)
+    def read_continuous(self):
+        values = self.dev.xfer([0x00] * 27)
+        return Reading(values)
 
     def close(self):
         self.dev.close()

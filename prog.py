@@ -1,8 +1,11 @@
 from time import sleep
 from playsound import playsound
+import numpy as np
+import matplotlib as plt
+import os
 
 from frontend import Frontend
-from leds import LEDs
+from leds import LEDs, Color
 
 FRONTEND_CONFIG = [
     0x3E, # Overwrite ID?
@@ -32,16 +35,16 @@ FRONTEND_CONFIG = [
 frontend = Frontend()
 leds = LEDs()
 
-playsound('sample.mp3')
-
 try:
-    data = frontend.read_reg(0x00, 1)
+    data = frontend.read_regs(0x00, 1)
     assert data == [0x3E], "Wrong output"
     print("EEG Frontend responsive")
+    leds.led2(Color.BLUE)
 
     print("Configuring EEG Frontend")
-    data = frontend.write_reg(0x00, FRONTEND_CONFIG)
+    data = frontend.write_regs(0x00, FRONTEND_CONFIG)
     print("EEG Frontend configured")
+    leds.led2(Color.PURPLE)
 
     leds.aquisition(True)
     sleep(0.5)
@@ -49,19 +52,11 @@ try:
     sleep(0.5)
     leds.aquisition(True)
 
-    for i in range(200):
-        red = (i % 10) * 10
-        blue = ((i % 100) // 10) * 10
-        leds.led1(red, 0, blue)
-        sleep(0.02)
-
-    for state in [RED, BLUE, PURPLE, CLOSED] * 3:
-        leds.led2(state)
-        sleep(0.2)
-
-    for state in [RED, CLOSED] * 3:
-        leds.led3(state)
-        sleep(0.2)
+    points = []
+    for x in range(2000):
+        sleep(0.001)
+        values = frontend.read()
+        print(values.channels())
 
 finally:
     frontend.close()
