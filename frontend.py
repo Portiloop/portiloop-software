@@ -17,7 +17,7 @@ WREG = 0x40
 class Frontend:
     def __init__(self):
         self.nrst = GPIO("/dev/gpiochip2", 9, "out")
-        self.npwdn = GPIO("/dev/gpiochip2", 12, "out")
+        self.pwdn = GPIO("/dev/gpiochip2", 12, "out")
         self.start = GPIO("/dev/gpiochip3", 29, "out")
         self.dev = SpiDev()
         self.dev.open(0, 0)
