@@ -14,7 +14,7 @@ class LEDs:
         #self.led3_B = GPIO("/dev/gpiochip2", 5, "out")
         self.led3_gnd = GPIO("/dev/gpiochip2", 8, "out")
 
-        self.aquisition = GPIO("/dev/gpiochip2", 20, "out")
+        self.acq = GPIO("/dev/gpiochip2", 20, "out")
 
         # Init LEDs
         # RGBs
@@ -41,7 +41,7 @@ class LEDs:
         self.led3_gnd.write(False)
 
     def aquisition(self, val):
-        self.aquisition.write(val)
+        self.acq.write(val)
 
     # red, green & blue are between 0 and 100 inclusively
     def led1(self, red, green, blue):
@@ -98,6 +98,6 @@ class LEDs:
         self.led3_gnd.close()
 
         # AQUISITION
-        self.aquisition.write(False)
-        self.aquisition.close()
+        self.acq.write(False)
+        self.acq.close()
 
