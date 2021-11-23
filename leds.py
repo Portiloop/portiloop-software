@@ -1,4 +1,11 @@
 from periphery import GPIO, PWM
+from enum import Enum
+
+class Color(Enum):
+    RED = 0
+    BLUE = 1
+    PURPLE = 2
+    CLOSED = 3
 
 class LEDs:
     def __init__(self):
@@ -40,15 +47,18 @@ class LEDs:
         #self.led3_B.write(False)
         self.led3_gnd.write(False)
 
-    def aquisition(self, val):
+    def aquisition(self, val: bool):
         self.acq.write(val)
 
     # red, green & blue are between 0 and 100 inclusively
-    def led1(self, red, green, blue):
+    def led1(self, red: int, green: int, blue: int):
+        assert 0 <= red <= 100, "Red should be between 0 and 100"
+        assert 0 <= green <= 100, "Green should be between 0 and 100"
+        assert 0 <= blue <= 100, "Blue should be between 0 and 100"
         self.led1_R.duty_cycle = red / 100
         self.led1_B.duty_cycle = blue / 100
 
-    def led2(self, value):
+    def led2(self, value: Color):
         if value == RED:
             self.led2_R.write(True)
             self.led2_B.write(False)
@@ -64,7 +74,7 @@ class LEDs:
         else:
             assert False, "Unknown color"
 
-    def led3(self, value):
+    def led3(self, value: Color):
         if value == RED:
             self.led3_R.write(True)
         elif value == CLOSED:
