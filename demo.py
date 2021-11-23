@@ -10,7 +10,7 @@ leds = LEDs()
 playsound('sample.mp3')
 
 try:
-    data = frontend.read_reg(0x00, 1)
+    data = frontend.read_regs(0x00, 1)
     assert data == [0x3E], "Wrong output"
     print("EEG Frontend responsive")
 
