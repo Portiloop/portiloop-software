@@ -17,7 +17,7 @@ WREG = 0x40
 
 class Reading:
     def __init__(self, values: [int]):
-        print(values)
+#         print(values)
         assert values[0] & 0xF0 == 0xC0, "Invalid readback"
         self.loff_statp = (values[0] & 0x0F) << 4 | (values[1] & 0xF0) >> 4
         self.loff_statn = (values[1] & 0x0F) << 4 | (values[2] & 0xF0) >> 4
@@ -28,7 +28,7 @@ class Reading:
             for i in range(8)
         ]
 
-        print(self.loff_statp, self.loff_statn, self.gpios, self._channels)
+#         print(self.loff_statp, self.loff_statn, self.gpios, self._channels)
 
     def channels(self):
         return self._channels
@@ -49,13 +49,14 @@ class Frontend:
     def __init__(self):
         self.nrst = GPIO("/dev/gpiochip2", 9, "out")
         self.pwdn = GPIO("/dev/gpiochip2", 12, "out")
-        self.start = GPIO("/dev/gpiochip3", 29, "out")
+        self._start = GPIO("/dev/gpiochip3", 29, "out")
+        self.drdy = GPIO("/dev/gpiochip3", 28, "in")
         self.dev = SpiDev()
         self.dev.open(0, 0)
-        self.dev.max_speed_hz = 8000000
+        self.dev.max_speed_hz = 1000000
         self.dev.mode = 0b01
 
-        self.start.write(False)
+        self._start.write(False)
         self.powerup()
         self.reset()
         self.stop_continuous()
@@ -93,6 +94,17 @@ class Frontend:
     def read_continuous(self):
         values = self.dev.xfer([0x00] * 27)
         return Reading(values)
+
+    def start(self):
+        self._start.write(True)
+        self.dev.xfer([START])
+
+    def stop(self):
+        self._start.write(False)
+        self.dev.xfer([STOP])
+
+    def is_ready(self):
+        return not self.drdy.read()
 
     def close(self):
         self.dev.close()
