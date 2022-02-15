@@ -3,16 +3,40 @@ import threading
 import time
 import logging
 import random
-import Queue
+from queue import Queue
 
-from frontend import Frontend
-from leds import LEDs, Color
+from hardware.frontend import Frontend
+from hardware.leds import LEDs, Color
 from portilooplot.jupyter_plot import ProgressPlot
 
 import ctypes
 import numpy as np
 import json
 
+FRONTEND_CONFIG =  [
+    0x3E, # ID (RO)
+    0x95, # CONFIG1 [95] [1, DAISY_EN(bar), CLK_EN, 1, 0, DR[2:0]] : Datarate = 500 SPS
+    0xD0, # CONFIG2 [C0] [1, 1, 0, INT_CAL, 0, CAL_AMP0, CAL_FREQ[1:0]]
+    0xE0, # CONFIG3 [E0] [PD_REFBUF(bar), 1, 1, BIAS_MEAS, BIASREF_INT, PD_BIAS(bar), BIAS_LOFF_SENS, BIAS_STAT] : Power-down reference buffer, no bias
+    0x00, # No lead-off
+    0x03, # CH1SET [60] [PD1, GAIN1[2:0], SRB2, MUX1[2:0]] test signal
+    0x00, # CH2SET
+    0x00, # CH3SET
+    0x00, # CH4SET voltage DVDD / 4
+    0x03, # CH5SET voltage 0.5 × (AVDD + AVSS)
+    0x03, # CH6SET
+    0x05, # CH7SET test
+    0x04, # CH8SET temperature
+    0x00, # BIAS_SENSP
+    0x00, # BIAS_SENSN
+    0xFF, # LOFF_SENSP Lead-off on all positive pins?
+    0xFF, # LOFF_SENSN Lead-off on all negative pins?
+    0x00, # Normal lead-off
+    0x00, # Lead-off positive status (RO)
+    0x00, # Lead-off negative status (RO)
+    0x00, # All GPIOs as output ?
+    0x20, # Enable SRB1
+]
 
 class Datapoint:
     '''
@@ -21,7 +45,7 @@ class Datapoint:
     def __init__(self, raw_datapoint, temperature=[], num_channels=8):
         # Initialize necessary data structures
         self.num_channels = num_channels
-        self.reading = np.array(num_channels, dtype=float)
+        self.reading = np.empty(num_channels, dtype=float)
 
         assert len(temperature) <= len(raw_datapoint), "Temperature array length must be lesser or equal to number of channels"
         self.temperature = temperature
@@ -114,21 +138,24 @@ class CaptureThread(threading.Thread):
                 
                 # Read values and add to q
                 values = self.frontend.read()
-                self.q.put(values)
+                self.q.put(values.channels())
                 
                 # Wait until reading is fully ompleted
                 while self.frontend.is_ready():
                     pass
 
             # Check for timeout
-            if time.time() - start_time > self.timeout:
-                break
+            if self.timeout is not None:
+                if time.time() - start_time > self.timeout:
+                    break
         return
 
     def init_checks(self):
         '''
         Run Initial threads to the registers to make sure we can start reading
         '''
+        print("Configuring EEG Frontend")
+        self.frontend.write_regs(0x00, FRONTEND_CONFIG)
         data = self.frontend.read_regs(0x00, len(FRONTEND_CONFIG))
         assert data == FRONTEND_CONFIG, f"Wrong config: {data} vs {FRONTEND_CONFIG}"
         self.frontend.start()
@@ -164,14 +191,15 @@ class FilterThread(threading.Thread):
             # Get an item from CaptureThread
             if not self.raw_q.empty():
                 raw_data = self.raw_q.get()
-            assert raw_data is not None, "Got a None item from CaptureThread in FilterThread"
-
+#             assert raw_data is not None, "Got a None item from CaptureThread in FilterThread"
+            if raw_data is None:
+                continue
             datapoint = Datapoint(raw_data, )
 
             # Put Item to all ConsumerThreads
             for q in self.qs:
                 if not q.full():
-                    q.put(item)
+                    q.put(datapoint)
         return
 
     def add_q(self, q):
@@ -279,9 +307,9 @@ class Capture:
         self.record = record
 
         # Initialize data structures for capture and filtering
-        raw_q = Queue.Queue()
-        self.capture_thread = CaptureThread(raw_q)
-        self.filter_thread = FilterThread(raw_q)
+        raw_q = Queue()
+        self.capture_thread = CaptureThread(raw_q, name='CapThread')
+        self.filter_thread = FilterThread(raw_q, name='FilterThread')
 
         # Declare data structures for viz and record functionality
         self.viz_q = None
@@ -299,8 +327,8 @@ class Capture:
             self.start_record()
 
     def start_viz(self):
-        self.viz_q = Queue.Queue()
-        self.viz_thread = DisplayThread(self.viz_q)
+        self.viz_q = Queue()
+        self.viz_thread = DisplayThread(self.viz_q, name='VizThread')
         self.filter_thread.add_q(self.viz_q)
         self.viz_thread.start()
 
@@ -310,8 +338,8 @@ class Capture:
         self.viz_thread.raise_exception()
 
     def start_record(self):
-        self.record_q = Queue.Queue()
-        self.record_thread = SaveThread(self.record_q)
+        self.record_q = Queue()
+        self.record_thread = SaveThread(self.record_q, name='RecThread')
         self.filter_thread.add_q(self.record_q)
         self.record_thread.start()
 
