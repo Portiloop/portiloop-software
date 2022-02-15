@@ -51,6 +51,7 @@ class Frontend:
         self.pwdn = GPIO("/dev/gpiochip2", 12, "out")
         self._start = GPIO("/dev/gpiochip3", 29, "out")
         self.drdy = GPIO("/dev/gpiochip3", 28, "in")
+        self.drdy.edge = "falling"
         self.dev = SpiDev()
         self.dev.open(0, 0)
         self.dev.max_speed_hz = 1000000
@@ -105,6 +106,11 @@ class Frontend:
 
     def is_ready(self):
         return not self.drdy.read()
+    
+    def wait_new_data(self):
+        self.drdy.poll(timeout=None)  # poll the falling edge event
+        self.drdy.read_event()  # consume the event
+        return self.read()  # read SPI with RDATA
 
     def close(self):
         self.dev.close()
