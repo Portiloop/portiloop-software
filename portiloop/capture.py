@@ -1,19 +1,17 @@
 from time import sleep
 import time
-from playsound import playsound
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 from pathlib import Path
 from datetime import datetime, timedelta
 import multiprocessing as mp
-from queue import Empty
 import warnings
 import shutil
-from pyedflib import highlevel
-from datetime import datetime
+from threading import Thread, Lock
 
 import matplotlib.pyplot as plt
+from EDFlib.edfwriter import EDFwriter
 
 from portilooplot.jupyter_plot import ProgressPlot
 from portiloop.hardware.frontend import Frontend
@@ -82,6 +80,8 @@ FRONTEND_CONFIG = [
     0x20, # Enable SRB1
 ]
 
+EDF_PATH = Path.home() / 'workspace' / 'edf_recording'
+
 def mod_config(config, datarate):
     possible_datarates = [(250, 0x06),
                           (500, 0x05),
@@ -99,23 +99,20 @@ def mod_config(config, datarate):
     new_cf1 = config[1] & 0xF8
     new_cf1 = new_cf1 | j
     config[1] = new_cf1
-    print(f"DEBUG: new cf1: {hex(config[1])}")
     return config
 
 def filter_24(value):
     return (value * 4.5) / (2**23 - 1)  # 23 because 1 bit is lost for sign
 
 def filter_2scomplement_np(value):
-    v = np.where((value & (1 << 23)) != 0, value - (1 << 24), value)
-    return filter_24(v)
+    return np.where((value & (1 << 23)) != 0, value - (1 << 24), value)
+
+def filter_np(value):
+    return filter_24(filter_2scomplement_np(value))
 
 class LiveDisplay():
-    def __init__(self, datapoint_dim=8, window_len=100):
-        self.datapoint_dim = datapoint_dim
-        self.queue = mp.Queue()
-        channel_names = [f"channel#{i+1}" for i in range(datapoint_dim)]
-        channel_names[0] = "voltage"
-        channel_names[7] = "temperature"
+    def __init__(self, channel_names, window_len=100):
+        self.datapoint_dim = len(channel_names)
         self.pp = ProgressPlot(plot_names=channel_names, max_window_len=window_len)
 
     def add_datapoints(self, datapoints):
@@ -136,14 +133,15 @@ class LiveDisplay():
         self.pp.update(disp_list)
 
 
-def _capture_process(q_data, q_out, q_in, duration, frequency, python_clock=True):
+def _capture_process(p_data_o, p_msg_io, duration, frequency, python_clock=True, time_msg_in=1.0):
     """
     Args:
-        q_data: multiprocessing.Queue: captured datapoints are put in the queue
-        q_out: mutliprocessing.Queue: to pass messages to the parent process
-            'STOP': end of the the process
-        q_in: mutliprocessing.Queue: to pass messages from the parent process
-            'STOP': stops the process
+        p_data_o: multiprocessing.Pipe: captured datapoints are put here
+        p_msg_io: mutliprocessing.Pipe: to communicate with the parent process
+        duration: float: max duration of the experiment in seconds
+        frequency: float: sampling frequency
+        ptyhon_clock: bool (default True): if True, the Coral clock is used, otherwise, the ADS interrupts are used
+        time_msg_in: float (default 1.0): min time between attempts to recv incomming messages
     """
     if duration <= 0:
         duration = np.inf
@@ -191,9 +189,10 @@ def _capture_process(q_data, q_out, q_in, duration, frequency, python_clock=True
         # first sample:
         reading = frontend.read()
         datapoint = reading.channels()
-        q_data.put(datapoint)
+        p_data_o.send(datapoint)
         
         t_next = t + sample_time
+        t_chk_msg = t + time_msg_in
         
         # sampling loop:
         while c and t < t_max:
@@ -206,46 +205,52 @@ def _capture_process(q_data, q_out, q_in, duration, frequency, python_clock=True
             else:
                 reading = frontend.wait_new_data()
             datapoint = reading.channels()
-            q_data.put(datapoint)
-            
+            p_data_o.send(datapoint)
 
-            # Check for messages  # this takes too long :/
-#             try:
-#                 message = q_in.get_nowait()
-#                 if message == 'STOP':
-#                     c = False
-#             except Empty:
-#                 pass
+            # Check for messages
+            if t >= t_chk_msg:
+                t_chk_msg = t + time_msg_in
+                if p_msg_io.poll():
+                    message = p_msg_io.recv()
+                    if message == 'STOP':
+                        c = False
             it += 1
         t = time.time()
         tot = (t - t_start) / it        
 
-        print(f"Average frequency: {1 / tot} Hz for {it} samples")
+        p_msg_io.send(("PRT", f"Average frequency: {1 / tot} Hz for {it} samples"))
 
         leds.aquisition(False)
 
     finally:
         frontend.close()
         leds.close()
-        q_in.close()
-        q_out.put('STOP')
+        p_msg_io.send('STOP')
+        p_msg_io.close()
+        p_data_o.close()
 
         
 class Capture:
     def __init__(self):
-        
-        self.filename = Path.home() / 'edf_recording' / f"recording_{now.strftime('%m_%d_%Y_%H_%M_%S')}.edf"
+        # {now.strftime('%m_%d_%Y_%H_%M_%S')}
+        self.filename = EDF_PATH / 'recording.edf'
         self._p_capture = None
         self.__capture_on = False
         self.frequency = 250
         self.duration = 10
         self.record = False
         self.display = False
-        self.recording_file = None
         self.python_clock = True
-        
-        self.binfile = None
-        self.temp_path = Path.home() / '.temp'
+        self.edf_writer = None
+        self.edf_buffer = []
+        self.nb_signals = 8
+        self.samples_per_datarecord_array = self.frequency
+        self.physical_max = 5
+        self.physical_min = -5
+        self.signal_labels = ['voltage', 'ch2', 'ch3', 'ch4', 'ch5', 'ch6', 'ch7', 'temperature']
+        self._lock_msg_out = Lock()
+        self._msg_out = None
+        self._t_capture = None
         
         # widgets
         
@@ -269,9 +274,8 @@ class Capture:
         )
         
         self.b_filename = widgets.Text(
-            value=self.filename,
-            description='Filename:',
-            placeholder='All files will be in the edf_recording folder'
+            value='recording.edf',
+            description='Recording:',
             disabled=False
         )
         
@@ -317,23 +321,53 @@ class Capture:
     def display_buttons(self):
         display(widgets.VBox([self.b_frequency,
                               self.b_duration,
+                              self.b_filename,
                               widgets.HBox([self.b_record, self.b_display]),
                               self.b_clock,
                               self.b_capture]))
+
+    def enable_buttons(self):
+        self.b_frequency.disabled = False
+        self.b_duration.disabled = False
+        self.b_filename.disabled = False
+        self.b_record.disabled = False
+        self.b_display.disabled = False
+        self.b_clock.disabled = False
     
+    def disable_buttons(self):
+        self.b_frequency.disabled = True
+        self.b_duration.disabled = True
+        self.b_filename.disabled = True
+        self.b_record.disabled = True
+        self.b_display.disabled = True
+        self.b_clock.disabled = True
+
     def on_b_capture(self, value):
         val = value['new']
         if val == 'Start':
-            self.start_capture(
-                record=self.record,
-                viz=self.display,
-                width=500,
-                python_clock=self.python_clock)
-        elif val == 'Stop':
             clear_output()
+            self.disable_buttons()
             self.display_buttons()
-        else:
-            print(f"This option is not supported: {val}.")
+            with self._lock_msg_out:
+                self._msg_out = None
+            if self._t_capture is not None:
+                warnings.warn("Capture already running, operation aborted.")
+                return
+            self._t_capture = Thread(target=self.start_capture,
+                                args=(self.record, self.display, 500, self.python_clock))
+            self._t_capture.start()
+#             self.start_capture(
+#                 record=self.record,
+#                 viz=self.display,
+#                 width=500,
+#                 python_clock=self.python_clock)
+        elif val == 'Stop':
+            with self._lock_msg_out:
+                self._msg_out = 'STOP'
+            assert self._t_capture is not None
+            self._t_capture.join()
+            self._t_capture = None
+            self.enable_buttons()
     
     def on_b_clock(self, value):
         val = value['new']
@@ -341,30 +375,26 @@ class Capture:
             self.python_clock = True
         elif val == 'ADS':
             self.python_clock = False
-        else:
-            print(f"This option is not supported: {val}.")
     
     def on_b_frequency(self, value):
         val = value['new']
         if val > 0:
             self.frequency = val
-        else:
-            print(f"Unsupported frequency: {val} Hz")
             
     def on_b_filename(self, value):
         val = value['new']
         if val != '':
-            self.filename = Path.home() / 'edf_recording' / val
+            if not val.endswith('.edf'):
+                val += '.edf'
+            self.filename = EDF_PATH / val
         else:
             now = datetime.now()
-            self.filename = Path.home() / 'edf_recording' / f"recording_{now.strftime('%m_%d_%Y_%H_%M_%S')}.edf"
+            self.filename = EDF_PATH / 'recording.edf'
         
     def on_b_duration(self, value):
         val = value['new']
         if val > 0:
             self.duration = val
-        else:
-            print(f"Unsupported duration: {val} s")
     
     def on_b_record(self, value):
         val = value['new']
@@ -375,110 +405,123 @@ class Capture:
         self.display = val
     
     def open_recording_file(self):
+        nb_signals = self.nb_signals
+        samples_per_datarecord_array = self.samples_per_datarecord_array
+        physical_max = self.physical_max
+        physical_min = self.physical_min
+        signal_labels = self.signal_labels
+
         print(f"Will store edf recording in {self.filename}")
-        os.mkdir(self.temp_path)
-        self.binfile = open(self.temp_path / 'data.bin', 'wb')
-    
+
+        self.edf_writer = EDFwriter(p_path=str(self.filename),
+                                    f_file_type=EDFwriter.EDFLIB_FILETYPE_EDFPLUS,
+                                    number_of_signals=nb_signals)
+        
+        for signal in range(nb_signals):
+            assert self.edf_writer.setSampleFrequency(signal, samples_per_datarecord_array) == 0
+            assert self.edf_writer.setPhysicalMaximum(signal, physical_max) == 0
+            assert self.edf_writer.setPhysicalMinimum(signal, physical_min) == 0
+            assert self.edf_writer.setDigitalMaximum(signal, 32767) == 0
+            assert self.edf_writer.setDigitalMinimum(signal, -32768) == 0
+            assert self.edf_writer.setSignalLabel(signal, signal_labels[signal]) == 0
+            assert self.edf_writer.setPhysicalDimension(signal, 'V') == 0
+
     def close_recording_file(self):
-        
-        print('Saving recording data...')
-        # Channel names
-        channels = ['Voltage', 'Ch2', 'Ch3', 'Ch4', 'Ch5', 'Ch6', 'Ch7', 'Temperature']
-        
-        # Read binary data
-        data = np.fromfile(self.temp_path / 'data.bin', dtype=float)
-        data = data.reshape((8, int(data.shape[0]/8)))
-        
-        # Declare and write EDF format file
-        signal_headers = highlevel.make_signal_headers(channels, sample_frequency=self.frequency)
-        header = highlevel.make_header(patientname='patient_x', gender='Female')
-        highlevel.write_edf(self.filename, data, signal_headers, header)
-        
-        # Close and delete temp binary file
-        self.binfile.close()        
-        shutil.rmtree(self.temp_path)
-        
-        print('...done')
+        assert self.edf_writer.close() == 0
     
     def add_recording_data(self, data):
-        np.array(data).tofile(self.binfile)
+        self.edf_buffer += data
+        if len(self.edf_buffer) >= self.samples_per_datarecord_array:
+            datarecord_array = self.edf_buffer[:self.samples_per_datarecord_array]
+            self.edf_buffer = self.edf_buffer[self.samples_per_datarecord_array:]
+            datarecord_array = np.array(datarecord_array).transpose()
+            assert len(datarecord_array) == self.nb_signals, f"len(data)={len(data)}!={self.nb_signals}"
+            for d in datarecord_array:
+                assert len(d) == self.samples_per_datarecord_array, f"{len(d)}!={self.samples_per_datarecord_array}"
+                assert self.edf_writer.writeSamples(d) == 0
 
     def start_capture(self,
-                      record=True,
-                      viz=False,
-                      width=500,
-                      python_clock=True):
-        self.q_messages_send = mp.Queue()
-        self.q_messages_recv = mp.Queue()
-        self.q_data = mp.Queue()
+                      record,
+                      viz,
+                      width,
+                      python_clock):
+        
+        p_msg_io, p_msg_io_2 = mp.Pipe()
+        p_data_i, p_data_o = mp.Pipe(duplex=False)
 
         if self.__capture_on:
-            print("Capture is already ongoing, ignoring command.")
+            warnings.warn("Capture is already ongoing, ignoring command.")
             return
         else:
             self.__capture_on = True
-        SAMPLE_TIME = 1 / frequency
-        self._p_capture = mp.Process(target=_capture_process, args=(self.q_data,
-                                                                    self.q_messages_recv,
-                                                                    self.q_messages_send,
-                                                                    self.duration,
-                                                                    self.frequency,
-                                                                    python_clock))
+        SAMPLE_TIME = 1 / self.frequency
+        self._p_capture = mp.Process(target=_capture_process,
+                                     args=(p_data_o,
+                                           p_msg_io_2,
+                                           self.duration,
+                                           self.frequency,
+                                           python_clock)
+                                    )
         self._p_capture.start()
-        
+
         if viz:
-            live_disp = LiveDisplay(window_len=width)
-        
+            live_disp = LiveDisplay(channel_names = self.signal_labels, window_len=width)
+
         if record:
             self.open_recording_file()
 
         cc = True
         while cc:
-            try:
-                mess = self.q_messages_recv.get_nowait()
+            with self._lock_msg_out:
+                if self._msg_out is not None:
+                    p_msg_io.send(self._msg_out)
+                    self._msg_out = None
+            if p_msg_io.poll():
+                mess = p_msg_io.recv()
                 if mess == 'STOP':
                     cc = False
-            except Empty:
-                pass
+                elif mess[0] == 'PRT':
+                    print(mess[1])
 
-            # retrieve all data points from q_data and put them in a list of np.array:
+            # retrieve all data points from p_data and put them in a list of np.array:
             res = []
             c = True
             while c and len(res) < 25:
-                try:
-                    point = self.q_data.get(timeout=SAMPLE_TIME)
+                if p_data_i.poll(timeout=SAMPLE_TIME):
+                    point = p_data_i.recv()
                     res.append(point)
-                except Empty:
+                else:
                     c = False
             if len(res) == 0:
                 continue
+
             n_array = np.array(res)
-            n_array = filter_2scomplement_np(n_array)
-            
+            n_array = filter_np(n_array)
+
             to_add = n_array.tolist()
-            
+
             if viz:
                 live_disp.add_datapoints(to_add)
             if record:
                 self.add_recording_data(to_add)
-        
-        # empty q_data
+
+        # empty pipes
         cc = True 
         while cc:
-            try:
-                _ = self.q_data.get_nowait()
-            except Empty:
+            if p_data_i.poll():
+                _ = p_data_i.recv()
+            elif p_msg_io.poll():
+                _ = p_msg_io.recv()
+            else:
                 cc = False
 
-        self.q_messages_recv.close()
-        self.q_data.close()
+        p_data_i.close()
+        p_msg_io.close()
         
         if record:
             self.close_recording_file()
 
-        # print("DEBUG: joining capture process...")
         self._p_capture.join()
-        # print("DEBUG: capture process joined.")
         self.__capture_on = False
 
 
