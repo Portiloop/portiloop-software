@@ -59,18 +59,18 @@ FRONTEND_CONFIG = [
     0x3E, # ID (RO)
     0x95, # CONFIG1 [95] [1, DAISY_EN(bar), CLK_EN, 1, 0, DR[2:0]] : Datarate = 500 SPS
     0xD0, # CONFIG2 [C0] [1, 1, 0, INT_CAL, 0, CAL_AMP0, CAL_FREQ[1:0]]
-    0xE0, # CONFIG3 [E0] [PD_REFBUF(bar), 1, 1, BIAS_MEAS, BIASREF_INT, PD_BIAS(bar), BIAS_LOFF_SENS, BIAS_STAT] : Power-down reference buffer, no bias
+    0xE8, # CONFIG3 [E0] [PD_REFBUF(bar), 1, 1, BIAS_MEAS, BIASREF_INT, PD_BIAS(bar), BIAS_LOFF_SENS, BIAS_STAT] : Power-down reference buffer, no bias
     0x00, # No lead-off
-    0x03, # CH1SET [60] [PD1, GAIN1[2:0], SRB2, MUX1[2:0]]
-    0x00, # CH2SET
-    0x00, # CH3SET
-    0x00, # CH4SET
-    0x00, # CH5SET voltage
-    0x00, # CH6SET voltage
-    0x00, # CH7SET test
-    0x04, # CH8SET temperature
-    0x00, # BIAS_SENSP
-    0x00, # BIAS_SENSN
+    0x60, # CH1SET [60] [PD1, GAIN1[2:0], SRB2, MUX1[2:0]]
+    0x60, # CH2SET 66
+    0x60, # CH3SET
+    0x60, # CH4SET
+    0x60, # CH5SET
+    0x60, # CH6SET
+    0x60, # CH7SET
+    0x60, # CH8SET
+    0x04, # BIAS_SENSP 04
+    0x04, # BIAS_SENSN 04
     0xFF, # LOFF_SENSP Lead-off on all positive pins?
     0xFF, # LOFF_SENSN Lead-off on all negative pins?
     0x00, # Normal lead-off
@@ -82,7 +82,10 @@ FRONTEND_CONFIG = [
 
 EDF_PATH = Path.home() / 'workspace' / 'edf_recording'
 
-def mod_config(config, datarate):
+def mod_config(config, datarate, channel_modes):
+    
+    # datarate:
+
     possible_datarates = [(250, 0x06),
                           (500, 0x05),
                           (1000, 0x04),
@@ -99,6 +102,39 @@ def mod_config(config, datarate):
     new_cf1 = config[1] & 0xF8
     new_cf1 = new_cf1 | j
     config[1] = new_cf1
+    
+    # bias:
+
+    assert len(channel_modes) == 8
+    config[13] = 0x00  # clear BIAS_SENSP
+    config[14] = 0x00  # clear BIAS_SENSN
+    bias_active = False
+    for chan_i, chan_mode in enumerate(channel_modes):
+        n = 5 + chan_i
+        mod = config[n] & 0x78  # clear PDn and MUX[2:0]
+        if chan_mode == 'simple':
+            pass  # PDn = 0 and normal electrode (000)
+        elif chan_mode == 'disabled':
+            mod = mod | 0x81  # PDn = 1 and input shorted (001)
+        elif chan_mode == 'bias in':
+            bit_i = 1 << chan_i
+            config[13] = config[13] | bit_i
+            config[14] = config[14] | bit_i
+            bias_active = True
+        elif chan_mode == 'bias out':
+            mod = mod | 0x06  # MUX[2:0] = BIAS_DRP (110)
+            bias_active = True
+        else:
+            assert False, f"Wrong key: {chan_mode}."
+        config[n] = mod
+        print(f"DEBUG: new config[{n}]:{hex(config[n])}")
+    print(f"DEBUG: new config[13]:{hex(config[13])}")
+    print(f"DEBUG: new config[14]:{hex(config[14])}")
+    if bias_active:
+        config[3] = config[3] | 0x04  # PD_BIAS bar = 1
+    else:
+        config[3] = config[3] & 0xFB  # PD_BIAS bar = 0
+    print(f"DEBUG: new config[3]:{hex(config[3])}")
     return config
 
 def filter_24(value):
@@ -133,15 +169,15 @@ class LiveDisplay():
         self.pp.update(disp_list)
 
 
-def _capture_process(p_data_o, p_msg_io, duration, frequency, python_clock=True, time_msg_in=1.0):
+def _capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_msg_in, channel_states):
     """
     Args:
         p_data_o: multiprocessing.Pipe: captured datapoints are put here
         p_msg_io: mutliprocessing.Pipe: to communicate with the parent process
         duration: float: max duration of the experiment in seconds
         frequency: float: sampling frequency
-        ptyhon_clock: bool (default True): if True, the Coral clock is used, otherwise, the ADS interrupts are used
-        time_msg_in: float (default 1.0): min time between attempts to recv incomming messages
+        ptyhon_clock: bool: if True, the Coral clock is used, otherwise, the ADS interrupts are used
+        time_msg_in: float: min time between attempts to recv incomming messages
     """
     if duration <= 0:
         duration = np.inf
@@ -160,9 +196,10 @@ def _capture_process(p_data_o, p_msg_io, duration, frequency, python_clock=True,
         
         config = FRONTEND_CONFIG
         if python_clock:  # set ADS to 2 * frequency
-            config = mod_config(config, 2 * frequency)
+            datarate = 2 * frequency
         else:  # set ADS to frequency
-            config = mod_config(config, frequency)
+            datarate = frequency
+        config = mod_config(config, datarate, channel_states)
         
         frontend.write_regs(0x00, config)
         data = frontend.read_regs(0x00, len(config))
@@ -247,12 +284,88 @@ class Capture:
         self.samples_per_datarecord_array = self.frequency
         self.physical_max = 5
         self.physical_min = -5
-        self.signal_labels = ['voltage', 'ch2', 'ch3', 'ch4', 'ch5', 'ch6', 'ch7', 'temperature']
+        self.signal_labels = ['ch1', 'ch2', 'ch3', 'ch4', 'ch5', 'ch6', 'ch7', 'ch8']
         self._lock_msg_out = Lock()
         self._msg_out = None
         self._t_capture = None
+        self.channel_states = ['disabled', 'simple', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled']
         
-        # widgets
+        # widgets ===============================
+        
+        # CHANNELS ------------------------------
+        
+        self.b_radio_ch1 = widgets.RadioButtons(
+            options=['disabled', 'simple', 'bias in', 'bias out'],
+            value='disabled',
+            disabled=True
+        )
+        
+        self.b_radio_ch2 = widgets.RadioButtons(
+            options=['disabled', 'simple', 'bias in', 'bias out'],
+            value='simple',
+            disabled=False
+        )
+        
+        self.b_radio_ch3 = widgets.RadioButtons(
+            options=['disabled', 'simple', 'bias in', 'bias out'],
+            value='disabled',
+            disabled=False
+        )
+        
+        self.b_radio_ch4 = widgets.RadioButtons(
+            options=['disabled', 'simple', 'bias in', 'bias out'],
+            value='disabled',
+            disabled=False
+        )
+        
+        self.b_radio_ch5 = widgets.RadioButtons(
+            options=['disabled', 'simple', 'bias in', 'bias out'],
+            value='disabled',
+            disabled=False
+        )
+        
+        self.b_radio_ch6 = widgets.RadioButtons(
+            options=['disabled', 'simple', 'bias in', 'bias out'],
+            value='disabled',
+            disabled=False
+        )
+        
+        self.b_radio_ch7 = widgets.RadioButtons(
+            options=['disabled', 'simple', 'bias in', 'bias out'],
+            value='disabled',
+            disabled=False
+        )
+        
+        self.b_radio_ch8 = widgets.RadioButtons(
+            options=['disabled', 'simple', 'bias in', 'bias out'],
+            value='disabled',
+            disabled=True
+        )
+        
+        self.b_accordion_channels = widgets.Accordion(
+            children=[
+                widgets.GridBox([
+                    widgets.Label('CH1'),
+                    widgets.Label('CH2'),
+                    widgets.Label('CH3'),
+                    widgets.Label('CH4'),
+                    widgets.Label('CH5'),
+                    widgets.Label('CH6'),
+                    widgets.Label('CH7'),
+                    widgets.Label('CH8'),
+                    self.b_radio_ch1,
+                    self.b_radio_ch2,
+                    self.b_radio_ch3,
+                    self.b_radio_ch4,
+                    self.b_radio_ch5,
+                    self.b_radio_ch6,
+                    self.b_radio_ch7,
+                    self.b_radio_ch8
+                ], layout=widgets.Layout(grid_template_columns="repeat(8, 90px)"))
+            ])
+        self.b_accordion_channels.set_title(index = 0, title = 'Channels')
+        
+        # OTHERS ------------------------------
         
         self.b_capture = widgets.ToggleButtons(
             options=['Stop', 'Start'],
@@ -305,6 +418,8 @@ class Capture:
             indent=False
         )
         
+        # CALLBACKS ----------------------
+        
         self.b_capture.observe(self.on_b_capture, 'value')
         self.b_clock.observe(self.on_b_clock, 'value')
         self.b_frequency.observe(self.on_b_frequency, 'value')
@@ -312,6 +427,12 @@ class Capture:
         self.b_record.observe(self.on_b_record, 'value')
         self.b_display.observe(self.on_b_display, 'value')
         self.b_filename.observe(self.on_b_filename, 'value')
+        self.b_radio_ch2.observe(self.on_b_radio_ch2, 'value')
+        self.b_radio_ch3.observe(self.on_b_radio_ch3, 'value')
+        self.b_radio_ch4.observe(self.on_b_radio_ch4, 'value')
+        self.b_radio_ch5.observe(self.on_b_radio_ch5, 'value')
+        self.b_radio_ch6.observe(self.on_b_radio_ch6, 'value')
+        self.b_radio_ch7.observe(self.on_b_radio_ch7, 'value')
         
         self.display_buttons()
 
@@ -319,7 +440,8 @@ class Capture:
         self.b_capture.close()
     
     def display_buttons(self):
-        display(widgets.VBox([self.b_frequency,
+        display(widgets.VBox([self.b_accordion_channels,
+                              self.b_frequency,
                               self.b_duration,
                               self.b_filename,
                               widgets.HBox([self.b_record, self.b_display]),
@@ -333,6 +455,12 @@ class Capture:
         self.b_record.disabled = False
         self.b_display.disabled = False
         self.b_clock.disabled = False
+        self.b_radio_ch2.disabled = False
+        self.b_radio_ch3.disabled = False
+        self.b_radio_ch4.disabled = False
+        self.b_radio_ch5.disabled = False
+        self.b_radio_ch6.disabled = False
+        self.b_radio_ch7.disabled = False
     
     def disable_buttons(self):
         self.b_frequency.disabled = True
@@ -341,6 +469,30 @@ class Capture:
         self.b_record.disabled = True
         self.b_display.disabled = True
         self.b_clock.disabled = True
+        self.b_radio_ch2.disabled = True
+        self.b_radio_ch3.disabled = True
+        self.b_radio_ch4.disabled = True
+        self.b_radio_ch5.disabled = True
+        self.b_radio_ch6.disabled = True
+        self.b_radio_ch7.disabled = True
+    
+    def on_b_radio_ch2(self, value):
+        self.channel_states[1] = value['new']
+    
+    def on_b_radio_ch3(self, value):
+        self.channel_states[2] = value['new']
+    
+    def on_b_radio_ch4(self, value):
+        self.channel_states[3] = value['new']
+    
+    def on_b_radio_ch5(self, value):
+        self.channel_states[4] = value['new']
+    
+    def on_b_radio_ch6(self, value):
+        self.channel_states[5] = value['new']
+    
+    def on_b_radio_ch7(self, value):
+        self.channel_states[6] = value['new']
 
     def on_b_capture(self, value):
         val = value['new']
@@ -460,7 +612,9 @@ class Capture:
                                            p_msg_io_2,
                                            self.duration,
                                            self.frequency,
-                                           python_clock)
+                                           python_clock,
+                                           1.0,
+                                           self.channel_states)
                                     )
         self._p_capture.start()
 
