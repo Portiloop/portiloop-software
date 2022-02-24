@@ -37,28 +37,22 @@ The GUI now looks like this:
 
 ![gui](figures/gui.png)
 
-The `Channels` pannel enables you to configure each electrode:
-- `disabled`: the electrode is not used
-- `simple`: the electrode is simply used to measure signal (not recommended)
-- `bias in`: the electrode is used to measure signal and to compute a bias ("ground") signal
-- `bias out`: the electrode is used to output the bias ("ground") signal
+- The `Channels` pannel enables you to configure each electrode:
+  - `disabled`: the electrode is not used
+  - `simple`: the electrode is simply used to measure signal (not recommended)
+  - `bias in`: the electrode is used to measure signal and to compute a bias ("ground") signal
+  - `bias out`: the electrode is used to output the bias ("ground") signal
+- Use the `Freq` widget to enter your desired sampling rate
+- Use the `Time` widget to enter a maximum duration for the experiment (you can also stop the experiment manually)
+- Use the `Recording` widget to enter the name of a `.edf` output file if you wish to record the signal
+- If you tick the `Record` checkbox, the signal will be recorded in this file
+- If you tick the `Display` checkbox, the signal will be displayed for the duration of the whole experiment
+- The `Clock` widget lets you select the sampling method:
+  - `Coral` sets the `ADS1299` sampling rate to twice your target, and uses the Coral RT clock to sample at your target
+  - `ADS` sets the `ADS1299` sampling rate to the closest compatible to your target and uses the ADS interrupts to sample
+- Finally, the `Capture` widget lets you start and stop the experiment at any point in time
 
-Use the `Freq` widget to enter your desired sampling rate.
-
-Use the `Time` widget to enter a maximum duration for the experiment (you can also stop the experiment manually).
-
-Use the `Recording` widget to enter the name of a `.edf` output file if you wish to record the signal
-
-If you tick the `Record` checkbox, the signal will be recorded in this file.
-
-If you tick the `Display` checkbox, the signal will be displayed for the duration of the whole experiment.
-
-The `Clock` widget lets you select the sampling method:
-- `Coral` sets the `ADS1299` sampling rate to twice your target, and uses the Coral RT clock to sample at your target.
-- `ADS` sets the `ADS1299` sampling rate to the closest compatible to your target and uses the ADS interrupts to sample.
-
-Finally, the `Capture` widget lets you start and stop the experiment at any point in time.
-Note that one the experiment is started, all widgets are deactivated until you stop the experiment.
+_Note: once the experiment is started, all widgets are deactivated until you stop the experiment._
 
 ## Installation:
 
@@ -113,4 +107,3 @@ WantedBy=multi-user.target
 - Execute `sudo systemctl daemon-reload`
 - Execute `sudo systemctl start notebook.service`
 - Check that your service is up and running: `sudo systemctl status notebook.service`
-
