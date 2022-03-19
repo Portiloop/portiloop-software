@@ -9,6 +9,7 @@ import multiprocessing as mp
 import warnings
 import shutil
 from threading import Thread, Lock
+from scipy import signal
 
 import matplotlib.pyplot as plt
 from EDFlib.edfwriter import EDFwriter
@@ -137,6 +138,7 @@ def mod_config(config, datarate, channel_modes):
     print(f"DEBUG: new config[3]:{hex(config[3])}")
     return config
 
+
 def filter_24(value):
     return (value * 4.5) / (2**23 - 1)  # 23 because 1 bit is lost for sign
 
@@ -145,6 +147,77 @@ def filter_2scomplement_np(value):
 
 def filter_np(value):
     return filter_24(filter_2scomplement_np(value))
+
+
+class FilterPipeline:
+    def __init__(self, power_line_fq=60):
+        assert power_line_fq in [50, 60], f"The only supported power line frequencies are 50Hz and 60Hz"
+        if power_line_fq == 60:
+            self.notch_coeff1 = -0.12478308884588535
+            self.notch_coeff2 = 0.98729186796473023
+            self.notch_coeff3 = 0.99364593398236511
+            self.notch_coeff4 = -0.12478308884588535
+            self.notch_coeff5 = 0.99364593398236511
+        else:
+            self.notch_coeff1 = -0.61410695998423581
+            self.notch_coeff2 =  0.98729186796473023
+            self.notch_coeff3 = 0.99364593398236511
+            self.notch_coeff4 = -0.61410695998423581
+            self.notch_coeff5 = 0.99364593398236511
+        self.dfs = [0, 0]
+        
+        self.moving_average = None
+        self.moving_variance = 0
+        self.ALPHA_AVG = 0.1
+        self.ALPHA_STD = 0.001
+        self.EPSILON = 0.000001
+            
+        self.fir_30_coef = [
+            0.001623780150148094927192721215192250384,
+            0.014988684599373741992978104065059596905,
+            0.021287595318265635502275046064823982306,
+            0.007349500393709578957568417933998716762,
+            -0.025127515717112181709014251396183681209,
+            -0.052210507359822452833064687638398027048,
+            -0.039273839505489904766477593511808663607,
+            0.033021568427940004020193498490698402748,
+            0.147606943281569008563636202779889572412,
+            0.254000252034505602516389899392379447818,
+            0.297330876398883392486283128164359368384,
+            0.254000252034505602516389899392379447818,
+            0.147606943281569008563636202779889572412,
+            0.033021568427940004020193498490698402748,
+            -0.039273839505489904766477593511808663607,
+            -0.052210507359822452833064687638398027048,
+            -0.025127515717112181709014251396183681209,
+            0.007349500393709578957568417933998716762,
+            0.021287595318265635502275046064823982306,
+            0.014988684599373741992978104065059596905,
+            0.001623780150148094927192721215192250384]
+        self.z = signal.lfilter_zi(self.fir_30_coef, 1)
+        
+    def filter(self, value):
+        result = np.zeros(value.size)
+        for i, x in enumerate(value):
+            # FIR:
+            x, self.z = signal.lfilter(self.fir_30_coef, 1, [x], zi=self.z)
+            # notch:
+            denAccum = (x - self.notch_coeff1 * self.dfs[0]) - self.notch_coeff2 * self.dfs[1]
+            x = (self.notch_coeff3 * denAccum + self.notch_coeff4 * self.dfs[0]) + self.notch_coeff5 * self.dfs[1]
+            self.dfs[1] = self.dfs[0]
+            self.dfs[0] = denAccum
+            # standardization:
+            if self.moving_average is not None:
+                delta = x - self.moving_average
+                self.moving_average = self.moving_average + self.ALPHA_AVG * delta
+                self.moving_variance = (1 - self.ALPHA_STD) * (self.moving_variance + self.ALPHA_STD * delta**2)
+                moving_std = np.sqrt(self.moving_variance)
+                x = (x - self.moving_average) / (moving_std + self.EPSILON)
+            else:
+                self.moving_average = x
+            result[i] = x
+        return result
+    
 
 class LiveDisplay():
     def __init__(self, channel_names, window_len=100):
@@ -260,8 +333,8 @@ def _capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time
         leds.aquisition(False)
 
     finally:
-        frontend.close()
         leds.close()
+        frontend.close()
         p_msg_io.send('STOP')
         p_msg_io.close()
         p_data_o.close()
@@ -508,11 +581,6 @@ class Capture:
             self._t_capture = Thread(target=self.start_capture,
                                 args=(self.record, self.display, 500, self.python_clock))
             self._t_capture.start()
-#             self.start_capture(
-#                 record=self.record,
-#                 viz=self.display,
-#                 width=500,
-#                 python_clock=self.python_clock)
         elif val == 'Stop':
             with self._lock_msg_out:
                 self._msg_out = 'STOP'
@@ -597,16 +665,15 @@ class Capture:
                       viz,
                       width,
                       python_clock):
-        
-        p_msg_io, p_msg_io_2 = mp.Pipe()
-        p_data_i, p_data_o = mp.Pipe(duplex=False)
-
         if self.__capture_on:
             warnings.warn("Capture is already ongoing, ignoring command.")
             return
         else:
             self.__capture_on = True
+            p_msg_io, p_msg_io_2 = mp.Pipe()
+            p_data_i, p_data_o = mp.Pipe(duplex=False)
         SAMPLE_TIME = 1 / self.frequency
+        fp_vec = [FilterPipeline() for _ in range(8)]
         self._p_capture = mp.Process(target=_capture_process,
                                      args=(p_data_o,
                                            p_msg_io_2,
@@ -624,8 +691,7 @@ class Capture:
         if record:
             self.open_recording_file()
 
-        cc = True
-        while cc:
+        while True:
             with self._lock_msg_out:
                 if self._msg_out is not None:
                     p_msg_io.send(self._msg_out)
@@ -633,7 +699,7 @@ class Capture:
             if p_msg_io.poll():
                 mess = p_msg_io.recv()
                 if mess == 'STOP':
-                    cc = False
+                    break
                 elif mess[0] == 'PRT':
                     print(mess[1])
 
@@ -651,23 +717,27 @@ class Capture:
 
             n_array = np.array(res)
             n_array = filter_np(n_array)
+            
+            if True:
+                n_array = np.swapaxes(n_array, 0, 1)
+                n_array = np.array([fp_vec[i].filter(a) for i, a in enumerate(n_array)])
+                n_array = np.swapaxes(n_array, 0, 1)
 
             to_add = n_array.tolist()
-
+            
             if viz:
                 live_disp.add_datapoints(to_add)
             if record:
                 self.add_recording_data(to_add)
 
         # empty pipes
-        cc = True 
-        while cc:
+        while True:
             if p_data_i.poll():
                 _ = p_data_i.recv()
             elif p_msg_io.poll():
                 _ = p_msg_io.recv()
             else:
-                cc = False
+                break
 
         p_data_i.close()
         p_msg_io.close()
@@ -680,5 +750,4 @@ class Capture:
 
 
 if __name__ == "__main__":
-    # TODO: Argparse this
     pass
