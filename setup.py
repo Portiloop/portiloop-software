@@ -4,7 +4,7 @@ setup(
     name='portiloop',
     version='0.0.1',
     packages=[package for package in find_packages()],
-    description='Library for portiloop',
+    description='Portiloop software library',
     install_requires=['wheel',
                       'EDFlib-Python',
                       'numpy',
@@ -12,6 +12,7 @@ setup(
                       'portilooplot',
                       'ipywidgets',
                       'python-periphery',
-                      'spidev'
+                      'spidev',
+                      'scipy'
                      ]
 )
