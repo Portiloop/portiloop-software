@@ -9,7 +9,6 @@ import multiprocessing as mp
 import warnings
 import shutil
 from threading import Thread, Lock
-from scipy import signal
 
 import matplotlib.pyplot as plt
 from EDFlib.edfwriter import EDFwriter
@@ -117,7 +116,7 @@ def mod_config(config, datarate, channel_modes):
             pass  # PDn = 0 and normal electrode (000)
         elif chan_mode == 'disabled':
             mod = mod | 0x81  # PDn = 1 and input shorted (001)
-        elif chan_mode == 'bias in':
+        elif chan_mode == 'with bias':
             bit_i = 1 << chan_i
             config[13] = config[13] | bit_i
             config[14] = config[14] | bit_i
@@ -147,6 +146,33 @@ def filter_2scomplement_np(value):
 
 def filter_np(value):
     return filter_24(filter_2scomplement_np(value))
+
+
+def shift_numpy(arr, num, fill_value=np.nan):
+    result = np.empty_like(arr)
+    if num > 0:
+        result[:num] = fill_value
+        result[num:] = arr[:-num]
+    elif num < 0:
+        result[num:] = fill_value
+        result[:num] = arr[-num:]
+    else:
+        result[:] = arr
+    return result
+
+
+class FIR:
+    def __init__(self, coefficients, buffer=None):
+        self.coefficients = coefficients
+        self.taps = len(self.coefficients)
+        if buffer is not None:
+            self.buffer = np.array(z)
+        else:
+            self.buffer = np.zeros(self.taps)
+    
+    def filter(self, x):
+        self.buffer = shift_numpy(self.buffer, 1, x)
+        return np.sum(self.buffer * self.coefficients)
 
 
 class FilterPipeline:
@@ -194,13 +220,14 @@ class FilterPipeline:
             0.021287595318265635502275046064823982306,
             0.014988684599373741992978104065059596905,
             0.001623780150148094927192721215192250384]
-        self.z = signal.lfilter_zi(self.fir_30_coef, 1)
+        self.fir = FIR(self.fir_30_coef)
         
     def filter(self, value):
+        
         result = np.zeros(value.size)
         for i, x in enumerate(value):
             # FIR:
-            x, self.z = signal.lfilter(self.fir_30_coef, 1, [x], zi=self.z)
+            x = self.fir.filter(x)
             # notch:
             denAccum = (x - self.notch_coeff1 * self.dfs[0]) - self.notch_coeff2 * self.dfs[1]
             x = (self.notch_coeff3 * denAccum + self.notch_coeff4 * self.dfs[0]) + self.notch_coeff5 * self.dfs[1]
@@ -348,6 +375,7 @@ class Capture:
         self.__capture_on = False
         self.frequency = 250
         self.duration = 10
+        self.filter = True
         self.record = False
         self.display = False
         self.python_clock = True
@@ -361,56 +389,56 @@ class Capture:
         self._lock_msg_out = Lock()
         self._msg_out = None
         self._t_capture = None
-        self.channel_states = ['disabled', 'simple', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled']
+        self.channel_states = ['disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled']
         
         # widgets ===============================
         
         # CHANNELS ------------------------------
         
         self.b_radio_ch1 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'bias in', 'bias out'],
+            options=['disabled', 'simple', 'with bias', 'bias out'],
             value='disabled',
             disabled=True
         )
         
         self.b_radio_ch2 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'bias in', 'bias out'],
-            value='simple',
+            options=['disabled', 'simple', 'with bias', 'bias out'],
+            value='disabled',
             disabled=False
         )
         
         self.b_radio_ch3 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'bias in', 'bias out'],
+            options=['disabled', 'simple', 'with bias', 'bias out'],
             value='disabled',
             disabled=False
         )
         
         self.b_radio_ch4 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'bias in', 'bias out'],
+            options=['disabled', 'simple', 'with bias', 'bias out'],
             value='disabled',
             disabled=False
         )
         
         self.b_radio_ch5 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'bias in', 'bias out'],
+            options=['disabled', 'simple', 'with bias', 'bias out'],
             value='disabled',
             disabled=False
         )
         
         self.b_radio_ch6 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'bias in', 'bias out'],
+            options=['disabled', 'simple', 'with bias', 'bias out'],
             value='disabled',
             disabled=False
         )
         
         self.b_radio_ch7 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'bias in', 'bias out'],
+            options=['disabled', 'simple', 'with bias', 'bias out'],
             value='disabled',
             disabled=False
         )
         
         self.b_radio_ch8 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'bias in', 'bias out'],
+            options=['disabled', 'simple', 'with bias', 'bias out'],
             value='disabled',
             disabled=True
         )
@@ -477,6 +505,13 @@ class Capture:
             disabled=False
         )
         
+        self.b_filter = widgets.Checkbox(
+            value=True,
+            description='Filter',
+            disabled=False,
+            indent=False
+        )
+        
         self.b_record = widgets.Checkbox(
             value=False,
             description='Record',
@@ -497,6 +532,7 @@ class Capture:
         self.b_clock.observe(self.on_b_clock, 'value')
         self.b_frequency.observe(self.on_b_frequency, 'value')
         self.b_duration.observe(self.on_b_duration, 'value')
+        self.b_filter.observe(self.on_b_filter, 'value')
         self.b_record.observe(self.on_b_record, 'value')
         self.b_display.observe(self.on_b_display, 'value')
         self.b_filename.observe(self.on_b_filename, 'value')
@@ -517,7 +553,7 @@ class Capture:
                               self.b_frequency,
                               self.b_duration,
                               self.b_filename,
-                              widgets.HBox([self.b_record, self.b_display]),
+                              widgets.HBox([self.b_filter, self.b_record, self.b_display]),
                               self.b_clock,
                               self.b_capture]))
 
@@ -525,6 +561,7 @@ class Capture:
         self.b_frequency.disabled = False
         self.b_duration.disabled = False
         self.b_filename.disabled = False
+        self.b_filter.disabled = False
         self.b_record.disabled = False
         self.b_display.disabled = False
         self.b_clock.disabled = False
@@ -539,6 +576,7 @@ class Capture:
         self.b_frequency.disabled = True
         self.b_duration.disabled = True
         self.b_filename.disabled = True
+        self.b_filter.disabled = True
         self.b_record.disabled = True
         self.b_display.disabled = True
         self.b_clock.disabled = True
@@ -579,7 +617,7 @@ class Capture:
                 warnings.warn("Capture already running, operation aborted.")
                 return
             self._t_capture = Thread(target=self.start_capture,
-                                args=(self.record, self.display, 500, self.python_clock))
+                                args=(self.filter, self.record, self.display, 500, self.python_clock))
             self._t_capture.start()
         elif val == 'Stop':
             with self._lock_msg_out:
@@ -615,6 +653,10 @@ class Capture:
         val = value['new']
         if val > 0:
             self.duration = val
+    
+    def on_b_filter(self, value):
+        val = value['new']
+        self.filter = val
     
     def on_b_record(self, value):
         val = value['new']
@@ -661,6 +703,7 @@ class Capture:
                 assert self.edf_writer.writeSamples(d) == 0
 
     def start_capture(self,
+                      filter,
                       record,
                       viz,
                       width,
@@ -684,12 +727,15 @@ class Capture:
                                            self.channel_states)
                                     )
         self._p_capture.start()
+        # print(f"PID capture: {self._p_capture.pid}")
 
         if viz:
             live_disp = LiveDisplay(channel_names = self.signal_labels, window_len=width)
 
         if record:
             self.open_recording_file()
+
+        buffer = []
 
         while True:
             with self._lock_msg_out:
@@ -704,31 +750,30 @@ class Capture:
                     print(mess[1])
 
             # retrieve all data points from p_data and put them in a list of np.array:
-            res = []
-            c = True
-            while c and len(res) < 25:
-                if p_data_i.poll(timeout=SAMPLE_TIME):
-                    point = p_data_i.recv()
-                    res.append(point)
-                else:
-                    c = False
-            if len(res) == 0:
+            point = None
+            if p_data_i.poll(timeout=SAMPLE_TIME):
+                point = p_data_i.recv()
+            else:
                 continue
-
-            n_array = np.array(res)
+                
+            n_array = np.array([point])
             n_array = filter_np(n_array)
             
-            if True:
+            if filter:
                 n_array = np.swapaxes(n_array, 0, 1)
-                n_array = np.array([fp_vec[i].filter(a) for i, a in enumerate(n_array)])
+                n_array = np.array([fp_vec[i].filter(a) if self.channel_states[i] != 'disabled' else [0] for i, a in enumerate(n_array)])
                 n_array = np.swapaxes(n_array, 0, 1)
-
-            to_add = n_array.tolist()
             
-            if viz:
-                live_disp.add_datapoints(to_add)
-            if record:
-                self.add_recording_data(to_add)
+            buffer += n_array.tolist()
+            if len(buffer) >= 50:
+
+                if viz:
+                    live_disp.add_datapoints(buffer)
+
+                if record:
+                    self.add_recording_data(buffer)
+                    
+                buffer = []
 
         # empty pipes
         while True:
