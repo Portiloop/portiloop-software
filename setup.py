@@ -12,7 +12,6 @@ setup(
                       'portilooplot',
                       'ipywidgets',
                       'python-periphery',
-                      'spidev',
-                      'scipy'
+                      'spidev'
                      ]
 )
