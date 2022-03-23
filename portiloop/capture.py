@@ -141,8 +141,10 @@ def mod_config(config, datarate, channel_modes):
 def filter_24(value):
     return (value * 4.5) / (2**23 - 1)  # 23 because 1 bit is lost for sign
 
+
 def filter_2scomplement_np(value):
     return np.where((value & (1 << 23)) != 0, value - (1 << 24), value)
+
 
 def filter_np(value):
     return filter_24(filter_2scomplement_np(value))
@@ -162,21 +164,22 @@ def shift_numpy(arr, num, fill_value=np.nan):
 
 
 class FIR:
-    def __init__(self, coefficients, buffer=None):
-        self.coefficients = coefficients
+    def __init__(self, nb_channels, coefficients, buffer=None):
+        
+        self.coefficients = np.expand_dims(np.array(coefficients), axis=1)
         self.taps = len(self.coefficients)
-        if buffer is not None:
-            self.buffer = np.array(z)
-        else:
-            self.buffer = np.zeros(self.taps)
+        self.nb_channels = nb_channels
+        self.buffer = np.array(z) if buffer is not None else np.zeros((self.taps, self.nb_channels))
     
     def filter(self, x):
         self.buffer = shift_numpy(self.buffer, 1, x)
-        return np.sum(self.buffer * self.coefficients)
+        filtered = np.sum(self.buffer * self.coefficients, axis=0)
+        return filtered
 
-
+    
 class FilterPipeline:
-    def __init__(self, power_line_fq=60):
+    def __init__(self, nb_channels, power_line_fq=60):
+        self.nb_channels = nb_channels
         assert power_line_fq in [50, 60], f"The only supported power line frequencies are 50Hz and 60Hz"
         if power_line_fq == 60:
             self.notch_coeff1 = -0.12478308884588535
@@ -190,10 +193,10 @@ class FilterPipeline:
             self.notch_coeff3 = 0.99364593398236511
             self.notch_coeff4 = -0.61410695998423581
             self.notch_coeff5 = 0.99364593398236511
-        self.dfs = [0, 0]
+        self.dfs = [np.zeros(self.nb_channels), np.zeros(self.nb_channels)]
         
         self.moving_average = None
-        self.moving_variance = 0
+        self.moving_variance = np.zeros(self.nb_channels)
         self.ALPHA_AVG = 0.1
         self.ALPHA_STD = 0.001
         self.EPSILON = 0.000001
@@ -220,12 +223,13 @@ class FilterPipeline:
             0.021287595318265635502275046064823982306,
             0.014988684599373741992978104065059596905,
             0.001623780150148094927192721215192250384]
-        self.fir = FIR(self.fir_30_coef)
+        self.fir = FIR(self.nb_channels, self.fir_30_coef)
         
     def filter(self, value):
-        
-        result = np.zeros(value.size)
-        for i, x in enumerate(value):
+        """
+        value: a numpy array of shape (data series, channels)
+        """
+        for i, x in enumerate(value):  # loop over the data series
             # FIR:
             x = self.fir.filter(x)
             # notch:
@@ -242,9 +246,9 @@ class FilterPipeline:
                 x = (x - self.moving_average) / (moving_std + self.EPSILON)
             else:
                 self.moving_average = x
-            result[i] = x
-        return result
-    
+            value[i] = x
+        return value
+
 
 class LiveDisplay():
     def __init__(self, channel_names, window_len=100):
@@ -716,7 +720,7 @@ class Capture:
             p_msg_io, p_msg_io_2 = mp.Pipe()
             p_data_i, p_data_o = mp.Pipe(duplex=False)
         SAMPLE_TIME = 1 / self.frequency
-        fp_vec = [FilterPipeline() for _ in range(8)]
+        fp = FilterPipeline(nb_channels=8)
         self._p_capture = mp.Process(target=_capture_process,
                                      args=(p_data_o,
                                            p_msg_io_2,
@@ -760,9 +764,10 @@ class Capture:
             n_array = filter_np(n_array)
             
             if filter:
-                n_array = np.swapaxes(n_array, 0, 1)
-                n_array = np.array([fp_vec[i].filter(a) if self.channel_states[i] != 'disabled' else [0] for i, a in enumerate(n_array)])
-                n_array = np.swapaxes(n_array, 0, 1)
+                n_array = fp.filter(n_array)
+#                 n_array = np.swapaxes(n_array, 0, 1)
+#                 n_array = np.array([fp_vec[i].filter(a) if self.channel_states[i] != 'disabled' else [0] for i, a in enumerate(n_array)])
+#                 n_array = np.swapaxes(n_array, 0, 1)
             
             buffer += n_array.tolist()
             if len(buffer) >= 50:
