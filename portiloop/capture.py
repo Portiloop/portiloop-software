@@ -1,3 +1,6 @@
+import os
+import sys
+
 from time import sleep
 import time
 import numpy as np
@@ -12,6 +15,7 @@ from threading import Thread, Lock
 
 import matplotlib.pyplot as plt
 from EDFlib.edfwriter import EDFwriter
+from scipy.signal import firwin
 
 from portilooplot.jupyter_plot import ProgressPlot
 from portiloop.hardware.frontend import Frontend
@@ -82,6 +86,17 @@ FRONTEND_CONFIG = [
 
 EDF_PATH = Path.home() / 'workspace' / 'edf_recording'
 
+
+def to_ads_frequency(frequency):
+    possible_datarates = [250, 500, 1000, 2000, 4000, 8000, 16000]
+    dr = 16000
+    for i in possible_datarates:
+        if i >= datarate:
+            dr = i
+            break
+    return dr
+    
+
 def mod_config(config, datarate, channel_modes):
     
     # datarate:
@@ -100,7 +115,7 @@ def mod_config(config, datarate, channel_modes):
             break
     
     new_cf1 = config[1] & 0xF8
-    new_cf1 = new_cf1 | j
+    new_cf1 = new_cf1 | mod_dr
     config[1] = new_cf1
     
     # bias:
@@ -178,9 +193,18 @@ class FIR:
 
     
 class FilterPipeline:
-    def __init__(self, nb_channels, power_line_fq=60):
+    def __init__(self,
+                 nb_channels,
+                 sampling_rate,
+                 power_line_fq=60,
+                 use_custom_fir=False,
+                 custom_fir_order=10,
+                 custom_fir_cutoff=30,
+                 alpha_avg=0.1,
+                 alpha_std=0.001,
+                 epsilon=0.000001):
         self.nb_channels = nb_channels
-        assert power_line_fq in [50, 60], f"The only supported power line frequencies are 50Hz and 60Hz"
+        assert power_line_fq in [50, 60], f"The only supported power line frequencies are 50 Hz and 60 Hz"
         if power_line_fq == 60:
             self.notch_coeff1 = -0.12478308884588535
             self.notch_coeff2 = 0.98729186796473023
@@ -197,33 +221,36 @@ class FilterPipeline:
         
         self.moving_average = None
         self.moving_variance = np.zeros(self.nb_channels)
-        self.ALPHA_AVG = 0.1
-        self.ALPHA_STD = 0.001
-        self.EPSILON = 0.000001
-            
-        self.fir_30_coef = [
-            0.001623780150148094927192721215192250384,
-            0.014988684599373741992978104065059596905,
-            0.021287595318265635502275046064823982306,
-            0.007349500393709578957568417933998716762,
-            -0.025127515717112181709014251396183681209,
-            -0.052210507359822452833064687638398027048,
-            -0.039273839505489904766477593511808663607,
-            0.033021568427940004020193498490698402748,
-            0.147606943281569008563636202779889572412,
-            0.254000252034505602516389899392379447818,
-            0.297330876398883392486283128164359368384,
-            0.254000252034505602516389899392379447818,
-            0.147606943281569008563636202779889572412,
-            0.033021568427940004020193498490698402748,
-            -0.039273839505489904766477593511808663607,
-            -0.052210507359822452833064687638398027048,
-            -0.025127515717112181709014251396183681209,
-            0.007349500393709578957568417933998716762,
-            0.021287595318265635502275046064823982306,
-            0.014988684599373741992978104065059596905,
-            0.001623780150148094927192721215192250384]
-        self.fir = FIR(self.nb_channels, self.fir_30_coef)
+        self.ALPHA_AVG = alpha_avg
+        self.ALPHA_STD = alpha_std
+        self.EPSILON = epsilon
+        
+        if use_custom_fir:
+            self.fir_coef = firwin(numtaps=custom_fir_order+1, cutoff=custom_fir_cutoff, fs=sampling_rate)
+        else:
+            self.fir_coef = [
+                0.001623780150148094927192721215192250384,
+                0.014988684599373741992978104065059596905,
+                0.021287595318265635502275046064823982306,
+                0.007349500393709578957568417933998716762,
+                -0.025127515717112181709014251396183681209,
+                -0.052210507359822452833064687638398027048,
+                -0.039273839505489904766477593511808663607,
+                0.033021568427940004020193498490698402748,
+                0.147606943281569008563636202779889572412,
+                0.254000252034505602516389899392379447818,
+                0.297330876398883392486283128164359368384,
+                0.254000252034505602516389899392379447818,
+                0.147606943281569008563636202779889572412,
+                0.033021568427940004020193498490698402748,
+                -0.039273839505489904766477593511808663607,
+                -0.052210507359822452833064687638398027048,
+                -0.025127515717112181709014251396183681209,
+                0.007349500393709578957568417933998716762,
+                0.021287595318265635502275046064823982306,
+                0.014988684599373741992978104065059596905,
+                0.001623780150148094927192721215192250384]
+        self.fir = FIR(self.nb_channels, self.fir_coef)
         
     def filter(self, value):
         """
@@ -370,7 +397,7 @@ def _capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time
         p_msg_io.close()
         p_data_o.close()
 
-        
+
 class Capture:
     def __init__(self):
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
@@ -379,8 +406,16 @@ class Capture:
         self.__capture_on = False
         self.frequency = 250
         self.duration = 10
+        self.power_line = 60
+        self.polyak_mean = 0.1
+        self.polyak_std = 0.001
+        self.epsilon = 0.000001
+        self.custom_fir = False
+        self.custom_fir_order = 10
+        self.custom_fir_cutoff = 30
         self.filter = True
         self.record = False
+        self.lsl = False
         self.display = False
         self.python_clock = True
         self.edf_writer = None
@@ -478,7 +513,6 @@ class Capture:
             disabled=False,
             button_style='', # 'success', 'info', 'warning', 'danger' or ''
             tooltips=['Stop capture', 'Start capture'],
-            # icons=['check'] * 2
         )
         
         self.b_clock = widgets.ToggleButtons(
@@ -488,7 +522,24 @@ class Capture:
             button_style='', # 'success', 'info', 'warning', 'danger' or ''
             tooltips=['Use Coral clock (very precise, not very timely)',
                       'Use ADS clock (not very precise, very timely)'],
-            # icons=['check'] * 2
+        )
+        
+        self.b_power_line = widgets.ToggleButtons(
+            options=['60 Hz', '50 Hz'],
+            description='Power line:',
+            disabled=False,
+            button_style='', # 'success', 'info', 'warning', 'danger' or ''
+            tooltips=['North America 60 Hz',
+                      'Europe 50 Hz'],
+        )
+        
+        self.b_custom_fir = widgets.ToggleButtons(
+            options=['Default', 'Custom'],
+            description='FIR filter:',
+            disabled=False,
+            button_style='', # 'success', 'info', 'warning', 'danger' or ''
+            tooltips=['Use the default 30Hz low-pass FIR from the Portiloop paper',
+                      'Use a custom FIR'],
         )
         
         self.b_filename = widgets.Text(
@@ -498,33 +549,83 @@ class Capture:
         )
         
         self.b_frequency = widgets.IntText(
-            value=250,
+            value=self.frequency,
             description='Freq (Hz):',
             disabled=False
         )
         
+        self.b_polyak_mean = widgets.FloatText(
+            value=self.polyak_mean,
+            description='Polyak mean:',
+            disabled=False
+        )
+        
+        self.b_polyak_std = widgets.FloatText(
+            value=self.polyak_std,
+            description='Polyak std:',
+            disabled=False
+        )
+        
+        self.b_epsilon = widgets.FloatText(
+            value=self.epsilon,
+            description='Epsilon:',
+            disabled=False
+        )
+        
+        self.b_custom_fir_order = widgets.IntText(
+            value=self.custom_fir_order,
+            description='FIR order:',
+            disabled=True
+        )
+        
+        self.b_custom_fir_cutoff = widgets.IntText(
+            value=self.custom_fir_cutoff,
+            description='FIR cutoff:',
+            disabled=True
+        )
+        
+        self.b_accordion_filter = widgets.Accordion(
+            children=[
+                widgets.VBox([
+                    self.b_custom_fir,
+                    self.b_custom_fir_order,
+                    self.b_custom_fir_cutoff,
+                    self.b_polyak_mean,
+                    self.b_polyak_std,
+                    self.b_epsilon
+                ])
+            ])
+        self.b_accordion_filter.set_title(index = 0, title = 'Filtering')
+        
         self.b_duration = widgets.IntText(
-            value=10,
+            value=self.duration,
             description='Time (s):',
             disabled=False
         )
         
         self.b_filter = widgets.Checkbox(
-            value=True,
+            value=self.filter,
             description='Filter',
             disabled=False,
             indent=False
         )
         
         self.b_record = widgets.Checkbox(
-            value=False,
-            description='Record',
+            value=self.record,
+            description='Record EDF',
+            disabled=False,
+            indent=False
+        )
+        
+        self.b_lsl = widgets.Checkbox(
+            value=self.lsl,
+            description='Stream LSL',
             disabled=False,
             indent=False
         )
         
         self.b_display = widgets.Checkbox(
-            value=False,
+            value=self.display,
             description='Display',
             disabled=False,
             indent=False
@@ -538,6 +639,7 @@ class Capture:
         self.b_duration.observe(self.on_b_duration, 'value')
         self.b_filter.observe(self.on_b_filter, 'value')
         self.b_record.observe(self.on_b_record, 'value')
+        self.b_lsl.observe(self.on_b_lsl, 'value')
         self.b_display.observe(self.on_b_display, 'value')
         self.b_filename.observe(self.on_b_filename, 'value')
         self.b_radio_ch2.observe(self.on_b_radio_ch2, 'value')
@@ -546,6 +648,13 @@ class Capture:
         self.b_radio_ch5.observe(self.on_b_radio_ch5, 'value')
         self.b_radio_ch6.observe(self.on_b_radio_ch6, 'value')
         self.b_radio_ch7.observe(self.on_b_radio_ch7, 'value')
+        self.b_power_line.observe(self.on_b_power_line, 'value')
+        self.b_custom_fir.observe(self.on_b_custom_fir, 'value')
+        self.b_custom_fir_order.observe(self.on_b_custom_fir_order, 'value')
+        self.b_custom_fir_cutoff.observe(self.on_b_custom_fir_cutoff, 'value')
+        self.b_polyak_mean.observe(self.on_b_polyak_mean, 'value')
+        self.b_polyak_std.observe(self.on_b_polyak_std, 'value')
+        self.b_epsilon.observe(self.on_b_epsilon, 'value')
         
         self.display_buttons()
 
@@ -557,8 +666,10 @@ class Capture:
                               self.b_frequency,
                               self.b_duration,
                               self.b_filename,
-                              widgets.HBox([self.b_filter, self.b_record, self.b_display]),
+                              self.b_power_line,
                               self.b_clock,
+                              widgets.HBox([self.b_filter, self.b_record, self.b_lsl, self.b_display]),
+                              self.b_accordion_filter,
                               self.b_capture]))
 
     def enable_buttons(self):
@@ -567,6 +678,7 @@ class Capture:
         self.b_filename.disabled = False
         self.b_filter.disabled = False
         self.b_record.disabled = False
+        self.b_record.lsl = False
         self.b_display.disabled = False
         self.b_clock.disabled = False
         self.b_radio_ch2.disabled = False
@@ -575,6 +687,13 @@ class Capture:
         self.b_radio_ch5.disabled = False
         self.b_radio_ch6.disabled = False
         self.b_radio_ch7.disabled = False
+        self.b_power_line.disabled = False
+        self.b_polyak_mean.disabled = False
+        self.b_polyak_std.disabled = False
+        self.b_epsilon.disabled = False
+        self.b_custom_fir.disabled = False
+        self.b_custom_fir_order.disabled = not self.custom_fir
+        self.b_custom_fir_cutoff.disabled = not self.custom_fir
     
     def disable_buttons(self):
         self.b_frequency.disabled = True
@@ -582,6 +701,7 @@ class Capture:
         self.b_filename.disabled = True
         self.b_filter.disabled = True
         self.b_record.disabled = True
+        self.b_record.lsl = True
         self.b_display.disabled = True
         self.b_clock.disabled = True
         self.b_radio_ch2.disabled = True
@@ -590,6 +710,13 @@ class Capture:
         self.b_radio_ch5.disabled = True
         self.b_radio_ch6.disabled = True
         self.b_radio_ch7.disabled = True
+        self.b_power_line.disabled = True
+        self.b_polyak_mean.disabled = True
+        self.b_polyak_std.disabled = True
+        self.b_epsilon.disabled = True
+        self.b_custom_fir.disabled = True
+        self.b_custom_fir_order.disabled = True
+        self.b_custom_fir_cutoff.disabled = True
     
     def on_b_radio_ch2(self, value):
         self.channel_states[1] = value['new']
@@ -614,6 +741,9 @@ class Capture:
         if val == 'Start':
             clear_output()
             self.disable_buttons()
+            if not self.python_clock:  # ADS clock: force the frequency to an ADS-compatible frequency
+                self.frequency = to_ads_frequency(self.frequency)
+                self.b_frequency.value = self.frequency
             self.display_buttons()
             with self._lock_msg_out:
                 self._msg_out = None
@@ -621,7 +751,7 @@ class Capture:
                 warnings.warn("Capture already running, operation aborted.")
                 return
             self._t_capture = Thread(target=self.start_capture,
-                                args=(self.filter, self.record, self.display, 500, self.python_clock))
+                                args=(self.filter, self.record, self.lsl, self.display, 500, self.python_clock))
             self._t_capture.start()
         elif val == 'Stop':
             with self._lock_msg_out:
@@ -631,6 +761,14 @@ class Capture:
             self._t_capture = None
             self.enable_buttons()
     
+    def on_b_custom_fir(self, value):
+        val = value['new']
+        if val == 'Default':
+            self.custom_fir = False
+        elif val == 'Custom':
+            self.custom_fir = True
+        self.enable_buttons()
+    
     def on_b_clock(self, value):
         val = value['new']
         if val == 'Coral':
@@ -638,10 +776,19 @@ class Capture:
         elif val == 'ADS':
             self.python_clock = False
     
+    def on_b_power_line(self, value):
+        val = value['new']
+        if val == '60 Hz':
+            self.power_line = 60
+        elif val == '50 Hz':
+            self.python_clock = 50
+    
     def on_b_frequency(self, value):
         val = value['new']
         if val > 0:
             self.frequency = val
+        else:
+            self.b_frequency.value = self.frequency
             
     def on_b_filename(self, value):
         val = value['new']
@@ -658,6 +805,41 @@ class Capture:
         if val > 0:
             self.duration = val
     
+    def on_b_custom_fir_order(self, value):
+        val = value['new']
+        if val > 0:
+            self.custom_fir_order = val
+        else:
+            self.b_custom_fir_order.value = self.custom_fir_order
+    
+    def on_b_custom_fir_cutoff(self, value):
+        val = value['new']
+        if val > 0 and val < self.frequency / 2:
+            self.custom_fir_cutoff = val
+        else:
+            self.b_custom_fir_cutoff.value = self.custom_fir_cutoff
+    
+    def on_b_polyak_mean(self, value):
+        val = value['new']
+        if val >= 0 and val <= 1:
+            self.polyak_mean = val
+        else:
+            self.b_polyak_mean.value = self.polyak_mean
+    
+    def on_b_polyak_std(self, value):
+        val = value['new']
+        if val >= 0 and val <= 1:
+            self.polyak_std = val
+        else:
+            self.b_polyak_std.value = self.polyak_std
+    
+    def on_b_epsilon(self, value):
+        val = value['new']
+        if val > 0 and val < 0.1:
+            self.epsilon = val
+        else:
+            self.b_epsilon.value = self.epsilon
+    
     def on_b_filter(self, value):
         val = value['new']
         self.filter = val
@@ -665,6 +847,10 @@ class Capture:
     def on_b_record(self, value):
         val = value['new']
         self.record = val
+    
+    def on_b_lsl(self, value):
+        val = value['new']
+        self.lsl = val
     
     def on_b_display(self, value):
         val = value['new']
@@ -709,6 +895,7 @@ class Capture:
     def start_capture(self,
                       filter,
                       record,
+                      lsl,
                       viz,
                       width,
                       python_clock):
@@ -720,7 +907,18 @@ class Capture:
             p_msg_io, p_msg_io_2 = mp.Pipe()
             p_data_i, p_data_o = mp.Pipe(duplex=False)
         SAMPLE_TIME = 1 / self.frequency
-        fp = FilterPipeline(nb_channels=8)
+
+        if filter:
+            fp = FilterPipeline(nb_channels=8,
+                                sampling_rate=self.frequency,
+                                power_line_fq=self.power_line,
+                                use_custom_fir=False,
+                                custom_fir_order=10,
+                                custom_fir_cutoff=30,
+                                alpha_avg=0.1,
+                                alpha_std=0.001,
+                                epsilon=0.000001)
+
         self._p_capture = mp.Process(target=_capture_process,
                                      args=(p_data_o,
                                            p_msg_io_2,
@@ -738,6 +936,15 @@ class Capture:
 
         if record:
             self.open_recording_file()
+        
+        if lsl:
+            from pylsl import StreamInfo, StreamOutlet
+            lsl_info = StreamInfo(name='Portiloop',
+                                  type='EEG',
+                                  channel_count=8,
+                                  channel_format='float32',
+                                  source_id='')  # TODO: replace this by unique device identifier
+            lsl_outlet = StreamOutlet(lsl_info)
 
         buffer = []
 
@@ -765,11 +972,13 @@ class Capture:
             
             if filter:
                 n_array = fp.filter(n_array)
-#                 n_array = np.swapaxes(n_array, 0, 1)
-#                 n_array = np.array([fp_vec[i].filter(a) if self.channel_states[i] != 'disabled' else [0] for i, a in enumerate(n_array)])
-#                 n_array = np.swapaxes(n_array, 0, 1)
             
-            buffer += n_array.tolist()
+            filtered_point = n_array.tolist()
+            
+            if lsl:
+                lsl_outlet.push_sample(filtered_point[-1])
+            
+            buffer += filtered_point
             if len(buffer) >= 50:
 
                 if viz:
