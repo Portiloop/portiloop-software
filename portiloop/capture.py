@@ -91,7 +91,7 @@ def to_ads_frequency(frequency):
     possible_datarates = [250, 500, 1000, 2000, 4000, 8000, 16000]
     dr = 16000
     for i in possible_datarates:
-        if i >= datarate:
+        if i >= frequency:
             dr = i
             break
     return dr
@@ -912,12 +912,12 @@ class Capture:
             fp = FilterPipeline(nb_channels=8,
                                 sampling_rate=self.frequency,
                                 power_line_fq=self.power_line,
-                                use_custom_fir=False,
-                                custom_fir_order=10,
-                                custom_fir_cutoff=30,
-                                alpha_avg=0.1,
-                                alpha_std=0.001,
-                                epsilon=0.000001)
+                                use_custom_fir=self.custom_fir,
+                                custom_fir_order=self.custom_fir_order,
+                                custom_fir_cutoff=self.custom_fir_cutoff,
+                                alpha_avg=self.polyak_mean,
+                                alpha_std=self.polyak_std,
+                                epsilon=self.epsilon)
 
         self._p_capture = mp.Process(target=_capture_process,
                                      args=(p_data_o,
