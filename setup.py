@@ -14,6 +14,7 @@ setup(
                       'python-periphery',
                       'spidev',
                       'pylsl-coral',
-                      'scipy'
+                      'scipy',
+                      'pycoral'
                      ]
 )

@@ -399,7 +399,7 @@ def _capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time
 
 
 class Capture:
-    def __init__(self):
+    def __init__(self, quantInferenceClass):
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
         self.filename = EDF_PATH / 'recording.edf'
         self._p_capture = None
@@ -415,6 +415,9 @@ class Capture:
         self.custom_fir_cutoff = 30
         self.filter = True
         self.record = False
+        self.detect = False
+        self.stimulate = False
+        self.threshold = 0.5
         self.lsl = False
         self.display = False
         self.python_clock = True
@@ -429,6 +432,8 @@ class Capture:
         self._msg_out = None
         self._t_capture = None
         self.channel_states = ['disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled']
+        
+        self.quantInferenceClass = quantInferenceClass
         
         # widgets ===============================
         
@@ -554,6 +559,12 @@ class Capture:
             disabled=False
         )
         
+        self.b_threshold = widgets.FloatText(
+            value=self.threshold,
+            description='Threshold:',
+            disabled=True
+        )
+        
         self.b_polyak_mean = widgets.FloatText(
             value=self.polyak_mean,
             description='Polyak mean:',
@@ -610,6 +621,20 @@ class Capture:
             indent=False
         )
         
+        self.b_detect = widgets.Checkbox(
+            value=self.detect,
+            description='Detect',
+            disabled=False,
+            indent=False
+        )
+        
+        self.b_stimulate = widgets.Checkbox(
+            value=self.stimulate,
+            description='Stimulate',
+            disabled=True,
+            indent=False
+        )
+
         self.b_record = widgets.Checkbox(
             value=self.record,
             description='Record EDF',
@@ -636,8 +661,10 @@ class Capture:
         self.b_capture.observe(self.on_b_capture, 'value')
         self.b_clock.observe(self.on_b_clock, 'value')
         self.b_frequency.observe(self.on_b_frequency, 'value')
+        self.b_threshold.observe(self.on_b_threshold, 'value')
         self.b_duration.observe(self.on_b_duration, 'value')
         self.b_filter.observe(self.on_b_filter, 'value')
+        self.b_detect.observe(self.on_b_detect, 'value')
         self.b_record.observe(self.on_b_record, 'value')
         self.b_lsl.observe(self.on_b_lsl, 'value')
         self.b_display.observe(self.on_b_display, 'value')
@@ -668,7 +695,8 @@ class Capture:
                               self.b_filename,
                               self.b_power_line,
                               self.b_clock,
-                              widgets.HBox([self.b_filter, self.b_record, self.b_lsl, self.b_display]),
+                              widgets.HBox([self.b_filter, self.b_detect, self.b_stimulate, self.b_record, self.b_lsl, self.b_display]),
+                              self.b_threshold,
                               self.b_accordion_filter,
                               self.b_capture]))
 
@@ -677,6 +705,7 @@ class Capture:
         self.b_duration.disabled = False
         self.b_filename.disabled = False
         self.b_filter.disabled = False
+        self.b_detect.disabled = False
         self.b_record.disabled = False
         self.b_record.lsl = False
         self.b_display.disabled = False
@@ -694,11 +723,15 @@ class Capture:
         self.b_custom_fir.disabled = False
         self.b_custom_fir_order.disabled = not self.custom_fir
         self.b_custom_fir_cutoff.disabled = not self.custom_fir
+        self.b_stimulate.disabled = not self.detect
+        self.b_threshold.disabled = not self.detect
     
     def disable_buttons(self):
         self.b_frequency.disabled = True
         self.b_duration.disabled = True
         self.b_filename.disabled = True
+        self.b_filter.disabled = True
+        self.b_stimulate.disabled = True
         self.b_filter.disabled = True
         self.b_record.disabled = True
         self.b_record.lsl = True
@@ -717,6 +750,7 @@ class Capture:
         self.b_custom_fir.disabled = True
         self.b_custom_fir_order.disabled = True
         self.b_custom_fir_cutoff.disabled = True
+        self.b_threshold.disabled = True
     
     def on_b_radio_ch2(self, value):
         self.channel_states[1] = value['new']
@@ -751,7 +785,7 @@ class Capture:
                 warnings.warn("Capture already running, operation aborted.")
                 return
             self._t_capture = Thread(target=self.start_capture,
-                                args=(self.filter, self.record, self.lsl, self.display, 500, self.python_clock))
+                                args=(self.filter, self.detect, self.quantInferenceClass, self.record, self.lsl, self.display, 500, self.python_clock))
             self._t_capture.start()
         elif val == 'Stop':
             with self._lock_msg_out:
@@ -789,6 +823,13 @@ class Capture:
             self.frequency = val
         else:
             self.b_frequency.value = self.frequency
+            
+    def on_b_threshold(self, value):
+        val = value['new']
+        if val >= 0 and val <= 1:
+            self.threshold = val
+        else:
+            self.b_threshold.value = self.threshold
             
     def on_b_filename(self, value):
         val = value['new']
@@ -844,6 +885,15 @@ class Capture:
         val = value['new']
         self.filter = val
     
+    def on_b_stimulate(self, value):
+        val = value['new']
+        self.stimulate = val
+    
+    def on_b_detect(self, value):
+        val = value['new']
+        self.detect = val
+        self.enable_buttons()
+    
     def on_b_record(self, value):
         val = value['new']
         self.record = val
@@ -894,6 +944,8 @@ class Capture:
 
     def start_capture(self,
                       filter,
+                      detect,
+                      quantInferenceClass,
                       record,
                       lsl,
                       viz,
@@ -918,6 +970,9 @@ class Capture:
                                 alpha_avg=self.polyak_mean,
                                 alpha_std=self.polyak_std,
                                 epsilon=self.epsilon)
+            
+        if detect:
+            infer = quantInferenceClass()
 
         self._p_capture = mp.Process(target=_capture_process,
                                      args=(p_data_o,
@@ -974,6 +1029,15 @@ class Capture:
                 n_array = fp.filter(n_array)
             
             filtered_point = n_array.tolist()
+            
+            if detect:
+                results = infer.add_datapoints(filtered_points)
+                
+                for r in results:
+                    print(r >= threshold)
+                
+                if stimulate and True:
+                    print('stimulation')
             
             if lsl:
                 lsl_outlet.push_sample(filtered_point[-1])
