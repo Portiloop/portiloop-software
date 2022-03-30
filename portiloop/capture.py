@@ -399,7 +399,7 @@ def _capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time
 
 
 class Capture:
-    def __init__(self, quantInferenceClass):
+    def __init__(self, detector_cls=None, stimulator_cls=None):
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
         self.filename = EDF_PATH / 'recording.edf'
         self._p_capture = None
@@ -433,7 +433,8 @@ class Capture:
         self._t_capture = None
         self.channel_states = ['disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled']
         
-        self.quantInferenceClass = quantInferenceClass
+        self.detector_cls = detector_cls
+        self.stimulator_cls = stimulator_cls
         
         # widgets ===============================
         
@@ -665,6 +666,7 @@ class Capture:
         self.b_duration.observe(self.on_b_duration, 'value')
         self.b_filter.observe(self.on_b_filter, 'value')
         self.b_detect.observe(self.on_b_detect, 'value')
+        self.b_stimulate.observe(self.on_b_stimulate, 'value')
         self.b_record.observe(self.on_b_record, 'value')
         self.b_lsl.observe(self.on_b_lsl, 'value')
         self.b_display.observe(self.on_b_display, 'value')
@@ -707,7 +709,7 @@ class Capture:
         self.b_filter.disabled = False
         self.b_detect.disabled = False
         self.b_record.disabled = False
-        self.b_record.lsl = False
+        self.b_lsl.disabled = False
         self.b_display.disabled = False
         self.b_clock.disabled = False
         self.b_radio_ch2.disabled = False
@@ -733,8 +735,9 @@ class Capture:
         self.b_filter.disabled = True
         self.b_stimulate.disabled = True
         self.b_filter.disabled = True
+        self.b_detect.disabled = True
         self.b_record.disabled = True
-        self.b_record.lsl = True
+        self.b_lsl.disabled = True
         self.b_display.disabled = True
         self.b_clock.disabled = True
         self.b_radio_ch2.disabled = True
@@ -784,8 +787,18 @@ class Capture:
             if self._t_capture is not None:
                 warnings.warn("Capture already running, operation aborted.")
                 return
+            detector_cls = self.detector_cls if self.detect else None
+            stimulator_cls = self.stimulator_cls if self.stimulate else None
             self._t_capture = Thread(target=self.start_capture,
-                                args=(self.filter, self.detect, self.quantInferenceClass, self.record, self.lsl, self.display, 500, self.python_clock))
+                                args=(self.filter,
+                                      detector_cls,
+                                      self.threshold,
+                                      stimulator_cls,
+                                      self.record,
+                                      self.lsl,
+                                      self.display,
+                                      500,
+                                      self.python_clock))
             self._t_capture.start()
         elif val == 'Stop':
             with self._lock_msg_out:
@@ -944,8 +957,9 @@ class Capture:
 
     def start_capture(self,
                       filter,
-                      detect,
-                      quantInferenceClass,
+                      detector_cls,
+                      threshold,
+                      stimulator_cls,
                       record,
                       lsl,
                       viz,
@@ -971,8 +985,8 @@ class Capture:
                                 alpha_std=self.polyak_std,
                                 epsilon=self.epsilon)
             
-        if detect:
-            infer = quantInferenceClass()
+        detector = detector_cls(threshold) if detector_cls is not None else None
+        stimulator = stimulator_cls() if stimulator_cls is not None else None
 
         self._p_capture = mp.Process(target=_capture_process,
                                      args=(p_data_o,
@@ -984,7 +998,7 @@ class Capture:
                                            self.channel_states)
                                     )
         self._p_capture.start()
-        # print(f"PID capture: {self._p_capture.pid}")
+        print(f"PID capture: {self._p_capture.pid}")
 
         if viz:
             live_disp = LiveDisplay(channel_names = self.signal_labels, window_len=width)
@@ -1030,14 +1044,11 @@ class Capture:
             
             filtered_point = n_array.tolist()
             
-            if detect:
-                results = infer.add_datapoints(filtered_points)
+            if detector is not None:
+                detection_signal = detector.detect(filtered_point)
                 
-                for r in results:
-                    print(r >= threshold)
-                
-                if stimulate and True:
-                    print('stimulation')
+                if stimulator is not None:
+                    stimulator.stimulate(detection_signal)
             
             if lsl:
                 lsl_outlet.push_sample(filtered_point[-1])
