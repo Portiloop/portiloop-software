@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
 import time
+from playsound import playsound
+from threading import Thread, Lock
+from pathlib import Path
 
 
 # Abstract interface for developers:
@@ -17,10 +20,14 @@ class Stimulator(ABC):
         raise NotImplementedError
 
         
-# Example implementation for sleep spindles:
+# Example implementation for sleep spindles
 
 class SleepSpindleRealTimeStimulator(Stimulator):
     def __init__(self):
+        self._sound = Path(__file__).parent / 'sounds' / 'stimulus.wav'
+        print(f"DEBUG:{self._sound}")
+        self._thread = None
+        self._lock = Lock()
         self.last_detected_ts = time.time()
         self.wait_t = 0.4  # 400 ms
     
@@ -29,7 +36,13 @@ class SleepSpindleRealTimeStimulator(Stimulator):
             if sig:
                 ts = time.time()
                 if ts - self.last_detected_ts > self.wait_t:
-                    print("stimulation")
-                else:
-                    print("same spindle")
+                    with self._lock:
+                        if self._thread is None:
+                            self._thread = Thread(target=self._t_sound, daemon=True)
+                            self._thread.start()
                 self.last_detected_ts = ts
+                
+    def _t_sound(self):
+        playsound(self._sound)
+        with self._lock:
+            self._thread = None
