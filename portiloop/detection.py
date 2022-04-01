@@ -66,6 +66,8 @@ class SleepSpindleRealTimeDetector(Detector):
         for idx in reversed(range(1, len(self.stride_counters))):
             self.stride_counters[idx] -= self.stride_counters[idx-1]
         assert sum(self.stride_counters) == self.seq_stride, f"{self.stride_counters} does not sum to {self.seq_stride}"
+        
+        self.h = [np.zeros((1, 7), dtype=np.int8) for _ in range(self.num_models_parallel)]
             
         self.current_stride_counter = self.stride_counters[0] - 1
         
@@ -104,20 +106,22 @@ class SleepSpindleRealTimeDetector(Detector):
             input = np.asarray(input_float) / input_scale + input_zero_point
             input = input.astype(self.input_details[0]["dtype"])
         input = input.reshape((1, 1, -1))
-
-        # FIXME: bad sequence length: 50 instead of 1:
-        # self.interpreters[idx].set_tensor(self.input_details[0]['index'], input)
-        #
-        # if self.verbose:
-        #     start_time = time.time()
-        #
-        # self.interpreters[idx].invoke()
-        #
-        # if self.verbose:
-        #     end_time = time.time()
-        # output = self.interpreters[idx].get_tensor(self.output_details[0]['index'])
-        # output_scale, output_zero_point = self.input_details[0]["quantization"]
-        # output = float(output - output_zero_point) * output_scale
+        
+        # TODO: Milo please implement this:
+#         self.interpreters[idx].set_tensor(self.input_details[0]['index'], (self.h[idx], input))
+        
+#         if self.verbose:
+#             start_time = time.time()
+        
+#         self.interpreters[idx].invoke()
+        
+#         if self.verbose:
+#             end_time = time.time()
+#         output, self.h[idx] = self.interpreters[idx].get_tensor(self.output_details[0]['index'])
+#         output_scale, output_zero_point = self.input_details[0]["quantization"]
+#         output = float(output - output_zero_point) * output_scale
+        
+        # TODO: remove this line:
         output = np.random.uniform()  # FIXME: remove
 
         if self.verbose:
