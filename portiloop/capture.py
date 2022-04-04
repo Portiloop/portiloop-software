@@ -12,6 +12,7 @@ import multiprocessing as mp
 import warnings
 import shutil
 from threading import Thread, Lock
+import alsaaudio
 
 import matplotlib.pyplot as plt
 from EDFlib.edfwriter import EDFwriter
@@ -198,7 +199,7 @@ class FilterPipeline:
                  sampling_rate,
                  power_line_fq=60,
                  use_custom_fir=False,
-                 custom_fir_order=10,
+                 custom_fir_order=20,
                  custom_fir_cutoff=30,
                  alpha_avg=0.1,
                  alpha_std=0.001,
@@ -411,7 +412,7 @@ class Capture:
         self.polyak_std = 0.001
         self.epsilon = 0.000001
         self.custom_fir = False
-        self.custom_fir_order = 10
+        self.custom_fir_order = 20
         self.custom_fir_cutoff = 30
         self.filter = True
         self.record = False
@@ -435,6 +436,19 @@ class Capture:
         
         self.detector_cls = detector_cls
         self.stimulator_cls = stimulator_cls
+        
+        self._test_stimulus_lock = Lock()
+        self._test_stimulus = False
+        
+        mixers = alsaaudio.mixers()
+        if 'PCM' in mixers:
+            self.mixer = alsaaudio.Mixer(control='PCM')
+        else:
+            assert len(mixers) > 0, 'No ALSA mixer found'
+            warnings.warn(f"Could not find mixer PCM, using {mixers[0]} instead.")
+            self.mixer = alsaaudio.Mixer(control=mixers[0])
+        self.volume = self.mixer.getvolume()[0]  # we will set the same volume on all channels
+        
         
         # widgets ===============================
         
@@ -657,6 +671,22 @@ class Capture:
             indent=False
         )
         
+        self.b_volume = widgets.IntSlider(
+            value=self.volume, 
+            min=0,
+            max=100,
+            step=1,
+            description="Volume",
+            disabled=False
+        )
+        
+        self.b_test_stimulus = widgets.Button(
+            description='Test stimulus',
+            disabled=True,
+            button_style='', # 'success', 'info', 'warning', 'danger' or ''
+            tooltip='Send a test stimulus'
+        )
+        
         # CALLBACKS ----------------------
         
         self.b_capture.observe(self.on_b_capture, 'value')
@@ -684,6 +714,8 @@ class Capture:
         self.b_polyak_mean.observe(self.on_b_polyak_mean, 'value')
         self.b_polyak_std.observe(self.on_b_polyak_std, 'value')
         self.b_epsilon.observe(self.on_b_epsilon, 'value')
+        self.b_volume.observe(self.on_b_volume, 'value')
+        self.b_test_stimulus.on_click(self.on_b_test_stimulus)
         
         self.display_buttons()
 
@@ -698,7 +730,8 @@ class Capture:
                               self.b_power_line,
                               self.b_clock,
                               widgets.HBox([self.b_filter, self.b_detect, self.b_stimulate, self.b_record, self.b_lsl, self.b_display]),
-                              self.b_threshold,
+                              widgets.HBox([self.b_threshold, self.b_test_stimulus]),
+                              self.b_volume,
                               self.b_accordion_filter,
                               self.b_capture]))
 
@@ -727,6 +760,7 @@ class Capture:
         self.b_custom_fir_cutoff.disabled = not self.custom_fir
         self.b_stimulate.disabled = not self.detect
         self.b_threshold.disabled = not self.detect
+        self.b_test_stimulus.disabled = True # only enabled when running
     
     def disable_buttons(self):
         self.b_frequency.disabled = True
@@ -754,6 +788,7 @@ class Capture:
         self.b_custom_fir_order.disabled = True
         self.b_custom_fir_cutoff.disabled = True
         self.b_threshold.disabled = True
+        self.b_test_stimulus.disabled = not self.stimulate # only enabled when running
     
     def on_b_radio_ch2(self, value):
         self.channel_states[1] = value['new']
@@ -789,6 +824,7 @@ class Capture:
                 return
             detector_cls = self.detector_cls if self.detect else None
             stimulator_cls = self.stimulator_cls if self.stimulate else None
+            
             self._t_capture = Thread(target=self.start_capture,
                                 args=(self.filter,
                                       detector_cls,
@@ -918,6 +954,16 @@ class Capture:
     def on_b_display(self, value):
         val = value['new']
         self.display = val
+        
+    def on_b_volume(self, value):
+        val = value['new']
+        if val >= 0 and val <= 100:
+            self.volume = val
+            self.mixer.setvolume(self.volume)
+    
+    def on_b_test_stimulus(self, b):
+        with self._test_stimulus_lock:
+            self._test_stimulus = True
     
     def open_recording_file(self):
         nb_signals = self.nb_signals
@@ -1011,8 +1057,9 @@ class Capture:
             lsl_info = StreamInfo(name='Portiloop',
                                   type='EEG',
                                   channel_count=8,
+                                  nominal_srate=self.frequency,
                                   channel_format='float32',
-                                  source_id='')  # TODO: replace this by unique device identifier
+                                  source_id='portiloop1')  # TODO: replace this by unique device identifier
             lsl_outlet = StreamOutlet(lsl_info)
 
         buffer = []
@@ -1046,9 +1093,13 @@ class Capture:
             
             if detector is not None:
                 detection_signal = detector.detect(filtered_point)
-                
                 if stimulator is not None:
                     stimulator.stimulate(detection_signal)
+                    with self._test_stimulus_lock:
+                        test_stimulus = self._test_stimulus
+                        self._test_stimulus = False
+                    if test_stimulus:
+                        stimulator.test_stimulus()
             
             if lsl:
                 lsl_outlet.push_sample(filtered_point[-1])
