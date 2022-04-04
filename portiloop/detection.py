@@ -82,51 +82,68 @@ class SleepSpindleRealTimeDetector(Detector):
         return res
 
     def add_datapoint(self, input_float):
+        '''
+        Add one datapoint to the buffer
+        '''
         input_float = input_float[self.channel - 1]
         result = None
+        # Add to current buffer
         self.buffer.append(input_float)
         if len(self.buffer) > self.window_size:
+            # Remove the end of the buffer
             self.buffer = self.buffer[1:]
             self.current_stride_counter += 1
             if self.current_stride_counter == self.stride_counters[self.interpreter_counter]:
-                result = self.call_model(self.interpreter_counter, self.buffer)
+                # If we have reached the next window size, we send the current buffer to the inference function and update the hidden state
+                result, self.h[self.interpreter_counter] = self.forward_tflite(self.interpreter_counter, self.buffer, self.h[self.interpreter_counter])
                 self.interpreter_counter += 1
                 self.interpreter_counter %= self.num_models_parallel
                 self.current_stride_counter = 0
         return result
+        
+    def forward_tflite(self, idx, input_x, input_h):
+        input_details = self.interpreters[idx].get_input_details()
+        output_details = self.interpreters[idx].get_output_details()
+        
+        # convert input to int 
+        input_scale, input_zero_point = input_details[1]["quantization"]
+        input_x = np.asarray(input_x) / input_scale + input_zero_point
+        input_data_x = input_x.astype(input_details[1]["dtype"])
+        input_data_x = np.expand_dims(input_data_x, (0, 1))
 
-    def call_model(self, idx, input_float=None):
-        if input_float is None:
-            # For debugging purposes
-            input_shape = self.input_details[0]['shape']
-            input = np.array(np.random.random_sample(input_shape), dtype=np.int8)
-        else:
-            # Convert float input to Int
-            input_scale, input_zero_point = self.input_details[0]["quantization"]
-            input = np.asarray(input_float) / input_scale + input_zero_point
-            input = input.astype(self.input_details[0]["dtype"])
-        input = input.reshape((1, 1, -1))
-        
-        # TODO: Milo please implement this:
-#         self.interpreters[idx].set_tensor(self.input_details[0]['index'], (self.h[idx], input))
-        
-#         if self.verbose:
-#             start_time = time.time()
-        
-#         self.interpreters[idx].invoke()
-        
-#         if self.verbose:
-#             end_time = time.time()
-#         output, self.h[idx] = self.interpreters[idx].get_tensor(self.output_details[0]['index'])
-#         output_scale, output_zero_point = self.input_details[0]["quantization"]
-#         output = float(output - output_zero_point) * output_scale
-        
-        # TODO: remove this line:
-        output = np.random.uniform()  # FIXME: remove
+        # input_scale, input_zero_point = input_details[0]["quantization"]
+        # input = np.asarray(input) / input_scale + input_zero_point
 
+        # Test the model on random input data.
+        input_shape_h = input_details[0]['shape']
+        input_shape_x = input_details[1]['shape']
+
+        # input_data_h = np.array(np.random.random_sample(input_shape_h), dtype=np.int8)
+        # input_data_x = np.array(np.random.random_sample(input_shape_x), dtype=np.int8)
+        self.interpreters[idx].set_tensor(input_details[0]['index'], input_h)
+        self.interpreters[idx].set_tensor(input_details[1]['index'], input_data_x)
+        
         if self.verbose:
-            print(f"Computed output {output} in {end_time - start_time} seconds")
+            start_time = time.time()
 
-        return output
+        self.interpreters[idx].invoke()
+        
+        if self.verbose:
+            end_time = time.time()
+
+        # The function `get_tensor()` returns a copy of the tensor data.
+        # Use `tensor()` in order to get a pointer to the tensor.
+        output_data_h = self.interpreters[idx].get_tensor(output_details[0]['index'])
+        output_data_y = self.interpreters[idx].get_tensor(output_details[1]['index'])
+
+        output_scale, output_zero_point = output_details[1]["quantization"]
+        output_data_y = float(output_data_y - output_zero_point) * output_scale
+        
+        if self.verbose:
+            print(f"Computed output {output_data_y} in {end_time - start_time} seconds")
+
+        return output_data_y, output_data_h
+        
+        
     
     
