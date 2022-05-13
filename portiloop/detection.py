@@ -137,7 +137,7 @@ class SleepSpindleRealTimeDetector(Detector):
         output_data_y = self.interpreters[idx].get_tensor(output_details[1]['index'])
 
         output_scale, output_zero_point = output_details[1]["quantization"]
-        output_data_y = float(output_data_y - output_zero_point) * output_scale
+        output_data_y = (int(output_data_y) - output_zero_point) * output_scale
         
         if self.verbose:
             print(f"Computed output {output_data_y} in {end_time - start_time} seconds")

@@ -8,13 +8,13 @@ setup(
     install_requires=['wheel',
                       'EDFlib-Python',
                       'numpy',
-                      'matplotlib',
                       'portilooplot',
                       'ipywidgets',
                       'python-periphery',
                       'spidev',
                       'pylsl-coral',
                       'scipy',
-                      'pycoral'
+                      'pycoral',
+                      'pyalsaaudio'
                      ]
 )
