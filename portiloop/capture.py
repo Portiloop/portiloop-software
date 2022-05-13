@@ -4,7 +4,6 @@ import sys
 from time import sleep
 import time
 import numpy as np
-import matplotlib.pyplot as plt
 import os
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -14,7 +13,6 @@ import shutil
 from threading import Thread, Lock
 import alsaaudio
 
-import matplotlib.pyplot as plt
 from EDFlib.edfwriter import EDFwriter
 from scipy.signal import firwin
 
@@ -63,8 +61,8 @@ DEFAULT_FRONTEND_CONFIG = [
 FRONTEND_CONFIG = [
     0x3E, # ID (RO)
     0x95, # CONFIG1 [95] [1, DAISY_EN(bar), CLK_EN, 1, 0, DR[2:0]] : Datarate = 500 SPS
-    0xD0, # CONFIG2 [C0] [1, 1, 0, INT_CAL, 0, CAL_AMP0, CAL_FREQ[1:0]]
-    0xE8, # CONFIG3 [E0] [PD_REFBUF(bar), 1, 1, BIAS_MEAS, BIASREF_INT, PD_BIAS(bar), BIAS_LOFF_SENS, BIAS_STAT] : Power-down reference buffer, no bias
+    0xC0, # CONFIG2 [C0] [1, 1, 0, INT_CAL, 0, CAL_AMP0, CAL_FREQ[1:0]]
+    0xE0, # CONFIG3 [E0] [PD_REFBUF(bar), 1, 1, BIAS_MEAS, BIASREF_INT, PD_BIAS(bar), BIAS_LOFF_SENS, BIAS_STAT] : Power-down reference buffer, no bias
     0x00, # No lead-off
     0x60, # CH1SET [60] [PD1, GAIN1[2:0], SRB2, MUX1[2:0]]
     0x60, # CH2SET 66
@@ -76,8 +74,8 @@ FRONTEND_CONFIG = [
     0x60, # CH8SET
     0x04, # BIAS_SENSP 04
     0x04, # BIAS_SENSN 04
-    0xFF, # LOFF_SENSP Lead-off on all positive pins?
-    0xFF, # LOFF_SENSN Lead-off on all negative pins?
+    0x00, # LOFF_SENSP Lead-off on all positive pins?
+    0x00, # LOFF_SENSN Lead-off on all negative pins?
     0x00, # Normal lead-off
     0x00, # Lead-off positive status (RO)
     0x00, # Lead-off negative status (RO)
@@ -133,24 +131,20 @@ def mod_config(config, datarate, channel_modes):
         elif chan_mode == 'disabled':
             mod = mod | 0x81  # PDn = 1 and input shorted (001)
         elif chan_mode == 'with bias':
+            bias_active = True
             bit_i = 1 << chan_i
             config[13] = config[13] | bit_i
-            config[14] = config[14] | bit_i
-            bias_active = True
+            # config[14] = config[14] | bit_i
         elif chan_mode == 'bias out':
-            mod = mod | 0x06  # MUX[2:0] = BIAS_DRP (110)
             bias_active = True
+            mod = mod | 0x06  # MUX[2:0] = BIAS_DRP (110)
         else:
             assert False, f"Wrong key: {chan_mode}."
         config[n] = mod
-        print(f"DEBUG: new config[{n}]:{hex(config[n])}")
-    print(f"DEBUG: new config[13]:{hex(config[13])}")
-    print(f"DEBUG: new config[14]:{hex(config[14])}")
     if bias_active:
-        config[3] = config[3] | 0x04  # PD_BIAS bar = 1
-    else:
-        config[3] = config[3] & 0xFB  # PD_BIAS bar = 0
-    print(f"DEBUG: new config[3]:{hex(config[3])}")
+        config[3] = config[3] | 0x1c
+    for n, c in enumerate(config):
+        print(f"DEBUG: new config[{n}]:\t{c:08b}\t({hex(c)})")
     return config
 
 
@@ -399,6 +393,17 @@ def _capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time
         p_data_o.close()
 
 
+class DummyAlsaMixer:
+    def __init__(self):
+        self.volume = 50
+    
+    def getvolume(self):
+        return [self.volume]
+    
+    def setvolume(self, volume):
+        self.volume = volume
+
+
 class Capture:
     def __init__(self, detector_cls=None, stimulator_cls=None):
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
@@ -441,10 +446,12 @@ class Capture:
         self._test_stimulus = False
         
         mixers = alsaaudio.mixers()
-        if 'PCM' in mixers:
+        if len(mixers) <= 0:
+            warnings.warn(f"No ALSA mixer found.")
+            self.mixer = DummyAlsaMixer()
+        elif 'PCM' in mixers:
             self.mixer = alsaaudio.Mixer(control='PCM')
         else:
-            assert len(mixers) > 0, 'No ALSA mixer found'
             warnings.warn(f"Could not find mixer PCM, using {mixers[0]} instead.")
             self.mixer = alsaaudio.Mixer(control=mixers[0])
         self.volume = self.mixer.getvolume()[0]  # we will set the same volume on all channels
