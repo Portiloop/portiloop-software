@@ -445,15 +445,20 @@ class Capture:
         self._test_stimulus_lock = Lock()
         self._test_stimulus = False
         
-        mixers = alsaaudio.mixers()
-        if len(mixers) <= 0:
+        try:
+            mixers = alsaaudio.mixers()
+            if len(mixers) <= 0:
+                warnings.warn(f"No ALSA mixer found.")
+                self.mixer = DummyAlsaMixer()
+            elif 'PCM' in mixers:
+                self.mixer = alsaaudio.Mixer(control='PCM')
+            else:
+                warnings.warn(f"Could not find mixer PCM, using {mixers[0]} instead.")
+                self.mixer = alsaaudio.Mixer(control=mixers[0])
+        except ALSAAudioError as e:
             warnings.warn(f"No ALSA mixer found.")
             self.mixer = DummyAlsaMixer()
-        elif 'PCM' in mixers:
-            self.mixer = alsaaudio.Mixer(control='PCM')
-        else:
-            warnings.warn(f"Could not find mixer PCM, using {mixers[0]} instead.")
-            self.mixer = alsaaudio.Mixer(control=mixers[0])
+        
         self.volume = self.mixer.getvolume()[0]  # we will set the same volume on all channels
         
         
