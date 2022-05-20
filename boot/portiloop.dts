@@ -1,7 +1,7 @@
 /dts-v1/;
 /plugin/;
 
-///include/ "fsl-imx8mq-phanbell.dtb";
+///include/ "fsl-imx8mq-phanbell.dts";
 
 / {
 	compatible = "fsl,imx8mq-phanbell", "fsl,imx8mq";
@@ -78,13 +78,15 @@
 				#sound-dai-cells = <0>;
 				compatible = "fsl,sgtl5000";
 				reg = <0x0a>;
-
-				clocks = <&clk IMX8MQ_CLK_SAI2_ROOT>;
-				assigned-clocks = <&clk IMX8MQ_CLK_SAI2>;
-				assigned-clock-parents = <&clk IMX8MQ_AUDIO_PLL1_OUT>;
+				clocks = <&clk 211>;
+				assigned-clocks = <&clk 129>;
+				assigned-clock-parents = <&clk 27>;
 				assigned-clock-rates = <24576000>;
 
 				status = "okay";
+
+			        VDDA-supply = <&reg_apex>;
+			        VDDIO-supply = <&reg_apex>;
 			};
 		};
 	};
@@ -106,8 +108,8 @@
 				simple-audio-card,name = "sgtl5000";
 				simple-audio-card,format = "i2s";
 				simple-audio-card,widgets = "Headphone", "Headphones";
-				simple-audio-card,routing = "Headphones", "HPOUTL",
-				                            "Headphones", "HPOUTR";
+				simple-audio-card,routing = "Headphones", "HP_OUT",
+				                            "Headphones", "HP_OUT";
 
 				status = "okay";
 		
@@ -117,7 +119,7 @@
 		
 				audio_codec: simple-audio-card,codec {
 					sound-dai = <&sgtl5000>;
-					clocks = <&clk IMX8MQ_CLK_SAI2_ROOT>;
+					clocks = <&clk 211>;
 					frame-master;
 					bitclock-master;
 				};
