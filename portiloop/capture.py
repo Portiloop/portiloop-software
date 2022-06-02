@@ -65,15 +65,15 @@ FRONTEND_CONFIG = [
     0xE0, # CONFIG3 [E0] [PD_REFBUF(bar), 1, 1, BIAS_MEAS, BIASREF_INT, PD_BIAS(bar), BIAS_LOFF_SENS, BIAS_STAT] : Power-down reference buffer, no bias
     0x00, # No lead-off
     0x60, # CH1SET [60] [PD1, GAIN1[2:0], SRB2, MUX1[2:0]]
-    0x60, # CH2SET 66
+    0x60, # CH2SET
     0x60, # CH3SET
     0x60, # CH4SET
     0x60, # CH5SET
     0x60, # CH6SET
     0x60, # CH7SET
     0x60, # CH8SET
-    0x04, # BIAS_SENSP 04
-    0x04, # BIAS_SENSN 04
+    0x00, # BIAS_SENSP 00
+    0x00, # BIAS_SENSN 00
     0x00, # LOFF_SENSP Lead-off on all positive pins?
     0x00, # LOFF_SENSN Lead-off on all negative pins?
     0x00, # Normal lead-off
@@ -130,6 +130,7 @@ def mod_config(config, datarate, channel_modes):
             pass  # PDn = 0 and normal electrode (000)
         elif chan_mode == 'disabled':
             mod = mod | 0x81  # PDn = 1 and input shorted (001)
+            mod = 0xe1
         elif chan_mode == 'with bias':
             bias_active = True
             bit_i = 1 << chan_i
@@ -142,9 +143,9 @@ def mod_config(config, datarate, channel_modes):
             assert False, f"Wrong key: {chan_mode}."
         config[n] = mod
     if bias_active:
-        config[3] = config[3] | 0x1c
-    for n, c in enumerate(config):
-        print(f"DEBUG: new config[{n}]:\t{c:08b}\t({hex(c)})")
+        config[3] = config[3] | 0x1c  # activate the bias mechanism
+    for n, c in enumerate(config):  # print ADS1299 configuration registers
+        print(f"config[{n}]:\t{c:08b}\t({hex(c)})")
     return config
 
 
@@ -197,7 +198,17 @@ class FilterPipeline:
                  custom_fir_cutoff=30,
                  alpha_avg=0.1,
                  alpha_std=0.001,
-                 epsilon=0.000001):
+                 epsilon=0.000001,
+                 filter_args=[]):
+        if len(filter_args) > 0:
+            use_fir, use_notch, use_std = filter_args
+        else:
+            use_fir=True,
+            use_notch=True,
+            use_std=True
+        self.use_fir = use_fir
+        self.use_notch = use_notch
+        self.use_std = use_std
         self.nb_channels = nb_channels
         assert power_line_fq in [50, 60], f"The only supported power line frequencies are 50 Hz and 60 Hz"
         if power_line_fq == 60:
@@ -253,21 +264,24 @@ class FilterPipeline:
         """
         for i, x in enumerate(value):  # loop over the data series
             # FIR:
-            x = self.fir.filter(x)
+            if self.use_fir:
+                x = self.fir.filter(x)
             # notch:
-            denAccum = (x - self.notch_coeff1 * self.dfs[0]) - self.notch_coeff2 * self.dfs[1]
-            x = (self.notch_coeff3 * denAccum + self.notch_coeff4 * self.dfs[0]) + self.notch_coeff5 * self.dfs[1]
-            self.dfs[1] = self.dfs[0]
-            self.dfs[0] = denAccum
+            if self.use_notch:
+                denAccum = (x - self.notch_coeff1 * self.dfs[0]) - self.notch_coeff2 * self.dfs[1]
+                x = (self.notch_coeff3 * denAccum + self.notch_coeff4 * self.dfs[0]) + self.notch_coeff5 * self.dfs[1]
+                self.dfs[1] = self.dfs[0]
+                self.dfs[0] = denAccum
             # standardization:
-            if self.moving_average is not None:
-                delta = x - self.moving_average
-                self.moving_average = self.moving_average + self.ALPHA_AVG * delta
-                self.moving_variance = (1 - self.ALPHA_STD) * (self.moving_variance + self.ALPHA_STD * delta**2)
-                moving_std = np.sqrt(self.moving_variance)
-                x = (x - self.moving_average) / (moving_std + self.EPSILON)
-            else:
-                self.moving_average = x
+            if self.use_std:
+                if self.moving_average is not None:
+                    delta = x - self.moving_average
+                    self.moving_average = self.moving_average + self.ALPHA_AVG * delta
+                    self.moving_variance = (1 - self.ALPHA_STD) * (self.moving_variance + self.ALPHA_STD * delta**2)
+                    moving_std = np.sqrt(self.moving_variance)
+                    x = (x - self.moving_average) / (moving_std + self.EPSILON)
+                else:
+                    self.moving_average = x
             value[i] = x
         return value
 
@@ -275,7 +289,9 @@ class FilterPipeline:
 class LiveDisplay():
     def __init__(self, channel_names, window_len=100):
         self.datapoint_dim = len(channel_names)
+        self.history = []
         self.pp = ProgressPlot(plot_names=channel_names, max_window_len=window_len)
+        self.matplotlib = False
 
     def add_datapoints(self, datapoints):
         """
@@ -284,11 +300,22 @@ class LiveDisplay():
         Args:
             datapoints: list of 8 lists of floats (or list of 8 floats)
         """
+        if self.matplotlib:
+            import matplotlib.pyplot as plt
         disp_list = []
         for datapoint in datapoints:
             d = [[elt] for elt in datapoint]
             disp_list.append(d)
-        self.pp.update_with_datapoints(disp_list)
+            
+            if self.matplotlib:
+                self.history += d[1]
+        
+        if not self.matplotlib:
+            self.pp.update_with_datapoints(disp_list)
+        elif len(self.history) == 1000:
+            plt.plot(self.history)
+            plt.show()
+            self.history = []
     
     def add_datapoint(self, datapoint):
         disp_list = [[elt] for elt in datapoint]
@@ -317,7 +344,7 @@ def _capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time
     
     try:
         data = frontend.read_regs(0x00, 1)
-        assert data == [0x3E], "The communication with the ADS cannot be established."
+        assert data == [0x3E], "The communication with the ADS failed, please try again."
         leds.led2(Color.BLUE)
         
         config = FRONTEND_CONFIG
@@ -383,9 +410,8 @@ def _capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time
 
         p_msg_io.send(("PRT", f"Average frequency: {1 / tot} Hz for {it} samples"))
 
-        leds.aquisition(False)
-
     finally:
+        leds.aquisition(False)
         leds.close()
         frontend.close()
         p_msg_io.send('STOP')
@@ -420,6 +446,7 @@ class Capture:
         self.custom_fir_order = 20
         self.custom_fir_cutoff = 30
         self.filter = True
+        self.filter_args = [True, True, True]
         self.record = False
         self.detect = False
         self.stimulate = False
@@ -622,6 +649,27 @@ class Capture:
             disabled=True
         )
         
+        self.b_use_fir = widgets.Checkbox(
+            value=self.filter_args[0],
+            description='Use FIR',
+            disabled=False,
+            indent=False
+        )
+        
+        self.b_use_notch = widgets.Checkbox(
+            value=self.filter_args[1],
+            description='Use notch',
+            disabled=False,
+            indent=False
+        )
+        
+        self.b_use_std = widgets.Checkbox(
+            value=self.filter_args[2],
+            description='Use standardization',
+            disabled=False,
+            indent=False
+        )
+        
         self.b_accordion_filter = widgets.Accordion(
             children=[
                 widgets.VBox([
@@ -630,7 +678,12 @@ class Capture:
                     self.b_custom_fir_cutoff,
                     self.b_polyak_mean,
                     self.b_polyak_std,
-                    self.b_epsilon
+                    self.b_epsilon,
+                    widgets.HBox([
+                        self.b_use_fir,
+                        self.b_use_notch,
+                        self.b_use_std
+                    ])
                 ])
             ])
         self.b_accordion_filter.set_title(index = 0, title = 'Filtering')
@@ -707,6 +760,9 @@ class Capture:
         self.b_threshold.observe(self.on_b_threshold, 'value')
         self.b_duration.observe(self.on_b_duration, 'value')
         self.b_filter.observe(self.on_b_filter, 'value')
+        self.b_use_fir.observe(self.on_b_use_fir, 'value')
+        self.b_use_notch.observe(self.on_b_use_notch, 'value')
+        self.b_use_std.observe(self.on_b_use_std, 'value')
         self.b_detect.observe(self.on_b_detect, 'value')
         self.b_stimulate.observe(self.on_b_stimulate, 'value')
         self.b_record.observe(self.on_b_record, 'value')
@@ -767,6 +823,9 @@ class Capture:
         self.b_polyak_mean.disabled = False
         self.b_polyak_std.disabled = False
         self.b_epsilon.disabled = False
+        self.b_use_fir.disabled = False
+        self.b_use_notch.disabled = False
+        self.b_use_std.disabled = False
         self.b_custom_fir.disabled = False
         self.b_custom_fir_order.disabled = not self.custom_fir
         self.b_custom_fir_cutoff.disabled = not self.custom_fir
@@ -796,6 +855,9 @@ class Capture:
         self.b_polyak_mean.disabled = True
         self.b_polyak_std.disabled = True
         self.b_epsilon.disabled = True
+        self.b_use_fir.disabled = True
+        self.b_use_notch.disabled = True
+        self.b_use_std.disabled = True
         self.b_custom_fir.disabled = True
         self.b_custom_fir_order.disabled = True
         self.b_custom_fir_cutoff.disabled = True
@@ -839,6 +901,7 @@ class Capture:
             
             self._t_capture = Thread(target=self.start_capture,
                                 args=(self.filter,
+                                      self.filter_args,
                                       detector_cls,
                                       self.threshold,
                                       stimulator_cls,
@@ -946,6 +1009,18 @@ class Capture:
         val = value['new']
         self.filter = val
     
+    def on_b_use_fir(self, value):
+        val = value['new']
+        self.filter_args[0] = val
+    
+    def on_b_use_notch(self, value):
+        val = value['new']
+        self.filter_args[1] = val
+    
+    def on_b_use_std(self, value):
+        val = value['new']
+        self.filter_args[2] = val
+    
     def on_b_stimulate(self, value):
         val = value['new']
         self.stimulate = val
@@ -1015,6 +1090,7 @@ class Capture:
 
     def start_capture(self,
                       filter,
+                      filter_args,
                       detector_cls,
                       threshold,
                       stimulator_cls,
@@ -1041,7 +1117,8 @@ class Capture:
                                 custom_fir_cutoff=self.custom_fir_cutoff,
                                 alpha_avg=self.polyak_mean,
                                 alpha_std=self.polyak_std,
-                                epsilon=self.epsilon)
+                                epsilon=self.epsilon,
+                                filter_args=filter_args)
             
         detector = detector_cls(threshold) if detector_cls is not None else None
         stimulator = stimulator_cls() if stimulator_cls is not None else None
