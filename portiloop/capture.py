@@ -130,12 +130,11 @@ def mod_config(config, datarate, channel_modes):
             pass  # PDn = 0 and normal electrode (000)
         elif chan_mode == 'disabled':
             mod = mod | 0x81  # PDn = 1 and input shorted (001)
-            mod = 0xe1
         elif chan_mode == 'with bias':
             bias_active = True
             bit_i = 1 << chan_i
             config[13] = config[13] | bit_i
-            # config[14] = config[14] | bit_i
+            config[14] = config[14] | bit_i
         elif chan_mode == 'bias out':
             bias_active = True
             mod = mod | 0x06  # MUX[2:0] = BIAS_DRP (110)
@@ -465,6 +464,7 @@ class Capture:
         self._msg_out = None
         self._t_capture = None
         self.channel_states = ['disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled']
+        self.channel_detection = 2
         
         self.detector_cls = detector_cls
         self.stimulator_cls = stimulator_cls
@@ -538,7 +538,15 @@ class Capture:
         self.b_radio_ch8 = widgets.RadioButtons(
             options=['disabled', 'simple', 'with bias', 'bias out'],
             value='disabled',
-            disabled=True
+            disabled=False
+        )
+        
+        self.b_channel_detect = widgets.Dropdown(
+            options=[('2', 2), ('3', 3), ('4', 4), ('5', 5), ('6', 6), ('7', 7), ('8', 8)],
+            value=2,
+            description='Detection Channel:',
+            disabled=False,
+            style={'description_width': 'initial'}
         )
         
         self.b_accordion_channels = widgets.Accordion(
@@ -559,8 +567,8 @@ class Capture:
                     self.b_radio_ch5,
                     self.b_radio_ch6,
                     self.b_radio_ch7,
-                    self.b_radio_ch8
-                ], layout=widgets.Layout(grid_template_columns="repeat(8, 90px)"))
+                    self.b_radio_ch8], layout=widgets.Layout(grid_template_columns="repeat(8, 90px)")
+                )
             ])
         self.b_accordion_channels.set_title(index = 0, title = 'Channels')
         
@@ -775,6 +783,7 @@ class Capture:
         self.b_radio_ch5.observe(self.on_b_radio_ch5, 'value')
         self.b_radio_ch6.observe(self.on_b_radio_ch6, 'value')
         self.b_radio_ch7.observe(self.on_b_radio_ch7, 'value')
+        self.b_channel_detect.observe(self.on_b_channel_detect, 'value')
         self.b_power_line.observe(self.on_b_power_line, 'value')
         self.b_custom_fir.observe(self.on_b_custom_fir, 'value')
         self.b_custom_fir_order.observe(self.on_b_custom_fir_order, 'value')
@@ -792,6 +801,7 @@ class Capture:
     
     def display_buttons(self):
         display(widgets.VBox([self.b_accordion_channels,
+                              self.b_channel_detect,
                               self.b_frequency,
                               self.b_duration,
                               self.b_filename,
@@ -820,6 +830,7 @@ class Capture:
         self.b_radio_ch6.disabled = False
         self.b_radio_ch7.disabled = False
         self.b_power_line.disabled = False
+        self.b_channel_detect.disabled = False
         self.b_polyak_mean.disabled = False
         self.b_polyak_std.disabled = False
         self.b_epsilon.disabled = False
@@ -851,6 +862,7 @@ class Capture:
         self.b_radio_ch5.disabled = True
         self.b_radio_ch6.disabled = True
         self.b_radio_ch7.disabled = True
+        self.b_channel_detect.disabled = True
         self.b_power_line.disabled = True
         self.b_polyak_mean.disabled = True
         self.b_polyak_std.disabled = True
@@ -881,6 +893,9 @@ class Capture:
     
     def on_b_radio_ch7(self, value):
         self.channel_states[6] = value['new']
+        
+    def on_b_channel_detect(self, value):
+        self.channel_detection = value['new']
 
     def on_b_capture(self, value):
         val = value['new']
@@ -904,11 +919,12 @@ class Capture:
                                       self.filter_args,
                                       detector_cls,
                                       self.threshold,
+                                      self.channel_detection,
                                       stimulator_cls,
                                       self.record,
                                       self.lsl,
                                       self.display,
-                                      500,
+                                      2500,
                                       self.python_clock))
             self._t_capture.start()
         elif val == 'Stop':
@@ -1093,6 +1109,7 @@ class Capture:
                       filter_args,
                       detector_cls,
                       threshold,
+                      channel,
                       stimulator_cls,
                       record,
                       lsl,
@@ -1120,7 +1137,7 @@ class Capture:
                                 epsilon=self.epsilon,
                                 filter_args=filter_args)
             
-        detector = detector_cls(threshold) if detector_cls is not None else None
+        detector = detector_cls(threshold, channel=channel) if detector_cls is not None else None
         stimulator = stimulator_cls() if stimulator_cls is not None else None
 
         self._p_capture = mp.Process(target=_capture_process,
