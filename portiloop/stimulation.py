@@ -75,8 +75,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
             self.wav_list = [data]
             while data:
                 self.wav_list.append(data)
-                data = f.readframes(self.periodsize)
-            
+                data = f.readframes(self.periodsize)            
        
     def play_sound(self):
         '''

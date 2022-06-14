@@ -436,7 +436,7 @@ class Capture:
         self._p_capture = None
         self.__capture_on = False
         self.frequency = 250
-        self.duration = 10
+        self.duration = 28800
         self.power_line = 60
         self.polyak_mean = 0.1
         self.polyak_std = 0.001
@@ -471,6 +471,9 @@ class Capture:
         
         self._test_stimulus_lock = Lock()
         self._test_stimulus = False
+        
+        self._pause_detect_lock = Lock()
+        self._pause_detect = True
         
         try:
             mixers = alsaaudio.mixers()
@@ -580,6 +583,14 @@ class Capture:
             disabled=False,
             button_style='', # 'success', 'info', 'warning', 'danger' or ''
             tooltips=['Stop capture', 'Start capture'],
+        )
+        
+        self.b_pause = widgets.ToggleButtons(
+            options=['Paused', 'Active'],
+            description='Detection',
+            disabled=True,
+            button_style='', # 'success', 'info', 'warning', 'danger' or ''
+            tooltips=['Detector and stimulator active', 'Detector and stimulator paused'],
         )
         
         self.b_clock = widgets.ToggleButtons(
@@ -783,6 +794,7 @@ class Capture:
         self.b_radio_ch5.observe(self.on_b_radio_ch5, 'value')
         self.b_radio_ch6.observe(self.on_b_radio_ch6, 'value')
         self.b_radio_ch7.observe(self.on_b_radio_ch7, 'value')
+        self.b_radio_ch8.observe(self.on_b_radio_ch8, 'value')
         self.b_channel_detect.observe(self.on_b_channel_detect, 'value')
         self.b_power_line.observe(self.on_b_power_line, 'value')
         self.b_custom_fir.observe(self.on_b_custom_fir, 'value')
@@ -793,6 +805,7 @@ class Capture:
         self.b_epsilon.observe(self.on_b_epsilon, 'value')
         self.b_volume.observe(self.on_b_volume, 'value')
         self.b_test_stimulus.on_click(self.on_b_test_stimulus)
+        self.b_pause.observe(self.on_b_pause, 'value')
         
         self.display_buttons()
 
@@ -811,7 +824,8 @@ class Capture:
                               widgets.HBox([self.b_threshold, self.b_test_stimulus]),
                               self.b_volume,
                               self.b_accordion_filter,
-                              self.b_capture]))
+                              self.b_capture,
+                              self.b_pause]))
 
     def enable_buttons(self):
         self.b_frequency.disabled = False
@@ -829,6 +843,7 @@ class Capture:
         self.b_radio_ch5.disabled = False
         self.b_radio_ch6.disabled = False
         self.b_radio_ch7.disabled = False
+        self.b_radio_ch8.disabled = False
         self.b_power_line.disabled = False
         self.b_channel_detect.disabled = False
         self.b_polyak_mean.disabled = False
@@ -842,6 +857,7 @@ class Capture:
         self.b_custom_fir_cutoff.disabled = not self.custom_fir
         self.b_stimulate.disabled = not self.detect
         self.b_threshold.disabled = not self.detect
+        self.b_pause.disabled = not self.detect
         self.b_test_stimulus.disabled = True # only enabled when running
     
     def disable_buttons(self):
@@ -862,6 +878,7 @@ class Capture:
         self.b_radio_ch5.disabled = True
         self.b_radio_ch6.disabled = True
         self.b_radio_ch7.disabled = True
+        self.b_radio_ch8.disabled = True
         self.b_channel_detect.disabled = True
         self.b_power_line.disabled = True
         self.b_polyak_mean.disabled = True
@@ -893,6 +910,9 @@ class Capture:
     
     def on_b_radio_ch7(self, value):
         self.channel_states[6] = value['new']
+    
+    def on_b_radio_ch8(self, value):
+        self.channel_states[7] = value['new']
         
     def on_b_channel_detect(self, value):
         self.channel_detection = value['new']
@@ -934,6 +954,8 @@ class Capture:
             self._t_capture.join()
             self._t_capture = None
             self.enable_buttons()
+            
+    
     
     def on_b_custom_fir(self, value):
         val = value['new']
@@ -1068,6 +1090,15 @@ class Capture:
         with self._test_stimulus_lock:
             self._test_stimulus = True
     
+    def on_b_pause(self, value):
+        val = value['new']
+        if val == 'Active':
+            with self._pause_detect_lock:
+                self._pause_detect = False
+        elif val == 'Paused':
+            with self._pause_detect_lock:
+                self._pause_detect = True
+    
     def open_recording_file(self):
         nb_signals = self.nb_signals
         samples_per_datarecord_array = self.samples_per_datarecord_array
@@ -1197,7 +1228,9 @@ class Capture:
             
             filtered_point = n_array.tolist()
             
-            if detector is not None:
+            with self._pause_detect_lock:
+                pause = self._pause_detect
+            if detector is not None and not pause:
                 detection_signal = detector.detect(filtered_point)
                 if stimulator is not None:
                     stimulator.stimulate(detection_signal)
