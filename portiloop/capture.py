@@ -1191,13 +1191,20 @@ class Capture:
         
         if lsl:
             from pylsl import StreamInfo, StreamOutlet
-            lsl_info = StreamInfo(name='Portiloop',
-                                  type='EEG',
+            lsl_info = StreamInfo(name='Portiloop Filtered',
+                                  type='Filtered EEG',
                                   channel_count=8,
                                   nominal_srate=self.frequency,
                                   channel_format='float32',
                                   source_id='portiloop1')  # TODO: replace this by unique device identifier
             lsl_outlet = StreamOutlet(lsl_info)
+            lsl_info_raw = StreamInfo(name='Portiloop Raw Data',
+                                  type='Raw EEG signal',
+                                  channel_count=8,
+                                  nominal_srate=self.frequency,
+                                  channel_format='float32',
+                                  source_id='portiloop1')  # TODO: replace this by unique device identifier
+            lsl_outlet_raw = StreamOutlet(lsl_info_raw)
 
         buffer = []
 
@@ -1228,6 +1235,10 @@ class Capture:
             
             filtered_point = n_array.tolist()
             
+            if lsl:
+                lsl_outlet_raw.push_sample(point)
+                lsl_outlet.push_sample(filtered_point[-1])
+            
             with self._pause_detect_lock:
                 pause = self._pause_detect
             if detector is not None and not pause:
@@ -1239,9 +1250,6 @@ class Capture:
                         self._test_stimulus = False
                     if test_stimulus:
                         stimulator.test_stimulus()
-            
-            if lsl:
-                lsl_outlet.push_sample(filtered_point[-1])
             
             buffer += filtered_point
             if len(buffer) >= 50:
