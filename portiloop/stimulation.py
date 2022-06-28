@@ -37,6 +37,8 @@ class SleepSpindleRealTimeStimulator(Stimulator):
         self._thread = None
         self._lock = Lock()
         self.last_detected_ts = time.time()
+        self.wait_counter = 0
+        self.delayed = False
         self.wait_t = 0.4  # 400 ms
         
         lsl_markers_info = pylsl.StreamInfo(name='Portiloop_stimuli',
@@ -45,6 +47,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                                   channel_format='string',
                                   source_id='portiloop1')  # TODO: replace this by unique device identifier
         self.lsl_outlet_markers = pylsl.StreamOutlet(lsl_markers_info)
+        self.delayer = None
         
         # Initialize Alsa stuff
         # Open WAV file and set PCM device
@@ -86,11 +89,32 @@ class SleepSpindleRealTimeStimulator(Stimulator):
     
     def stimulate(self, detection_signal):
         for sig in detection_signal:
-            if sig:
+            # We are waiting for a delayed stimulation
+            if self.delayed:
+                if self.wait_counter >= self.wait_time:
+                    with self._lock:
+                        if self._thread is None: 
+                            self._thread = Thread(target=self._t_sound, daemon=True)
+                            self._thread.start()
+                    self.delayed = False
+                else:
+                    self.wait_counter += 1
+            # We detect a stimulation
+            elif sig:
+                # Record time of stimulation
                 ts = time.time()
+                
+                # Prompt delayer to try and get a stimulation
+                if self.delayer is not None:
+                    self.wait_time = self.delayer.stimulate()
+                    self.delayed = True
+                    self.wait_counter = 0
+                    continue
+                
+                # Stimulate if allowed
                 if ts - self.last_detected_ts > self.wait_t:
                     with self._lock:
-                        if self._thread is None:
+                        if self._thread is None: 
                             self._thread = Thread(target=self._t_sound, daemon=True)
                             self._thread.start()
                 self.last_detected_ts = ts
@@ -106,3 +130,6 @@ class SleepSpindleRealTimeStimulator(Stimulator):
             if self._thread is None:
                 self._thread = Thread(target=self._t_sound, daemon=True)
                 self._thread.start()
+                
+    def add_delayer(self, delayer):
+        self.delayer = delayer

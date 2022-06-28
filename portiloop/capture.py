@@ -429,6 +429,58 @@ class DummyAlsaMixer:
         self.volume = volume
 
 
+class UpStateDelayer:
+    def __init__(self, sample_freq, spindle_freq, peak): 
+        '''
+        args:
+            buffer_size: int -> Size of desired buffer in length
+            sample_freq: int -> Sampling frequency of signal in Hz
+        '''
+        # Get number of timesteps for a whole spindle
+        self.spindle_timesteps = (1/spindle_freq) * sample_freq # s * 
+        self.sample_freq = sample_freq
+        self.buffer_size = 1.5 * self.spindle_timesteps
+        self.peak = peak
+        self.buffer = []
+
+    def add_point(self, point):
+        '''
+        Adds a point to the buffer to be able to keep track of peaks
+        '''
+        self.buffer.append(point)
+        if len(self.buffer) > self.buffer_size:
+            self.buffer.pop(0)
+
+    def stimulate(self): 
+        # Calculate how far away is last peak
+        last_peak = -1
+        count = 0
+        for idx, point in reversed(list(enumerate(self.buffer))):
+            if self.peak:
+                try:
+                    sup = point >= self.buffer[idx+1]
+                except IndexError:
+                    sup = False
+                try:
+                    inf = point >= self.buffer[idx-1]
+                except IndexError:
+                    inf = False
+            else:
+                try:
+                    sup = point <= self.buffer[idx+1]
+                except IndexError:
+                    sup = False
+                try:
+                    inf = point <= self.buffer[idx-1]
+                except IndexError:
+                    inf = False
+            if sup and inf:
+                last_peak = count
+                return self.spindle_timesteps - last_peak
+            count += 1
+        return -1
+        
+
 class Capture:
     def __init__(self, detector_cls=None, stimulator_cls=None):
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
@@ -465,6 +517,8 @@ class Capture:
         self._t_capture = None
         self.channel_states = ['disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled']
         self.channel_detection = 2
+        self.spindle_detection_mode = 'Fast'
+        self.spindle_freq = 10
         
         self.detector_cls = detector_cls
         self.stimulator_cls = stimulator_cls
@@ -548,6 +602,21 @@ class Capture:
             options=[('2', 2), ('3', 3), ('4', 4), ('5', 5), ('6', 6), ('7', 7), ('8', 8)],
             value=2,
             description='Detection Channel:',
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
+        
+        self.b_spindle_mode = widgets.Dropdown(
+            options=['Fast', 'Peak', 'Through'],
+            value='Fast',
+            description='Spindle Stimulation Mode',
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
+        
+        self.b_spindle_freq = widgets.IntText(
+            value=self.spindle_freq,
+            description='Spindle Freq (Hz):',
             disabled=False,
             style={'description_width': 'initial'}
         )
@@ -796,6 +865,8 @@ class Capture:
         self.b_radio_ch7.observe(self.on_b_radio_ch7, 'value')
         self.b_radio_ch8.observe(self.on_b_radio_ch8, 'value')
         self.b_channel_detect.observe(self.on_b_channel_detect, 'value')
+        self.b_spindle_mode.observe(self.on_b_spindle_mode, 'value')
+        self.b_spindle_freq.observe(self.on_b_spindle_freq, 'value')
         self.b_power_line.observe(self.on_b_power_line, 'value')
         self.b_custom_fir.observe(self.on_b_custom_fir, 'value')
         self.b_custom_fir_order.observe(self.on_b_custom_fir_order, 'value')
@@ -823,6 +894,7 @@ class Capture:
                               widgets.HBox([self.b_filter, self.b_detect, self.b_stimulate, self.b_record, self.b_lsl, self.b_display]),
                               widgets.HBox([self.b_threshold, self.b_test_stimulus]),
                               self.b_volume,
+                              widgets.HBox([self.b_spindle_mode, self.b_spindle_freq]),
                               self.b_accordion_filter,
                               self.b_capture,
                               self.b_pause]))
@@ -846,6 +918,8 @@ class Capture:
         self.b_radio_ch8.disabled = False
         self.b_power_line.disabled = False
         self.b_channel_detect.disabled = False
+        self.b_spindle_freq.disabled = False
+        self.b_spindle_mode.disabled = False
         self.b_polyak_mean.disabled = False
         self.b_polyak_std.disabled = False
         self.b_epsilon.disabled = False
@@ -880,6 +954,8 @@ class Capture:
         self.b_radio_ch7.disabled = True
         self.b_radio_ch8.disabled = True
         self.b_channel_detect.disabled = True
+        self.b_spindle_freq.disabled = True
+        self.b_spindle_mode.disabled = True
         self.b_power_line.disabled = True
         self.b_polyak_mean.disabled = True
         self.b_polyak_std.disabled = True
@@ -916,7 +992,17 @@ class Capture:
         
     def on_b_channel_detect(self, value):
         self.channel_detection = value['new']
-
+        
+    def on_b_spindle_freq(self, value): 
+        val = value['new']
+        if val > 0:
+            self.spindle_freq = val
+        else:
+            self.b_spindle_freq.value = self.spindle_freq
+        
+    def on_b_spindle_mode(self, value):
+        self.spindle_detection_mode = value['new']
+        
     def on_b_capture(self, value):
         val = value['new']
         if val == 'Start':
@@ -1208,6 +1294,13 @@ class Capture:
 
         buffer = []
 
+        if not self.spindle_detection_mode == 'Fast':
+            print('here')
+            stimulation_delayer = UpStateDelayer(self.frequency, self.spindle_freq, self.spindle_detection_mode == 'Peak')
+            stimulator.add_delayer(stimulation_delayer)
+        else:
+            stimulation_delayer = None
+
         while True:
             with self._lock_msg_out:
                 if self._msg_out is not None:
@@ -1238,12 +1331,15 @@ class Capture:
             if lsl:
                 lsl_outlet_raw.push_sample(point)
                 lsl_outlet.push_sample(filtered_point[-1])
+                
+            if stimulation_delayer is not None:
+                stimulation_delayer.add_point(point[channel-1])
             
             with self._pause_detect_lock:
                 pause = self._pause_detect
             if detector is not None and not pause:
                 detection_signal = detector.detect(filtered_point)
-                if stimulator is not None:
+                if stimulator is not None:                    
                     stimulator.stimulate(detection_signal)
                     with self._test_stimulus_lock:
                         test_stimulus = self._test_stimulus
