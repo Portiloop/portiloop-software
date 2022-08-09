@@ -57,14 +57,13 @@ DEFAULT_FRONTEND_CONFIG = [
     0x00, # CONFIG4 [00] [0, 0, 0, 0, SINGLE_SHOT, 0, PD_LOFF_COMP(bar), 0] : Single-shot, lead-off comparator disabled
 ]
 
-
 FRONTEND_CONFIG = [
     0x3E, # ID (RO)
     0x95, # CONFIG1 [95] [1, DAISY_EN(bar), CLK_EN, 1, 0, DR[2:0]] : Datarate = 500 SPS
     0xC0, # CONFIG2 [C0] [1, 1, 0, INT_CAL, 0, CAL_AMP0, CAL_FREQ[1:0]]
-    0xE0, # CONFIG3 [E0] [PD_REFBUF(bar), 1, 1, BIAS_MEAS, BIASREF_INT, PD_BIAS(bar), BIAS_LOFF_SENS, BIAS_STAT] : Power-down reference buffer, no bias
+    0xFC, # CONFIG3 [E0] [PD_REFBUF(bar), 1, 1, BIAS_MEAS, BIASREF_INT, PD_BIAS(bar), BIAS_LOFF_SENS, BIAS_STAT] : Power-down reference buffer, no bias
     0x00, # No lead-off
-    0x60, # CH1SET [60] [PD1, GAIN1[2:0], SRB2, MUX1[2:0]]
+    0x62, # CH1SET [60] [PD1, GAIN1[2:0], SRB2, MUX1[2:0]] set to measure BIAS signal
     0x60, # CH2SET
     0x60, # CH3SET
     0x60, # CH4SET
@@ -95,7 +94,6 @@ def to_ads_frequency(frequency):
             break
     return dr
     
-
 def mod_config(config, datarate, channel_modes):
     
     # datarate:
@@ -119,30 +117,22 @@ def mod_config(config, datarate, channel_modes):
     
     # bias:
 
-    assert len(channel_modes) == 8
+    assert len(channel_modes) == 7
     config[13] = 0x00  # clear BIAS_SENSP
     config[14] = 0x00  # clear BIAS_SENSN
-    bias_active = False
     for chan_i, chan_mode in enumerate(channel_modes):
         n = 5 + chan_i
         mod = config[n] & 0x78  # clear PDn and MUX[2:0]
         if chan_mode == 'simple':
-            pass  # PDn = 0 and normal electrode (000)
-        elif chan_mode == 'disabled':
-            mod = mod | 0x81  # PDn = 1 and input shorted (001)
-        elif chan_mode == 'with bias':
-            bias_active = True
+            # If channel is activated, we send the channel's output to the BIAS mechanism
             bit_i = 1 << chan_i
             config[13] = config[13] | bit_i
             config[14] = config[14] | bit_i
-        elif chan_mode == 'bias out':
-            bias_active = True
-            mod = mod | 0x06  # MUX[2:0] = BIAS_DRP (110)
+        elif chan_mode == 'disabled':
+            mod = mod | 0x81  # PDn = 1 and input shorted (001)
         else:
             assert False, f"Wrong key: {chan_mode}."
         config[n] = mod
-    if bias_active:
-        config[3] = config[3] | 0x1c  # activate the bias mechanism
     for n, c in enumerate(config):  # print ADS1299 configuration registers
         print(f"config[{n}]:\t{c:08b}\t({hex(c)})")
     return config
@@ -478,8 +468,7 @@ class UpStateDelayer:
                 last_peak = count
                 return self.spindle_timesteps - last_peak
             count += 1
-        return -1
-        
+        return -1        
 
 class Capture:
     def __init__(self, detector_cls=None, stimulator_cls=None):
@@ -511,11 +500,11 @@ class Capture:
         self.samples_per_datarecord_array = self.frequency
         self.physical_max = 5
         self.physical_min = -5
-        self.signal_labels = ['ch1', 'ch2', 'ch3', 'ch4', 'ch5', 'ch6', 'ch7', 'ch8']
+        self.signal_labels = ['Common Mode', 'ch2', 'ch3', 'ch4', 'ch5', 'ch6', 'ch7', 'ch8']
         self._lock_msg_out = Lock()
         self._msg_out = None
         self._t_capture = None
-        self.channel_states = ['disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled']
+        self.channel_states = ['disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled']
         self.channel_detection = 2
         self.spindle_detection_mode = 'Fast'
         self.spindle_freq = 10
@@ -550,50 +539,50 @@ class Capture:
         
         # CHANNELS ------------------------------
         
-        self.b_radio_ch1 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'with bias', 'bias out'],
-            value='disabled',
-            disabled=True
-        )
+#         self.b_radio_ch1 = widgets.RadioButtons(
+#             options=['disabled', 'simple'],
+#             value='disabled',
+#             disabled=True
+#         )
         
         self.b_radio_ch2 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'with bias', 'bias out'],
+            options=['disabled', 'simple'],
             value='disabled',
             disabled=False
         )
         
         self.b_radio_ch3 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'with bias', 'bias out'],
+            options=['disabled', 'simple'],
             value='disabled',
             disabled=False
         )
         
         self.b_radio_ch4 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'with bias', 'bias out'],
+            options=['disabled', 'simple'],
             value='disabled',
             disabled=False
         )
         
         self.b_radio_ch5 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'with bias', 'bias out'],
+            options=['disabled', 'simple'],
             value='disabled',
             disabled=False
         )
         
         self.b_radio_ch6 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'with bias', 'bias out'],
+            options=['disabled', 'simple'],
             value='disabled',
             disabled=False
         )
         
         self.b_radio_ch7 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'with bias', 'bias out'],
+            options=['disabled', 'simple'],
             value='disabled',
             disabled=False
         )
         
         self.b_radio_ch8 = widgets.RadioButtons(
-            options=['disabled', 'simple', 'with bias', 'bias out'],
+            options=['disabled', 'simple'],
             value='disabled',
             disabled=False
         )
@@ -624,7 +613,6 @@ class Capture:
         self.b_accordion_channels = widgets.Accordion(
             children=[
                 widgets.GridBox([
-                    widgets.Label('CH1'),
                     widgets.Label('CH2'),
                     widgets.Label('CH3'),
                     widgets.Label('CH4'),
@@ -632,14 +620,13 @@ class Capture:
                     widgets.Label('CH6'),
                     widgets.Label('CH7'),
                     widgets.Label('CH8'),
-                    self.b_radio_ch1,
                     self.b_radio_ch2,
                     self.b_radio_ch3,
                     self.b_radio_ch4,
                     self.b_radio_ch5,
                     self.b_radio_ch6,
                     self.b_radio_ch7,
-                    self.b_radio_ch8], layout=widgets.Layout(grid_template_columns="repeat(8, 90px)")
+                    self.b_radio_ch8], layout=widgets.Layout(grid_template_columns="repeat(7, 90px)")
                 )
             ])
         self.b_accordion_channels.set_title(index = 0, title = 'Channels')
@@ -840,6 +827,13 @@ class Capture:
             tooltip='Send a test stimulus'
         )
         
+        self.b_test_impedance = widgets.Button(
+            description='Impedance Check',
+            disabled=False,
+            button_style='', # 'success', 'info', 'warning', 'danger' or ''
+            tooltip='Check if electrodes are properly connected'
+        )
+        
         # CALLBACKS ----------------------
         
         self.b_capture.observe(self.on_b_capture, 'value')
@@ -876,6 +870,7 @@ class Capture:
         self.b_epsilon.observe(self.on_b_epsilon, 'value')
         self.b_volume.observe(self.on_b_volume, 'value')
         self.b_test_stimulus.on_click(self.on_b_test_stimulus)
+        self.b_test_impedance.on_click(self.on_b_test_impedance)
         self.b_pause.observe(self.on_b_pause, 'value')
         
         self.display_buttons()
@@ -895,6 +890,7 @@ class Capture:
                               widgets.HBox([self.b_threshold, self.b_test_stimulus]),
                               self.b_volume,
                               widgets.HBox([self.b_spindle_mode, self.b_spindle_freq]),
+                              self.b_test_impedance,
                               self.b_accordion_filter,
                               self.b_capture,
                               self.b_pause]))
@@ -933,6 +929,7 @@ class Capture:
         self.b_threshold.disabled = not self.detect
         self.b_pause.disabled = not self.detect
         self.b_test_stimulus.disabled = True # only enabled when running
+        self.b_test_impedance.disabled = False
     
     def disable_buttons(self):
         self.b_frequency.disabled = True
@@ -968,27 +965,28 @@ class Capture:
         self.b_custom_fir_cutoff.disabled = True
         self.b_threshold.disabled = True
         self.b_test_stimulus.disabled = not self.stimulate # only enabled when running
+        self.b_test_impedance.disabled = True
     
     def on_b_radio_ch2(self, value):
-        self.channel_states[1] = value['new']
+        self.channel_states[0] = value['new']
     
     def on_b_radio_ch3(self, value):
-        self.channel_states[2] = value['new']
+        self.channel_states[1] = value['new']
     
     def on_b_radio_ch4(self, value):
-        self.channel_states[3] = value['new']
+        self.channel_states[2] = value['new']
     
     def on_b_radio_ch5(self, value):
-        self.channel_states[4] = value['new']
+        self.channel_states[3] = value['new']
     
     def on_b_radio_ch6(self, value):
-        self.channel_states[5] = value['new']
+        self.channel_states[4] = value['new']
     
     def on_b_radio_ch7(self, value):
-        self.channel_states[6] = value['new']
+        self.channel_states[5] = value['new']
     
     def on_b_radio_ch8(self, value):
-        self.channel_states[7] = value['new']
+        self.channel_states[6] = value['new']
         
     def on_b_channel_detect(self, value):
         self.channel_detection = value['new']
@@ -1175,6 +1173,37 @@ class Capture:
     def on_b_test_stimulus(self, b):
         with self._test_stimulus_lock:
             self._test_stimulus = True
+            
+    def on_b_test_impedance(self, b):
+        frontend = Frontend()
+        
+        def is_set(x, n):
+            return x & 1 << n != 0
+        
+        try:
+            frontend.write_regs(0x00, FRONTEND_CONFIG)
+            frontend.start()
+            new_config = frontend.read_regs(0x00, len(FRONTEND_CONFIG))
+            leadoff_p = new_config[18]
+            leadoff_n = new_config[19]
+            
+            # Check if any of the negative bits are set and initialize the impedance array
+            impedance_check = [any([is_set(leadoff_n, i) for i in range(2, 9)])]
+            
+           # Check all other values for all electrodes
+            for i in range(2, 9):
+                impedance_check.append(is_set(leadoff_p, i))
+            
+            def print_impedance(impedance):
+                names = ["Ref", "Ch2", "Ch3", "Ch4", "Ch5", "Ch6", "Ch7", "Ch8"]
+                vals = [' Y ' if val else ' N ' for val in impedance]
+                print(' '.join(str(name) for name in names))
+                print(' '.join(str(val) for val in vals))
+                    
+            print_impedance(impedance_check)
+            
+        finally: 
+            frontend.close()
     
     def on_b_pause(self, value):
         val = value['new']
@@ -1319,8 +1348,15 @@ class Capture:
                 point = p_data_i.recv()
             else:
                 continue
-                
-            n_array = np.array([point])
+            
+            new_point = point
+            avg = 0
+            for idx, p in enumerate(point):
+                if idx > 0 and idx < 5:
+                    avg += p
+            new_point[0] = avg // 4
+            new_point[5] = new_point[1] - new_point[0]
+            n_array = np.array([new_point])
             n_array = filter_np(n_array)
             
             if filter:
