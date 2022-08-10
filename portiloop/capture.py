@@ -1323,8 +1323,7 @@ class Capture:
 
         buffer = []
 
-        if not self.spindle_detection_mode == 'Fast':
-            print('here')
+        if not self.spindle_detection_mode == 'Fast' and stimulator is not None:
             stimulation_delayer = UpStateDelayer(self.frequency, self.spindle_freq, self.spindle_detection_mode == 'Peak')
             stimulator.add_delayer(stimulation_delayer)
         else:
@@ -1370,7 +1369,7 @@ class Capture:
                 
             if stimulation_delayer is not None:
                 stimulation_delayer.add_point(point[channel-1])
-            
+
             with self._pause_detect_lock:
                 pause = self._pause_detect
             if detector is not None and not pause:
