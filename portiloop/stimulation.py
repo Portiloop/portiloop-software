@@ -46,7 +46,16 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                                   channel_count=1,
                                   channel_format='string',
                                   source_id='portiloop1')  # TODO: replace this by unique device identifier
+        
+        lsl_markers_info_fast = pylsl.StreamInfo(name='Portiloop_stimuli_fast',
+                                  type='Markers',
+                                  channel_count=1,
+                                  channel_format='string',
+                                  source_id='portiloop1')  # TODO: replace this by unique device identifier
+        
         self.lsl_outlet_markers = pylsl.StreamOutlet(lsl_markers_info)
+        self.lsl_outlet_markers_fast = pylsl.StreamOutlet(lsl_markers_info_fast)
+
         self.delayer = None
         
         # Initialize Alsa stuff
@@ -102,6 +111,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
             # We detect a stimulation
             elif sig:
                 # Record time of stimulation
+                self.lsl_outlet_markers_fast.push_sample(['FASTSTIM'])
                 ts = time.time()
                 
                 # Prompt delayer to try and get a stimulation
