@@ -82,6 +82,32 @@ FRONTEND_CONFIG = [
     0x20, # Enable SRB1
 ]
 
+
+LEADOFF_CONFIG = [
+    0x3E, # ID (RO)
+    0x95, # CONFIG1 [95] [1, DAISY_EN(bar), CLK_EN, 1, 0, DR[2:0]] : Datarate = 500 SPS
+    0xC0, # CONFIG2 [C0] [1, 1, 0, INT_CAL, 0, CAL_AMP0, CAL_FREQ[1:0]]
+    0xFC, # CONFIG3 [E0] [PD_REFBUF(bar), 1, 1, BIAS_MEAS, BIASREF_INT, PD_BIAS(bar), BIAS_LOFF_SENS, BIAS_STAT] : Power-down reference buffer, no bias
+    0x00, # No lead-off
+    0x60, # CH1SET [60] [PD1, GAIN1[2:0], SRB2, MUX1[2:0]] set to measure BIAS signal
+    0x60, # CH2SET
+    0x60, # CH3SET
+    0x60, # CH4SET
+    0x60, # CH5SET
+    0x60, # CH6SET
+    0x60, # CH7SET
+    0x60, # CH8SET
+    0x00, # BIAS_SENSP 00
+    0x00, # BIAS_SENSN 00
+    0xFF, # LOFF_SENSP Lead-off on all positive pins?
+    0xFF, # LOFF_SENSN Lead-off on all negative pins?
+    0x00, # Normal lead-off
+    0x00, # Lead-off positive status (RO)
+    0x00, # Lead-off negative status (RO)
+    0x00, # All GPIOs as output ?
+    0x20, # Enable SRB1
+]
+
 EDF_PATH = Path.home() / 'workspace' / 'edf_recording'
 
 
@@ -116,16 +142,15 @@ def mod_config(config, datarate, channel_modes):
     config[1] = new_cf1
     
     # bias:
-
     assert len(channel_modes) == 7
     config[13] = 0x00  # clear BIAS_SENSP
     config[14] = 0x00  # clear BIAS_SENSN
     for chan_i, chan_mode in enumerate(channel_modes):
-        n = 5 + chan_i
+        n = 6 + chan_i
         mod = config[n] & 0x78  # clear PDn and MUX[2:0]
         if chan_mode == 'simple':
             # If channel is activated, we send the channel's output to the BIAS mechanism
-            bit_i = 1 << chan_i
+            bit_i = 1 << chan_i + 1
             config[13] = config[13] | bit_i
             config[14] = config[14] | bit_i
         elif chan_mode == 'disabled':
@@ -1183,7 +1208,11 @@ class Capture:
         try:
             frontend.write_regs(0x00, FRONTEND_CONFIG)
             frontend.start()
-            new_config = frontend.read_regs(0x00, len(FRONTEND_CONFIG))
+            start_time = time.time()
+            current_time = time.time()
+            while current_time - start_time < 2:
+                current_time = time.time()
+            new_config = frontend.read_regs(0x00, len(LEADOFF_CONFIG))
             leadoff_p = new_config[18]
             leadoff_n = new_config[19]
             
@@ -1347,15 +1376,8 @@ class Capture:
                 point = p_data_i.recv()
             else:
                 continue
-            
-            new_point = point
-            avg = 0
-            for idx, p in enumerate(point):
-                if idx > 0 and idx < 5:
-                    avg += p
-            new_point[0] = avg // 4
-            new_point[5] = new_point[1] - new_point[0]
-            n_array = np.array([new_point])
+                
+            n_array = np.array([point])
             n_array = filter_np(n_array)
             
             if filter:
