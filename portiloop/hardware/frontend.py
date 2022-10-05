@@ -33,15 +33,15 @@ class Reading:
     def channels(self):
         return self._channels
 
-    def gpio(idx: int):
+    def gpio(self, idx: int):
         assert 0 <= idx <= 3, "Invalid gpio index"
         return (self.gpios >> idx) & 0x01 == 0x01
 
-    def loff_p(idx: int):
+    def loff_p(self, idx: int):
         assert 0 <= idx <= 7, "Invalid loff index"
         return (self.loff_statp >> idx) & 0x01 == 0x01
 
-    def loff_n(idx: int):
+    def loff_n(self, idx: int):
         assert 0 <= idx <= 7, "Invalid loff index"
         return (self.loff_statn >> idx) & 0x01 == 0x01
 
