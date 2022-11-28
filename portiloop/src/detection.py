@@ -39,7 +39,7 @@ class Detector(ABC):
 
 # Example implementation for sleep spindles:
         
-DEFAULT_MODEL_PATH = str(Path(__file__).parent / "models/portiloop_model_quant.tflite")
+DEFAULT_MODEL_PATH = str(Path(__file__).parent.parent / "models/portiloop_model_quant.tflite")
 # print(DEFAULT_MODEL_PATH)
 
 class SleepSpindleRealTimeDetector(Detector):
