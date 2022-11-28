@@ -1,345 +1,27 @@
-import os
-import sys
+
 
 from time import sleep
 import time
 import numpy as np
-import os
 from copy import deepcopy
-from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 import multiprocessing as mp
 import warnings
-import shutil
 from threading import Thread, Lock
 import alsaaudio
 
-from EDFlib.edfwriter import EDFwriter
-from scipy.signal import firwin
+from portiloop.src.stimulation import UpStateDelayer
 
-from portilooplot.jupyter_plot import ProgressPlot
-from portiloop.hardware.frontend import Frontend
-from portiloop.hardware.leds import LEDs, Color
-
+from portiloop.src.hardware.frontend import Frontend
+from portiloop.src.hardware.leds import LEDs, Color
+from portiloop.src.processing import FilterPipeline, int_to_float
+from portiloop.src.config import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
+from portiloop.src.utils import FileReader, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH
 from IPython.display import clear_output, display
 import ipywidgets as widgets
 
 
-DEFAULT_FRONTEND_CONFIG = [
-    # nomenclature: name [default setting] [bits 7-0] : description
-    # Read only ID:
-    0x3E, # ID [xx] [REV_ID[2:0], 1, DEV_ID[1:0], NU_CH[1:0]] : (RO)
-    # Global Settings Across Channels:
-    0x96, # CONFIG1 [96] [1, DAISY_EN(bar), CLK_EN, 1, 0, DR[2:0]] : Datarate = 250 SPS
-    0xC0, # CONFIG2 [C0] [1, 1, 0, INT_CAL, 0, CAL_AMP0, CAL_FREQ[1:0]] : No tests
-    0x60, # CONFIG3 [60] [PD_REFBUF(bar), 1, 1, BIAS_MEAS, BIASREF_INT, PD_BIAS(bar), BIAS_LOFF_SENS, BIAS_STAT] : Power-down reference buffer, no bias
-    0x00, # LOFF [00] [COMP_TH[2:0], 0, ILEAD_OFF[1:0], FLEAD_OFF[1:0]] : No lead-off
-    # Channel-Specific Settings:
-    0x61, # CH1SET [61] [PD1, GAIN1[2:0], SRB2, MUX1[2:0]] : Channel 1 active, 24 gain, no SRB2 & input shorted
-    0x61, # CH2SET [61] [PD2, GAIN2[2:0], SRB2, MUX2[2:0]] : Channel 2 active, 24 gain, no SRB2 & input shorted
-    0x61, # CH3SET [61] [PD3, GAIN3[2:0], SRB2, MUX3[2:0]] : Channel 3 active, 24 gain, no SRB2 & input shorted
-    0x61, # CH4SET [61] [PD4, GAIN4[2:0], SRB2, MUX4[2:0]] : Channel 4 active, 24 gain, no SRB2 & input shorted
-    0x61, # CH5SET [61] [PD5, GAIN5[2:0], SRB2, MUX5[2:0]] : Channel 5 active, 24 gain, no SRB2 & input shorted
-    0x61, # CH6SET [61] [PD6, GAIN6[2:0], SRB2, MUX6[2:0]] : Channel 6 active, 24 gain, no SRB2 & input shorted
-    0x61, # CH7SET [61] [PD7, GAIN7[2:0], SRB2, MUX7[2:0]] : Channel 7 active, 24 gain, no SRB2 & input shorted
-    0x61, # CH8SET [61] [PD8, GAIN8[2:0], SRB2, MUX8[2:0]] : Channel 8 active, 24 gain, no SRB2 & input shorted
-    0x00, # BIAS_SENSP [00] [BIASP8, BIASP7, BIASP6, BIASP5, BIASP4, BIASP3, BIASP2, BIASP1] : No bias
-    0x00, # BIAS_SENSN [00] [BIASN8, BIASN7, BIASN6, BIASN5, BIASN4, BIASN3, BIASN2, BIASN1] No bias
-    0x00, # LOFF_SENSP [00] [LOFFP8, LOFFP7, LOFFP6, LOFFP5, LOFFP4, LOFFP3, LOFFP2, LOFFP1] : No lead-off
-    0x00, # LOFF_SENSN [00] [LOFFM8, LOFFM7, LOFFM6, LOFFM5, LOFFM4, LOFFM3, LOFFM2, LOFFM1] : No lead-off
-    0x00, # LOFF_FLIP [00] [LOFF_FLIP8, LOFF_FLIP7, LOFF_FLIP6, LOFF_FLIP5, LOFF_FLIP4, LOFF_FLIP3, LOFF_FLIP2, LOFF_FLIP1] : No lead-off flip
-    # Lead-Off Status Registers (Read-Only Registers):
-    0x00, # LOFF_STATP [00] [IN8P_OFF, IN7P_OFF, IN6P_OFF, IN5P_OFF, IN4P_OFF, IN3P_OFF, IN2P_OFF, IN1P_OFF] : Lead-off positive status (RO)
-    0x00, # LOFF_STATN [00] [IN8M_OFF, IN7M_OFF, IN6M_OFF, IN5M_OFF, IN4M_OFF, IN3M_OFF, IN2M_OFF, IN1M_OFF] : Laed-off negative status (RO)
-    # GPIO and OTHER Registers:
-    0x0F, # GPIO [0F] [GPIOD[4:1], GPIOC[4:1]] : All GPIOs as inputs
-    0x00, # MISC1 [00] [0, 0, SRB1, 0, 0, 0, 0, 0] : Disable SRBM
-    0x00, # MISC2 [00] [00] : Unused
-    0x00, # CONFIG4 [00] [0, 0, 0, 0, SINGLE_SHOT, 0, PD_LOFF_COMP(bar), 0] : Single-shot, lead-off comparator disabled
-]
-
-FRONTEND_CONFIG = [
-    0x3E, # ID (RO)
-    0x95, # CONFIG1 [95] [1, DAISY_EN(bar), CLK_EN, 1, 0, DR[2:0]] : Datarate = 500 SPS
-    0xD0, # CONFIG2 [C0] [1, 1, 0, INT_CAL, 0, CAL_AMP0, CAL_FREQ[1:0]]
-    0xFC, # CONFIG3 [E0] [PD_REFBUF(bar), 1, 1, BIAS_MEAS, BIASREF_INT, PD_BIAS(bar), BIAS_LOFF_SENS, BIAS_STAT] : Power-down reference buffer, no bias
-    0x00, # No lead-off
-    0x62, # CH1SET [60] [PD1, GAIN1[2:0], SRB2, MUX1[2:0]] set to measure BIAS signal
-    0x60, # CH2SET
-    0x60, # CH3SET
-    0x60, # CH4SET
-    0x60, # CH5SET
-    0x60, # CH6SET
-    0x60, # CH7SET
-    0x60, # CH8SET
-    0x00, # BIAS_SENSP 00
-    0x00, # BIAS_SENSN 00
-    0x00, # LOFF_SENSP Lead-off on all positive pins?
-    0x00, # LOFF_SENSN Lead-off on all negative pins?
-    0x00, # Normal lead-off
-    0x00, # Lead-off positive status (RO)
-    0x00, # Lead-off negative status (RO)
-    0x00, # All GPIOs as output ?
-    0x20, # Enable SRB1
-]
-
-
-LEADOFF_CONFIG = [
-    0x3E, # ID (RO)
-    0x95, # CONFIG1 [95] [1, DAISY_EN(bar), CLK_EN, 1, 0, DR[2:0]] : Datarate = 500 SPS
-    0xC0, # CONFIG2 [C0] [1, 1, 0, INT_CAL, 0, CAL_AMP0, CAL_FREQ[1:0]]
-    0xFC, # CONFIG3 [E0] [PD_REFBUF(bar), 1, 1, BIAS_MEAS, BIASREF_INT, PD_BIAS(bar), BIAS_LOFF_SENS, BIAS_STAT] : Power-down reference buffer, no bias
-    0x00, # No lead-off
-    0x60, # CH1SET [60] [PD1, GAIN1[2:0], SRB2, MUX1[2:0]] set to measure BIAS signal
-    0x60, # CH2SET
-    0x60, # CH3SET
-    0x60, # CH4SET
-    0x60, # CH5SET
-    0x60, # CH6SET
-    0x60, # CH7SET
-    0x60, # CH8SET
-    0x00, # BIAS_SENSP 00
-    0x00, # BIAS_SENSN 00
-    0xFF, # LOFF_SENSP Lead-off on all positive pins?
-    0xFF, # LOFF_SENSN Lead-off on all negative pins?
-    0x00, # Normal lead-off
-    0x00, # Lead-off positive status (RO)
-    0x00, # Lead-off negative status (RO)
-    0x00, # All GPIOs as output ?
-    0x20, # Enable SRB1
-    0x00,
-    0x02,
-]
-
-EDF_PATH = Path.home() / 'workspace' / 'edf_recording'
-
-
-def to_ads_frequency(frequency):
-    possible_datarates = [250, 500, 1000, 2000, 4000, 8000, 16000]
-    dr = 16000
-    for i in possible_datarates:
-        if i >= frequency:
-            dr = i
-            break
-    return dr
-    
-def mod_config(config, datarate, channel_modes):
-    
-    # datarate:
-
-    possible_datarates = [(250, 0x06),
-                          (500, 0x05),
-                          (1000, 0x04),
-                          (2000, 0x03),
-                          (4000, 0x02),
-                          (8000, 0x01),
-                          (16000, 0x00)]
-    mod_dr = 0x00
-    for i, j in possible_datarates:
-        if i >= datarate:
-            mod_dr = j
-            break
-    
-    new_cf1 = config[1] & 0xF8
-    new_cf1 = new_cf1 | mod_dr
-    config[1] = new_cf1
-    
-    # bias:
-    assert len(channel_modes) == 7
-    config[13] = 0x00  # clear BIAS_SENSP
-    config[14] = 0x00  # clear BIAS_SENSN
-    for chan_i, chan_mode in enumerate(channel_modes):
-        n = 6 + chan_i
-        mod = config[n] & 0x78  # clear PDn and MUX[2:0]
-        if chan_mode == 'simple':
-            # If channel is activated, we send the channel's output to the BIAS mechanism
-            bit_i = 1 << chan_i + 1
-            config[13] = config[13] | bit_i
-            config[14] = config[14] | bit_i
-        elif chan_mode == 'disabled':
-            mod = mod | 0x81  # PDn = 1 and input shorted (001)
-        else:
-            assert False, f"Wrong key: {chan_mode}."
-        config[n] = mod
-    for n, c in enumerate(config):  # print ADS1299 configuration registers
-        print(f"config[{n}]:\t{c:08b}\t({hex(c)})")
-    return config
-
-
-def filter_24(value):
-    return (value * 4.5) / (2**23 - 1) / 24.0 * 1e6  # 23 because 1 bit is lost for sign
-
-
-def filter_2scomplement_np(value):
-    return np.where((value & (1 << 23)) != 0, value - (1 << 24), value)
-
-
-def filter_np(value):
-    return filter_24(filter_2scomplement_np(value))
-
-
-def shift_numpy(arr, num, fill_value=np.nan):
-    result = np.empty_like(arr)
-    if num > 0:
-        result[:num] = fill_value
-        result[num:] = arr[:-num]
-    elif num < 0:
-        result[num:] = fill_value
-        result[:num] = arr[-num:]
-    else:
-        result[:] = arr
-    return result
-
-
-class FIR:
-    def __init__(self, nb_channels, coefficients, buffer=None):
-        
-        self.coefficients = np.expand_dims(np.array(coefficients), axis=1)
-        self.taps = len(self.coefficients)
-        self.nb_channels = nb_channels
-        self.buffer = np.array(z) if buffer is not None else np.zeros((self.taps, self.nb_channels))
-    
-    def filter(self, x):
-        self.buffer = shift_numpy(self.buffer, 1, x)
-        filtered = np.sum(self.buffer * self.coefficients, axis=0)
-        return filtered
-
-    
-class FilterPipeline:
-    def __init__(self,
-                 nb_channels,
-                 sampling_rate,
-                 power_line_fq=60,
-                 use_custom_fir=False,
-                 custom_fir_order=20,
-                 custom_fir_cutoff=30,
-                 alpha_avg=0.1,
-                 alpha_std=0.001,
-                 epsilon=0.000001,
-                 filter_args=[]):
-        if len(filter_args) > 0:
-            use_fir, use_notch, use_std = filter_args
-        else:
-            use_fir=True,
-            use_notch=True,
-            use_std=True
-        self.use_fir = use_fir
-        self.use_notch = use_notch
-        self.use_std = use_std
-        self.nb_channels = nb_channels
-        assert power_line_fq in [50, 60], f"The only supported power line frequencies are 50 Hz and 60 Hz"
-        if power_line_fq == 60:
-            self.notch_coeff1 = -0.12478308884588535
-            self.notch_coeff2 = 0.98729186796473023
-            self.notch_coeff3 = 0.99364593398236511
-            self.notch_coeff4 = -0.12478308884588535
-            self.notch_coeff5 = 0.99364593398236511
-        else:
-            self.notch_coeff1 = -0.61410695998423581
-            self.notch_coeff2 =  0.98729186796473023
-            self.notch_coeff3 = 0.99364593398236511
-            self.notch_coeff4 = -0.61410695998423581
-            self.notch_coeff5 = 0.99364593398236511
-        self.dfs = [np.zeros(self.nb_channels), np.zeros(self.nb_channels)]
-        
-        self.moving_average = None
-        self.moving_variance = np.zeros(self.nb_channels)
-        self.ALPHA_AVG = alpha_avg
-        self.ALPHA_STD = alpha_std
-        self.EPSILON = epsilon
-        
-        if use_custom_fir:
-            self.fir_coef = firwin(numtaps=custom_fir_order+1, cutoff=custom_fir_cutoff, fs=sampling_rate)
-        else:
-            self.fir_coef = [
-                0.001623780150148094927192721215192250384,
-                0.014988684599373741992978104065059596905,
-                0.021287595318265635502275046064823982306,
-                0.007349500393709578957568417933998716762,
-                -0.025127515717112181709014251396183681209,
-                -0.052210507359822452833064687638398027048,
-                -0.039273839505489904766477593511808663607,
-                0.033021568427940004020193498490698402748,
-                0.147606943281569008563636202779889572412,
-                0.254000252034505602516389899392379447818,
-                0.297330876398883392486283128164359368384,
-                0.254000252034505602516389899392379447818,
-                0.147606943281569008563636202779889572412,
-                0.033021568427940004020193498490698402748,
-                -0.039273839505489904766477593511808663607,
-                -0.052210507359822452833064687638398027048,
-                -0.025127515717112181709014251396183681209,
-                0.007349500393709578957568417933998716762,
-                0.021287595318265635502275046064823982306,
-                0.014988684599373741992978104065059596905,
-                0.001623780150148094927192721215192250384]
-        self.fir = FIR(self.nb_channels, self.fir_coef)
-        
-    def filter(self, value):
-        """
-        value: a numpy array of shape (data series, channels)
-        """
-        for i, x in enumerate(value):  # loop over the data series
-            # FIR:
-            if self.use_fir:
-                x = self.fir.filter(x)
-            # notch:
-            if self.use_notch:
-                denAccum = (x - self.notch_coeff1 * self.dfs[0]) - self.notch_coeff2 * self.dfs[1]
-                x = (self.notch_coeff3 * denAccum + self.notch_coeff4 * self.dfs[0]) + self.notch_coeff5 * self.dfs[1]
-                self.dfs[1] = self.dfs[0]
-                self.dfs[0] = denAccum
-            # standardization:
-            if self.use_std:
-                if self.moving_average is not None:
-                    delta = x - self.moving_average
-                    self.moving_average = self.moving_average + self.ALPHA_AVG * delta
-                    self.moving_variance = (1 - self.ALPHA_STD) * (self.moving_variance + self.ALPHA_STD * delta**2)
-                    moving_std = np.sqrt(self.moving_variance)
-                    x = (x - self.moving_average) / (moving_std + self.EPSILON)
-                else:
-                    self.moving_average = x
-            value[i] = x
-        return value
-
-
-class LiveDisplay():
-    def __init__(self, channel_names, window_len=100):
-        self.datapoint_dim = len(channel_names)
-        self.history = []
-        self.pp = ProgressPlot(plot_names=channel_names, max_window_len=window_len)
-        self.matplotlib = False
-
-    def add_datapoints(self, datapoints):
-        """
-        Adds 8 lists of datapoints to the plot
-        
-        Args:
-            datapoints: list of 8 lists of floats (or list of 8 floats)
-        """
-        if self.matplotlib:
-            import matplotlib.pyplot as plt
-        disp_list = []
-        for datapoint in datapoints:
-            d = [[elt] for elt in datapoint]
-            disp_list.append(d)
-            
-            if self.matplotlib:
-                self.history += d[1]
-        
-        if not self.matplotlib:
-            self.pp.update_with_datapoints(disp_list)
-        elif len(self.history) == 1000:
-            plt.plot(self.history)
-            plt.show()
-            self.history = []
-    
-    def add_datapoint(self, datapoint):
-        disp_list = [[elt] for elt in datapoint]
-        self.pp.update(disp_list)
-
-
-def _capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_msg_in, channel_states):
+def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_msg_in, channel_states):
     """
     Args:
         p_data_o: multiprocessing.Pipe: captured datapoints are put here
@@ -434,69 +116,8 @@ def _capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time
         p_msg_io.send('STOP')
         p_msg_io.close()
         p_data_o.close()
-
-
-class DummyAlsaMixer:
-    def __init__(self):
-        self.volume = 50
     
-    def getvolume(self):
-        return [self.volume]
-    
-    def setvolume(self, volume):
-        self.volume = volume
 
-
-class UpStateDelayer:
-    def __init__(self, sample_freq, spindle_freq, peak): 
-        '''
-        args:
-            buffer_size: int -> Size of desired buffer in length
-            sample_freq: int -> Sampling frequency of signal in Hz
-        '''
-        # Get number of timesteps for a whole spindle
-        self.spindle_timesteps = (1/spindle_freq) * sample_freq # s * 
-        self.sample_freq = sample_freq
-        self.buffer_size = 1.5 * self.spindle_timesteps
-        self.peak = peak
-        self.buffer = []
-
-    def add_point(self, point):
-        '''
-        Adds a point to the buffer to be able to keep track of peaks
-        '''
-        self.buffer.append(point)
-        if len(self.buffer) > self.buffer_size:
-            self.buffer.pop(0)
-
-    def stimulate(self): 
-        # Calculate how far away is last peak
-        last_peak = -1
-        count = 0
-        for idx, point in reversed(list(enumerate(self.buffer))):
-            if self.peak:
-                try:
-                    sup = point >= self.buffer[idx+1]
-                except IndexError:
-                    sup = False
-                try:
-                    inf = point >= self.buffer[idx-1]
-                except IndexError:
-                    inf = False
-            else:
-                try:
-                    sup = point <= self.buffer[idx+1]
-                except IndexError:
-                    sup = False
-                try:
-                    inf = point <= self.buffer[idx-1]
-                except IndexError:
-                    inf = False
-            if sup and inf:
-                last_peak = count
-                return self.spindle_timesteps - last_peak
-            count += 1
-        return -1        
 
 class Capture:
     def __init__(self, detector_cls=None, stimulator_cls=None):
@@ -521,13 +142,10 @@ class Capture:
         self.threshold = 0.5
         self.lsl = False
         self.display = False
+        self.signal_input = "ADS"
         self.python_clock = True
         self.edf_writer = None
         self.edf_buffer = []
-        self.nb_signals = 8
-        self.samples_per_datarecord_array = self.frequency
-        self.physical_max = 5
-        self.physical_min = -5
         self.signal_labels = ['Common Mode', 'ch2', 'ch3', 'ch4', 'ch5', 'ch6', 'ch7', 'ch8']
         self._lock_msg_out = Lock()
         self._msg_out = None
@@ -678,7 +296,7 @@ class Capture:
         )
         
         self.b_clock = widgets.ToggleButtons(
-            options=['Coral', 'ADS'],
+            options=['ADS', 'Coral'],
             description='Clock:',
             disabled=False,
             button_style='', # 'success', 'info', 'warning', 'danger' or ''
@@ -693,6 +311,15 @@ class Capture:
             button_style='', # 'success', 'info', 'warning', 'danger' or ''
             tooltips=['North America 60 Hz',
                       'Europe 50 Hz'],
+        )
+
+        self.b_signal_input = widgets.ToggleButtons(
+            options=['ADS', 'File'],
+            description='Signal Input:',
+            disabled=False,
+            button_style='', # 'success', 'info', 'warning', 'danger' or ''
+            tooltips=['Read data from ADS.',
+                      'Read data from file.'],
         )
         
         self.b_custom_fir = widgets.ToggleButtons(
@@ -890,6 +517,7 @@ class Capture:
         self.b_spindle_mode.observe(self.on_b_spindle_mode, 'value')
         self.b_spindle_freq.observe(self.on_b_spindle_freq, 'value')
         self.b_power_line.observe(self.on_b_power_line, 'value')
+        self.b_signal_input.observe(self.on_b_power_line, 'value')
         self.b_custom_fir.observe(self.on_b_custom_fir, 'value')
         self.b_custom_fir_order.observe(self.on_b_custom_fir_order, 'value')
         self.b_custom_fir_cutoff.observe(self.on_b_custom_fir_cutoff, 'value')
@@ -912,6 +540,7 @@ class Capture:
                               self.b_frequency,
                               self.b_duration,
                               self.b_filename,
+                              self.b_signal_input,
                               self.b_power_line,
                               self.b_clock,
                               widgets.HBox([self.b_filter, self.b_detect, self.b_stimulate, self.b_record, self.b_lsl, self.b_display]),
@@ -941,6 +570,7 @@ class Capture:
         self.b_radio_ch7.disabled = False
         self.b_radio_ch8.disabled = False
         self.b_power_line.disabled = False
+        self.b_signal_input.disabled = False
         self.b_channel_detect.disabled = False
         self.b_spindle_freq.disabled = False
         self.b_spindle_mode.disabled = False
@@ -981,6 +611,7 @@ class Capture:
         self.b_channel_detect.disabled = True
         self.b_spindle_freq.disabled = True
         self.b_spindle_mode.disabled = True
+        self.b_signal_input.disabled = True
         self.b_power_line.disabled = True
         self.b_polyak_mean.disabled = True
         self.b_polyak_std.disabled = True
@@ -1067,8 +698,6 @@ class Capture:
             self._t_capture = None
             self.enable_buttons()
             
-    
-    
     def on_b_custom_fir(self, value):
         val = value['new']
         if val == 'Default':
@@ -1083,13 +712,20 @@ class Capture:
             self.python_clock = True
         elif val == 'ADS':
             self.python_clock = False
-    
+
+    def on_b_signal_input(self, value):
+        val = value['new']
+        if val == "ADS":
+            self.signal_input = "ADS"
+        elif val == "File":
+            self.signal_input = "File"
+
     def on_b_power_line(self, value):
         val = value['new']
         if val == '60 Hz':
             self.power_line = 60
         elif val == '50 Hz':
-            self.python_clock = 50
+            self.power_line = 50
     
     def on_b_frequency(self, value):
         val = value['new']
@@ -1243,42 +879,6 @@ class Capture:
         elif val == 'Paused':
             with self._pause_detect_lock:
                 self._pause_detect = True
-    
-    def open_recording_file(self):
-        nb_signals = self.nb_signals
-        samples_per_datarecord_array = self.samples_per_datarecord_array
-        physical_max = self.physical_max
-        physical_min = self.physical_min
-        signal_labels = self.signal_labels
-
-        print(f"Will store edf recording in {self.filename}")
-
-        self.edf_writer = EDFwriter(p_path=str(self.filename),
-                                    f_file_type=EDFwriter.EDFLIB_FILETYPE_EDFPLUS,
-                                    number_of_signals=nb_signals)
-        
-        for signal in range(nb_signals):
-            assert self.edf_writer.setSampleFrequency(signal, samples_per_datarecord_array) == 0
-            assert self.edf_writer.setPhysicalMaximum(signal, physical_max) == 0
-            assert self.edf_writer.setPhysicalMinimum(signal, physical_min) == 0
-            assert self.edf_writer.setDigitalMaximum(signal, 32767) == 0
-            assert self.edf_writer.setDigitalMinimum(signal, -32768) == 0
-            assert self.edf_writer.setSignalLabel(signal, signal_labels[signal]) == 0
-            assert self.edf_writer.setPhysicalDimension(signal, 'V') == 0
-
-    def close_recording_file(self):
-        assert self.edf_writer.close() == 0
-    
-    def add_recording_data(self, data):
-        self.edf_buffer += data
-        if len(self.edf_buffer) >= self.samples_per_datarecord_array:
-            datarecord_array = self.edf_buffer[:self.samples_per_datarecord_array]
-            self.edf_buffer = self.edf_buffer[self.samples_per_datarecord_array:]
-            datarecord_array = np.array(datarecord_array).transpose()
-            assert len(datarecord_array) == self.nb_signals, f"len(data)={len(data)}!={self.nb_signals}"
-            for d in datarecord_array:
-                assert len(d) == self.samples_per_datarecord_array, f"{len(d)}!={self.samples_per_datarecord_array}"
-                assert self.edf_writer.writeSamples(d) == 0
 
     def start_capture(self,
                       filter,
@@ -1292,15 +892,17 @@ class Capture:
                       viz,
                       width,
                       python_clock):
-        if self.__capture_on:
-            warnings.warn("Capture is already ongoing, ignoring command.")
-            return
-        else:
-            self.__capture_on = True
-            p_msg_io, p_msg_io_2 = mp.Pipe()
-            p_data_i, p_data_o = mp.Pipe(duplex=False)
-        SAMPLE_TIME = 1 / self.frequency
 
+        if self.signal_input == "ADS":
+            if self.__capture_on:
+                warnings.warn("Capture is already ongoing, ignoring command.")
+                return
+            else:
+                self.__capture_on = True
+                p_msg_io, p_msg_io_2 = mp.Pipe()
+                p_data_i, p_data_o = mp.Pipe(duplex=False)
+
+        # Initialize filtering pipeline
         if filter:
             fp = FilterPipeline(nb_channels=8,
                                 sampling_rate=self.frequency,
@@ -1312,28 +914,37 @@ class Capture:
                                 alpha_std=self.polyak_std,
                                 epsilon=self.epsilon,
                                 filter_args=filter_args)
-            
+        
+        # Initialize detector and stimulator
         detector = detector_cls(threshold, channel=channel) if detector_cls is not None else None
         stimulator = stimulator_cls() if stimulator_cls is not None else None
 
-        self._p_capture = mp.Process(target=_capture_process,
-                                     args=(p_data_o,
-                                           p_msg_io_2,
-                                           self.duration,
-                                           self.frequency,
-                                           python_clock,
-                                           1.0,
-                                           self.channel_states)
-                                    )
-        self._p_capture.start()
-        print(f"PID capture: {self._p_capture.pid}")
+        # Launch the capture process
+        if self.signal_input == "ADS":
+            self._p_capture = mp.Process(target=capture_process,
+                                        args=(p_data_o,
+                                            p_msg_io_2,
+                                            self.duration,
+                                            self.frequency,
+                                            python_clock,
+                                            1.0,
+                                            self.channel_states)
+                                        )
+            self._p_capture.start()
+            print(f"PID capture: {self._p_capture.pid}")
+        else:
+            filename = "INSERT FILENAME" # TODO
+            file_reader = FileReader(filename)
 
+        # Initialize display if requested
         if viz:
             live_disp = LiveDisplay(channel_names = self.signal_labels, window_len=width)
 
+        # Initialize recording if requested
         if record:
-            self.open_recording_file()
+            recorder = EDFRecorder(self.signal_label)
         
+        # Initialize LSL to stream if requested
         if lsl:
             from pylsl import StreamInfo, StreamOutlet
             lsl_info = StreamInfo(name='Portiloop Filtered',
@@ -1353,53 +964,71 @@ class Capture:
 
         buffer = []
 
+        # Initialize stimulation delayer if requested
         if not self.spindle_detection_mode == 'Fast' and stimulator is not None:
-            stimulation_delayer = UpStateDelayer(self.frequency, self.spindle_freq, self.spindle_detection_mode == 'Peak')
+            stimulation_delayer = UpStateDelayer(self.frequency, self.spindle_freq, self.spindle_detection_mode == 'Peak', time_to_buffer=0.1)
             stimulator.add_delayer(stimulation_delayer)
         else:
             stimulation_delayer = None
 
+        # Main capture loop
         while True:
-            with self._lock_msg_out:
-                if self._msg_out is not None:
-                    p_msg_io.send(self._msg_out)
-                    self._msg_out = None
-            if p_msg_io.poll():
-                mess = p_msg_io.recv()
-                if mess == 'STOP':
-                    break
-                elif mess[0] == 'PRT':
-                    print(mess[1])
+            if self.signal_input == "ADS":
+                # Send message in communication pipe if we have one
+                with self._lock_msg_out:
+                    if self._msg_out is not None:
+                        p_msg_io.send(self._msg_out)
+                        self._msg_out = None
 
-            # retrieve all data points from p_data and put them in a list of np.array:
-            point = None
-            if p_data_i.poll(timeout=SAMPLE_TIME):
-                point = p_data_i.recv()
-            else:
-                continue
-                
-            n_array = np.array([point])
-            n_array_raw = filter_np(n_array)
+                # Check if we have received a message in communication pipe
+                if p_msg_io.poll():
+                    mess = p_msg_io.recv()
+                    if mess == 'STOP':
+                        break
+                    elif mess[0] == 'PRT':
+                        print(mess[1])
+
+                # Retrieve all data points from data pipe p_data
+                point = None
+                if p_data_i.poll(timeout=(1 / self.frequency)):
+                    point = p_data_i.recv()
+                else:
+                    continue
+
+                # Convert point from int to corresponding value in microvolts
+                n_array_raw = int_to_float(np.array([point]))
+            elif self.signal_input == "File":
+                n_array_raw, gt_stimulation = file_reader.get_point()
             
+            # Go through filtering pipeline
             if filter:
                 n_array = fp.filter(deepcopy(n_array_raw))
             else:
-                n_array = n_array_raw
-            
+                n_array = deepcopy(n_array_raw)
+
+            # Contains the filtered point (if filtering is off, contains a copy of the raw point)
             filtered_point = n_array.tolist()
             
+            # Send both raw and filtered points over LSL
             if lsl:
                 raw_point = n_array_raw.tolist()
                 lsl_outlet_raw.push_sample(raw_point[-1])
                 lsl_outlet.push_sample(filtered_point[-1])
-                
+            
+            # Adds point to buffer for delayed stimulation
             if stimulation_delayer is not None:
-                stimulation_delayer.add_point(filtered_point[channel-1])
+                stimulation_delayer.step(filtered_point[0][channel-1])
 
+            # Check if detection is on or off
             with self._pause_detect_lock:
                 pause = self._pause_detect
+
+            # If detection is on
             if detector is not None and not pause:
+                # Detect using the latest point
                 detection_signal = detector.detect(filtered_point)
+
+                # Stimulate
                 if stimulator is not None:                    
                     stimulator.stimulate(detection_signal)
                     with self._test_stimulus_lock:
@@ -1407,35 +1036,36 @@ class Capture:
                         self._test_stimulus = False
                     if test_stimulus:
                         stimulator.test_stimulus()
+                
+                if self.signal_input == "File" and gt_stimulation:
+                    stimulator.send_stimulation("GROUND_TRUTH_STIM", False)
             
+            # Add point to the buffer to send to viz and recorder
             buffer += filtered_point
             if len(buffer) >= 50:
-
                 if viz:
                     live_disp.add_datapoints(buffer)
-
                 if record:
-                    self.add_recording_data(buffer)
-                    
+                    recorder.add_recording_data(buffer)
                 buffer = []
 
-        # empty pipes
-        while True:
-            if p_data_i.poll():
-                _ = p_data_i.recv()
-            elif p_msg_io.poll():
-                _ = p_msg_io.recv()
-            else:
-                break
+        if self.signal_input == "ADS":
+            # Empty pipes 
+            while True:
+                if p_data_i.poll():
+                    _ = p_data_i.recv()
+                elif p_msg_io.poll():
+                    _ = p_msg_io.recv()
+                else:
+                    break
 
-        p_data_i.close()
-        p_msg_io.close()
+            p_data_i.close()
+            p_msg_io.close()
+            self._p_capture.join()
+            self.__capture_on = False
         
         if record:
-            self.close_recording_file()
-
-        self._p_capture.join()
-        self.__capture_on = False
+            recorder.close_recording_file()
 
 
 if __name__ == "__main__":
