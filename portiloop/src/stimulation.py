@@ -3,7 +3,12 @@ from enum import Enum
 import time
 from threading import Thread, Lock
 from pathlib import Path
-import alsaaudio
+
+from portiloop.src import ADS
+
+if ADS:
+    import alsaaudio
+    
 import wave
 import pylsl
 from scipy.signal import find_peaks

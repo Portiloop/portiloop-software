@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
 import time
 from pathlib import Path
+from portiloop.src import ADS
 
-from pycoral.utils import edgetpu
+if ADS:
+    from pycoral.utils import edgetpu
 import numpy as np
 
 

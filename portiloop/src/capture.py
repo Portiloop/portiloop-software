@@ -8,12 +8,16 @@ from datetime import datetime
 import multiprocessing as mp
 import warnings
 from threading import Thread, Lock
-import alsaaudio
+from portiloop.src import ADS
+
+if ADS:
+    import alsaaudio
+    from portiloop.src.hardware.frontend import Frontend
+    from portiloop.src.hardware.leds import LEDs, Color
 
 from portiloop.src.stimulation import UpStateDelayer
 
-from portiloop.src.hardware.frontend import Frontend
-from portiloop.src.hardware.leds import LEDs, Color
+
 from portiloop.src.processing import FilterPipeline, int_to_float
 from portiloop.src.config import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
 from portiloop.src.utils import FileReader, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH
@@ -164,22 +168,25 @@ class Capture:
         self._pause_detect_lock = Lock()
         self._pause_detect = True
         
-        try:
-            mixers = alsaaudio.mixers()
-            if len(mixers) <= 0:
+        if ADS:
+            try:
+                mixers = alsaaudio.mixers()
+                if len(mixers) <= 0:
+                    warnings.warn(f"No ALSA mixer found.")
+                    self.mixer = DummyAlsaMixer()
+                elif 'PCM' in mixers:
+                    self.mixer = alsaaudio.Mixer(control='PCM')
+                else:
+                    warnings.warn(f"Could not find mixer PCM, using {mixers[0]} instead.")
+                    self.mixer = alsaaudio.Mixer(control=mixers[0])
+            except ALSAAudioError as e:
                 warnings.warn(f"No ALSA mixer found.")
                 self.mixer = DummyAlsaMixer()
-            elif 'PCM' in mixers:
-                self.mixer = alsaaudio.Mixer(control='PCM')
-            else:
-                warnings.warn(f"Could not find mixer PCM, using {mixers[0]} instead.")
-                self.mixer = alsaaudio.Mixer(control=mixers[0])
-        except ALSAAudioError as e:
-            warnings.warn(f"No ALSA mixer found.")
+            
+            self.volume = self.mixer.getvolume()[0]  # we will set the same volume on all channels
+        else:
             self.mixer = DummyAlsaMixer()
-        
-        self.volume = self.mixer.getvolume()[0]  # we will set the same volume on all channels
-        
+            self.volume = self.mixer.getvolume()[0]
         
         # widgets ===============================
         
@@ -528,8 +535,9 @@ class Capture:
         self.b_test_stimulus.on_click(self.on_b_test_stimulus)
         self.b_test_impedance.on_click(self.on_b_test_impedance)
         self.b_pause.observe(self.on_b_pause, 'value')
-        
+
         self.display_buttons()
+
 
     def __del__(self):
         self.b_capture.close()
