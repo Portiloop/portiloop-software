@@ -68,18 +68,26 @@ def do_treatment(csv_file, filtering, threshold, detect_channel, freq, spindle_f
         # Add data to plotting buffer
         points.append(filtered_point[0])
 
+        # Function to return a list of all indexes where activations have happened
+        def get_activations(activations):
+            return [i for i, x in enumerate(activations) if x == 1]
+
         # Plot the data
-        if index % (10 * freq) == 0:
+        if index % (10 * freq) == 0 and index >= (10 * freq):
             plt.close()
             fig = plt.figure(figsize=(20, 10))
             plt.clf()
-            plt.plot(points[-10 * freq:], label="Data")
+            plt.plot(np.linspace(0, 10, num=freq*10), points[-10 * freq:], label="Data")
             # Draw vertical lines for activations
             for index in get_activations(activations[-10 * freq:]):
-                plt.axvline(x=index, color='r', label="Fast Stimulation")
+                plt.axvline(x=index / freq, color='r', label="Fast Stimulation")
             if spindle_detection_mode != 'Fast':
                 for index in get_activations(delayed_activations[-10 * freq:]):
-                    plt.axvline(x=index, color='g', label="Delayed Stimulation")
+                    plt.axvline(x=index / freq, color='g', label="Delayed Stimulation")
+            # Add axis titles and legend
+            plt.legend()
+            plt.xlabel("Time (s)")
+            plt.ylabel("Amplitude")
             yield fig, None
 
     # Put all points and activations back in numpy arrays
@@ -93,13 +101,13 @@ def do_treatment(csv_file, filtering, threshold, detect_channel, freq, spindle_f
 
     yield None, "output.csv"
         
-# Function to return a list of all indexes where activations have happened
-def get_activations(activations):
-    return [i for i, x in enumerate(activations) if x == 1]
+
     
 
 with gr.Blocks() as demo:
-    gr.Markdown("Enter your csv file and click **Run Inference** to get the output.")
+    gr.Markdown("# Portiloop Demo")
+    gr.Markdown("This Demo takes as input a csv file containing EEG data and outputs a csv file with the following added: \n * The data filtered by the Portiloop online filter \n * The stimulations made by Portiloop.")
+    gr.Markdown("Upload your CSV file and click **Run Inference** to start the processing...")
 
     # Row containing all inputs:
     with gr.Row():
@@ -110,15 +118,15 @@ with gr.Blocks() as demo:
         # Threshold value
         threshold = gr.Slider(0, 1, value=0.82, step=0.01, label="Threshold", interactive=True)
         # Detection Channel
-        detect_column = gr.Dropdown(choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"], value="1", label="Detection Column", interactive=True) 
+        detect_column = gr.Dropdown(choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"], value="1", label="Detection Column in CSV", interactive=True) 
         # Frequency
-        freq = gr.Dropdown(choices=["100", "200", "250", "256", "500", "512", "1000", "1024"], value="250", label="Frequency", interactive=True)
+        freq = gr.Dropdown(choices=["100", "200", "250", "256", "500", "512", "1000", "1024"], value="250", label="Sampling Frequency (Hz)", interactive=True)
         # Spindle Frequency
-        spindle_freq = gr.Slider(10, 16, value=12, step=1, label="Spindle Frequency", interactive=True)
+        spindle_freq = gr.Slider(10, 16, value=12, step=1, label="Spindle Frequency (Hz)", interactive=True)
         # Spindle Detection Mode
         spindle_detection_mode = gr.Dropdown(choices=["Fast", "Peak", "Valley"], value="Peak", label="Spindle Detection Mode", interactive=True)
         # Time to buffer
-        time_to_buffer = gr.Slider(0, 1, value=0, step=0.01, label="Time to Buffer", interactive=True)
+        time_to_buffer = gr.Slider(0, 1, value=0.3, step=0.01, label="Time to Buffer (s)", interactive=True)
 
     # Output plot
     output_plot = gr.Plot()
@@ -134,4 +142,4 @@ with gr.Blocks() as demo:
     run_inference.click(fn=do_treatment, inputs=[csv_file, filtering, threshold, detect_column, freq, spindle_freq, spindle_detection_mode, time_to_buffer], outputs=[output_plot, output_array])
 
 demo.queue()
-demo.launch()
+demo.launch(share=True)
