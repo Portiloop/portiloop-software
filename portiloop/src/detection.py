@@ -5,6 +5,8 @@ from portiloop.src import ADS
 
 if ADS:
     from pycoral.utils import edgetpu
+else:
+    import tensorflow as tf
 import numpy as np
 
 
@@ -53,7 +55,10 @@ class SleepSpindleRealTimeDetector(Detector):
         
         self.interpreters = []
         for i in range(self.num_models_parallel):
-            self.interpreters.append(edgetpu.make_interpreter(model_path))
+            if ADS:
+                self.interpreters.append(edgetpu.make_interpreter(model_path))
+            else:
+                self.interpreters.append(tf.lite.Interpreter(model_path=model_path))
             self.interpreters[i].allocate_tensors()
         self.interpreter_counter = 0
         
@@ -76,6 +81,10 @@ class SleepSpindleRealTimeDetector(Detector):
         super().__init__(threshold)
 
     def detect(self, datapoints):
+        """
+        Takes datapoints as input and outputs a detection signal.
+        datapoints is a list of lists of n channels: may contain several datapoints.
+        """
         res = []
         for inp in datapoints:
             result = self.add_datapoint(inp)

@@ -2,6 +2,9 @@
 .vscode/
 .idea/
 
+# Output from the demo
+output.csv
+
 # Vagrant
 .vagrant/
 

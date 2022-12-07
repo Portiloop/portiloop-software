@@ -142,7 +142,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
 
     def add_delayer(self, delayer):
         self.delayer = delayer
-        self.delayer.stimulate = lambda x: self.send_stimulation("DELAY_STIM", True)
+        self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", True)
 
 # Class that delays stimulation to always stimulate peak or through
 class UpStateDelayer:
@@ -182,7 +182,7 @@ class UpStateDelayer:
             return False
         elif self.state == States.DELAYING:
             # Check if we are done delaying
-            if time.time() - self.time_started >= self.time_to_wait():
+            if time.time() - self.time_started >= self.time_to_wait:
                 # Actually stimulate the patient after the delay
                 if self.stimulate is not None:
                     self.stimulate()
