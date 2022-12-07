@@ -8,9 +8,9 @@ from portiloop.src import ADS
 
 if ADS:
     import alsaaudio
+    import pylsl
     
 import wave
-import pylsl
 from scipy.signal import find_peaks
 
 
