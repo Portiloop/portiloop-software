@@ -1,10 +1,10 @@
 ---
 title: Portiloop Demo
-emoji: {{emoji}}
-colorFrom: {{colorFrom}}
-colorTo: {{colorTo}}
+emoji: 💤
+colorFrom: blue
+colorTo: grey
 sdk: gradio
-sdk_version: {{sdkVersion}}
+sdk_version: 3.12.0
 app_file: portiloop/src/demo/demo.py
 pinned: false
 ---
