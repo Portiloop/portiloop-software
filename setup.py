@@ -11,10 +11,17 @@ setup(
                       'portilooplot',
                       'ipywidgets',
                       'python-periphery',
-                      'spidev',
-                      'pylsl-coral',
                       'scipy',
-                      'pycoral',
-                      'pyalsaaudio'
-                     ]
+                      'matplotlib',
+                     ],
+    extras_require={
+        'Portiloop': ['pycoral', 
+                'spidev', 
+                'pylsl-coral', 
+                'pyalsaaudio'],
+        'PC': ['gradio',
+               'tensorflow',
+               'pyxdf',
+               'wonambi']
+    },
 )
