@@ -7,9 +7,14 @@ from portiloop.src.demo.utils import xdf2array, offline_detect, offline_filter, 
 import gradio as gr
 
 
-def run_offline(xdf_file, offline_filtering, online_filtering, online_detection, lacourse, wamsley, threshold, channel_num, freq):
+def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq):
+    # Get the options from the checkbox group
+    offline_filtering = 0 in detect_filter_opts
+    lacourse = 1 in detect_filter_opts
+    wamsley = 2 in detect_filter_opts
+    online_filtering = 3 in detect_filter_opts
+    online_detection = 4 in detect_filter_opts
 
-    print("Starting offline processing...")
     # Make sure the inputs make sense:
     if not offline_filtering and (lacourse or wamsley):
         raise gr.Error("You can't use the offline detection methods without offline filtering.")
@@ -17,17 +22,17 @@ def run_offline(xdf_file, offline_filtering, online_filtering, online_detection,
     if not online_filtering and online_detection:
         raise gr.Error("You can't use the online detection without online filtering.")
 
+    if xdf_file is None:
+        raise gr.Error("Please upload a .xdf file.")
+
     freq = int(freq)
 
     # Read the xdf file to a numpy array
     print("Loading xdf file...")
-    yield None, None, "Loading xdf file..."
     data_whole, columns = xdf2array(xdf_file.name, int(channel_num))
-    print(data_whole.shape)
     # Do the offline filtering of the data
-    print("Filtering offline...")
-    yield None, None, "Filtering offline..."
     if offline_filtering:
+        print("Filtering offline...")
         offline_filtered_data = offline_filter(data_whole[:, columns.index("raw_signal")], freq)
         # Expand the dimension of the filtered data to match the shape of the other columns
         offline_filtered_data = np.expand_dims(offline_filtered_data, axis=1)
@@ -35,9 +40,8 @@ def run_offline(xdf_file, offline_filtering, online_filtering, online_detection,
         columns.append("offline_filtered_signal")
 
     #  Do Wamsley's method
-    print("Running Wamsley detection...")
-    yield None, None, "Running Wamsley detection..."
     if wamsley:
+        print("Running Wamsley detection...")
         wamsley_data = offline_detect("Wamsley", \
             data_whole[:, columns.index("offline_filtered_signal")],\
                 data_whole[:, columns.index("time_stamps")],\
@@ -47,9 +51,8 @@ def run_offline(xdf_file, offline_filtering, online_filtering, online_detection,
         columns.append("wamsley_spindles")
 
     # Do Lacourse's method
-    print("Running Lacourse detection...")
-    yield None, None, "Running Lacourse detection..."
     if lacourse:
+        print("Running Lacourse detection...")
         lacourse_data = offline_detect("Lacourse", \
             data_whole[:, columns.index("offline_filtered_signal")],\
                 data_whole[:, columns.index("time_stamps")],\
@@ -70,10 +73,9 @@ def run_offline(xdf_file, offline_filtering, online_filtering, online_detection,
         detector = SleepSpindleRealTimeDetector(threshold=threshold, channel=1) # always 1 because we have only one channel
         stimulator = OfflineSleepSpindleRealTimeStimulator()
 
-    print("Running online filtering and detection...")
-    yield None, None, "Running online filtering and detection..."
     if online_filtering or online_detection:
-        # Plotting variables
+        print("Running online filtering and detection...")
+
         points = []
         online_activations = []
 
@@ -97,25 +99,6 @@ def run_offline(xdf_file, offline_filtering, online_filtering, online_detection,
                     online_activations.append(1)
                 else:
                     online_activations.append(0)
-            
-            # Function to return a list of all indexes where activations have happened
-            def get_activations(activations):
-                return [i for i, x in enumerate(activations) if x == 1]
-
-            # Plot the data
-            if index % (10 * freq) == 0 and index >= (10 * freq):
-                plt.close()
-                fig = plt.figure(figsize=(20, 10))
-                plt.clf()
-                plt.plot(np.linspace(0, 10, num=freq*10), points[-10 * freq:], label="Data")
-                # Draw vertical lines for activations
-                for index in get_activations(online_activations[-10 * freq:]):
-                    plt.axvline(x=index / freq, color='r', label="Portiloop Stimulation")
-                # Add axis titles and legend
-                plt.legend()
-                plt.xlabel("Time (s)")
-                plt.ylabel("Amplitude")
-                yield fig, None, f"Running online filtering and detection {index}/{len(data)}..."
 
     if online_filtering:
         online_filtered = np.array(points)
@@ -134,4 +117,4 @@ def run_offline(xdf_file, offline_filtering, online_filtering, online_detection,
     np.savetxt("output.csv", data_whole, delimiter=",", header=",".join(columns), comments="")
 
     print("Done!")
-    yield None, "output.csv", "Done!"
+    return "output.csv"
