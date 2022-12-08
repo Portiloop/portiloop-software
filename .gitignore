@@ -4,6 +4,8 @@
 
 # Output from the demo
 output.csv
+# Any xdf file used for testing
+*.xdf
 
 # Vagrant
 .vagrant/
