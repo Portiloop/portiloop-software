@@ -47,7 +47,7 @@ def main():
             outputs=[output_array])
 
     demo.queue()
-    demo.launch(share=True)
+    demo.launch(share=False)
 
 if __name__ == "__main__":
     main() 
