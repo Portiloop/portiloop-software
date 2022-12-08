@@ -21,6 +21,7 @@ setup(
                 'pyalsaaudio'],
         'PC': ['gradio',
                'tensorflow',
-               'pyxdf']
+               'pyxdf',
+               'wonambi']
     },
 )
