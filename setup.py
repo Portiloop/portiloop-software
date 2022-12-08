@@ -20,6 +20,7 @@ setup(
                 'pylsl-coral', 
                 'pyalsaaudio'],
         'PC': ['gradio',
-               'tensorflow',]
+               'tensorflow',
+               'pyxdf']
     },
 )
