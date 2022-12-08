@@ -115,7 +115,7 @@ def run_offline(xdf_file, offline_filtering, online_filtering, online_detection,
                 plt.legend()
                 plt.xlabel("Time (s)")
                 plt.ylabel("Amplitude")
-                yield fig, None, "Running online filtering and detection..."
+                yield fig, None, f"Running online filtering and detection {index}/{len(data)}..."
 
     if online_filtering:
         online_filtered = np.array(points)
