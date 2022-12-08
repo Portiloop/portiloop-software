@@ -154,7 +154,3 @@ class SleepSpindleRealTimeDetector(Detector):
             print(f"Computed output {output_data_y} in {end_time - start_time} seconds")
 
         return output_data_y, output_data_h
-        
-        
-    
-    
