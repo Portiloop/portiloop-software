@@ -1,0 +1,12 @@
+wheel
+EDFlib-Python
+numpy
+portilooplot
+ipywidgets
+python-periphery
+scipy
+matplotlib
+gradio
+tensorflow
+pyxdf
+wonambi

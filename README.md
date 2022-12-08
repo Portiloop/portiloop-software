@@ -1,3 +1,14 @@
+---
+title: Portiloop Demo
+emoji: {{emoji}}
+colorFrom: {{colorFrom}}
+colorTo: {{colorTo}}
+sdk: {{sdk}}
+sdk_version: {{sdkVersion}}
+app_file: portiloop/src/demo/demo.py
+pinned: false
+---
+
 # Portiloop software
 
 This software works with the [Coral implementation](https://github.com/Portiloop/portiloop-hardware) of the `Portiloop` EEG closed-loop stimulation device.
