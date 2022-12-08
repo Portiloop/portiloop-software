@@ -3,7 +3,7 @@ title: Portiloop Demo
 emoji: {{emoji}}
 colorFrom: {{colorFrom}}
 colorTo: {{colorTo}}
-sdk: {{sdk}}
+sdk: gradio
 sdk_version: {{sdkVersion}}
 app_file: portiloop/src/demo/demo.py
 pinned: false
