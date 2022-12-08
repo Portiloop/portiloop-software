@@ -8,67 +8,46 @@ def on_upload_file(file):
     if file.name.split(".")[-1] != "xdf":
         raise gr.Error("Please upload a .xdf file.")
     else:
-        yield f"File {file.name} successfully uploaded!"
+        return file.name
 
 
-with gr.Blocks(title="Portiloop") as demo:
-    gr.Markdown("# Portiloop Demo")
-    gr.Markdown("This Demo takes as input an XDF file coming from the Portiloop EEG device and allows you to convert it to CSV and perform the following actions:: \n * Filter the data offline \n * Perform offline spindle detection using Wamsley or Lacourse. \n * Simulate the Portiloop online filtering and spindle detection with different parameters.")
-    gr.Markdown("Upload your CSV file and click **Run Inference** to start the processing...")
+def main():
+    with gr.Blocks(title="Portiloop") as demo:
+        gr.Markdown("# Portiloop Demo")
+        gr.Markdown("This Demo takes as input an XDF file coming from the Portiloop EEG device and allows you to convert it to CSV and perform the following actions:: \n * Filter the data offline \n * Perform offline spindle detection using Wamsley or Lacourse. \n * Simulate the Portiloop online filtering and spindle detection with different parameters.")
+        gr.Markdown("Upload your XDF file and click **Run Inference** to start the processing...")
 
-    with gr.Row():
-        xdf_file = gr.UploadButton(label="XDF File", type="file")
+        with gr.Row():
+            xdf_file_button = gr.UploadButton(label="Click to Upload", type="file", file_count="single")
+            xdf_file_static = gr.File(label="XDF File", type='file', interactive=False)
 
-        # Offline Filtering (Boolean)
-        offline_filtering = gr.Checkbox(label="Offline Filtering (On/Off)", value=True)
-        # Online Filtering (Boolean)
-        online_filtering = gr.Checkbox(label="Online Filtering (On/Off)", value=True)
-        # Lacourse's Method (Boolean)
-        lacourse = gr.Checkbox(label="Lacourse Detection (On/Off)", value=True)
-        # Wamsley's Method (Boolean)
-        wamsley = gr.Checkbox(label="Wamsley Detection (On/Off)", value=True)
-        # Online Detection (Boolean)
-        online_detection = gr.Checkbox(label="Online Detection (On/Off)", value=True)
+            xdf_file_button.upload(on_upload_file, xdf_file_button, xdf_file_static)
 
-        # Threshold value
-        threshold = gr.Slider(0, 1, value=0.82, step=0.01, label="Threshold", interactive=True)
-        # Detection Channel
-        detect_channel = gr.Dropdown(choices=["1", "2", "3", "4", "5", "6", "7", "8"], value="2", label="Detection Channel in XDF recording", interactive=True) 
-        # Frequency
-        freq = gr.Dropdown(choices=["100", "200", "250", "256", "500", "512", "1000", "1024"], value="250", label="Sampling Frequency (Hz)", interactive=True)
+            # Make a checkbox group for the options
+            detect_filter = gr.CheckboxGroup(['Offline Filtering', 'Lacourse Detection', 'Wamsley Detection', 'Online Filtering', 'Online Detection'], type='index', label="Filtering/Detection options")
 
-    # Output elements
-    update_text = gr.Textbox(value="Upload an XDF File and click 'Run Inference'...", label="Status", interactive=False)
-    output_plot = gr.Plot()
-    output_array = gr.File(label="Output CSV File")
-    xdf_file.upload(fn=on_upload_file, inputs=[xdf_file], outputs=[update_text])
+            # Threshold value
+            threshold = gr.Slider(0, 1, value=0.82, step=0.01, label="Threshold", interactive=True)
+            # Detection Channel
+            detect_channel = gr.Dropdown(choices=["1", "2", "3", "4", "5", "6", "7", "8"], value="2", label="Detection Channel in XDF recording", interactive=True) 
+            # Frequency
+            freq = gr.Dropdown(choices=["100", "200", "250", "256", "500", "512", "1000", "1024"], value="250", label="Sampling Frequency (Hz)", interactive=True)
 
-    def clear():
-        output_plot.clear()
-        output_array.clear()
-        update_text.clear()
-        xdf_file.clear()
+        output_array = gr.File(label="Output CSV File")
 
-    # Row containing all buttons:
-    with gr.Row():
-        # Run inference button
-        run_inference = gr.Button(
-            value="Run Inference")
-        # Reset button
-        reset = gr.Button(value="Reset", variant="secondary", on_click=clear,)
-    run_inference.click(
-        fn=run_offline, 
-        inputs=[
-            xdf_file, 
-            offline_filtering, 
-            online_filtering, 
-            online_detection, 
-            lacourse, 
-            wamsley, 
-            threshold, 
-            detect_channel,
-            freq], 
-        outputs=[output_plot, output_array, update_text])
+        run_inference = gr.Button(value="Run Inference")
+        run_inference.click(
+            fn=run_offline, 
+            inputs=[
+                xdf_file_static, 
+                detect_filter,
+                threshold, 
+                detect_channel,
+                freq], 
+            outputs=[output_array])
 
-demo.queue()
-demo.launch(share=False)
+    demo.queue()
+    demo.launch(share=True)
+
+if __name__ == "__main__":
+    main() 
