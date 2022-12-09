@@ -130,3 +130,22 @@ def offline_filter(signal, freq):
     signal = detrend(signal)
 
     return signal
+
+def compute_output_table(online_stimulation, lacourse_spindles, wamsley_spindles):
+    # Count the number of spindles detected by each method
+    online_stimulation_count = np.sum(online_stimulation)
+    lacourse_spindles_count = sum([1 for index, spindle in enumerate(lacourse_spindles) if spindle == 1 and lacourse_spindles[index - 1] == 0])
+    wamsley_spindles_count = sum([1 for index, spindle in enumerate(wamsley_spindles) if spindle == 1 and wamsley_spindles[index - 1] == 0])
+
+    # Count how many spindles were detected by both online and lacourse
+    both_online_lacourse = sum([1 for index, spindle in enumerate(online_stimulation) if spindle == 1 and lacourse_spindles[index] == 1])
+    # Count how many spindles were detected by both online and wamsley
+    both_online_wamsley = sum([1 for index, spindle in enumerate(online_stimulation) if spindle == 1 and wamsley_spindles[index] == 1])
+
+    # Create markdown table with the results
+    table = "| Method | Detected spindles | Overlap with Portiloop |\n"
+    table += "| --- | --- | --- |\n"
+    table += f"| Online | {online_stimulation_count} | {online_stimulation_count} |\n"
+    table += f"| Lacourse | {lacourse_spindles_count} | {both_online_lacourse} |\n"
+    table += f"| Wamsley | {wamsley_spindles_count} | {both_online_wamsley} |\n"
+    return table

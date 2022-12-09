@@ -33,7 +33,9 @@ def main():
             # Frequency
             freq = gr.Dropdown(choices=["100", "200", "250", "256", "500", "512", "1000", "1024"], value="250", label="Sampling Frequency (Hz)", interactive=True)
 
-        output_array = gr.File(label="Output CSV File")
+        with gr.Row():
+            output_array = gr.File(label="Output CSV File")
+            output_table = gr.Markdown(label="Output Table")
 
         run_inference = gr.Button(value="Run Inference")
         run_inference.click(
@@ -44,7 +46,7 @@ def main():
                 threshold, 
                 detect_channel,
                 freq], 
-            outputs=[output_array])
+            outputs=[output_array, output_table])
 
     demo.queue()
     demo.launch(share=False)
