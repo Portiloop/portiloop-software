@@ -3,7 +3,7 @@ import numpy as np
 from portiloop.src.detection import SleepSpindleRealTimeDetector
 plt.switch_backend('agg')
 from portiloop.src.processing import FilterPipeline
-from portiloop.src.demo.utils import xdf2array, offline_detect, offline_filter, OfflineSleepSpindleRealTimeStimulator
+from portiloop.src.demo.utils import compute_output_table, xdf2array, offline_detect, offline_filter, OfflineSleepSpindleRealTimeStimulator
 import gradio as gr
 
 
@@ -115,6 +115,12 @@ def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq):
     print("Saving output...")
     # Output the data to a csv file
     np.savetxt("output.csv", data_whole, delimiter=",", header=",".join(columns), comments="")
+    
+
+    output_table = compute_output_table(
+        data_whole[:, columns.index("online_stimulations")] if online_detection else data_whole[:, columns.index("online_stimulations_portiloop")],
+        data_whole[:, columns.index("lacourse_spindles")] if lacourse else None, 
+        data_whole[:, columns.index("wamsley_spindles")] if wamsley else None,)
 
     print("Done!")
-    return "output.csv"
+    return "output.csv", output_table
