@@ -115,7 +115,7 @@ def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq):
     print("Saving output...")
     # Output the data to a csv file
     np.savetxt("output.csv", data_whole, delimiter=",", header=",".join(columns), comments="")
-    
+
 
     output_table = compute_output_table(
         data_whole[:, columns.index("online_stimulations")] if online_detection else data_whole[:, columns.index("online_stimulations_portiloop")],
