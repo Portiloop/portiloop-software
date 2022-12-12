@@ -1,13 +1,12 @@
-import matplotlib.pyplot as plt
 import numpy as np
 from portiloop.src.detection import SleepSpindleRealTimeDetector
-plt.switch_backend('agg')
+from portiloop.src.stimulation import UpStateDelayer
 from portiloop.src.processing import FilterPipeline
 from portiloop.src.demo.utils import compute_output_table, xdf2array, offline_detect, offline_filter, OfflineSleepSpindleRealTimeStimulator
 import gradio as gr
 
 
-def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq):
+def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq, stimulation_phase="Fast", buffer_time=0.25):
     # Get the options from the checkbox group
     offline_filtering = 0 in detect_filter_opts
     lacourse = 1 in detect_filter_opts
@@ -72,12 +71,17 @@ def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq):
     if online_detection:
         detector = SleepSpindleRealTimeDetector(threshold=threshold, channel=1) # always 1 because we have only one channel
         stimulator = OfflineSleepSpindleRealTimeStimulator()
+        if stimulation_phase != "Fast":
+            stimulation_delayer = UpStateDelayer(freq, stimulation_phase == 'Peak', time_to_buffer=buffer_time, stimulate=lambda: None)
+            stimulator.add_delayer(stimulation_delayer)
+            
 
     if online_filtering or online_detection:
         print("Running online filtering and detection...")
 
         points = []
         online_activations = []
+        delayed_stims = []
 
         # Go through the data
         for index, point in enumerate(data):
@@ -92,6 +96,13 @@ def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq):
             if online_detection:
                 # Detect the spindles
                 result = detector.detect([filtered_point])
+
+                if stimulation_phase != "Fast":
+                    delayed_stim = stimulation_delayer.step_timesteps(filtered_point[0])
+                    if delayed_stim:
+                        delayed_stims.append(1)
+                    else:
+                        delayed_stims.append(0)
 
                 # Stimulate if necessary
                 stim = stimulator.stimulate(result)
@@ -111,6 +122,12 @@ def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq):
         online_activations = np.expand_dims(online_activations, axis=1)
         data_whole = np.concatenate((data_whole, online_activations), axis=1)
         columns.append("online_stimulations")
+
+        if stimulation_phase != "Fast":
+            delayed_stims = np.array(delayed_stims)
+            delayed_stims = np.expand_dims(delayed_stims, axis=1)
+            data_whole = np.concatenate((data_whole, delayed_stims), axis=1)
+            columns.append("delayed_stimulations")
 
     print("Saving output...")
     # Output the data to a csv file

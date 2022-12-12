@@ -2,7 +2,7 @@ import itertools
 import unittest
 from portiloop.src.demo.offline import run_offline
 from pathlib import Path
-
+import matplotlib.pyplot as plt
 
 class TestOffline(unittest.TestCase):
 
@@ -30,16 +30,18 @@ class TestOffline(unittest.TestCase):
                 self.assertTrue(config['online_filtering'])
 
     def test_single_option(self):
+
+        # Test options correspond to an index in the possible checkbox group options
+        test_options = [3, 4]
+
         res = list(run_offline(
                 self.xdf_file,
-                offline_filtering=True,
-                online_filtering=True,
-                online_detection=True,
-                wamsley=True,
-                lacourse=True,
+                test_options,
                 threshold=0.5,
                 channel_num=2,
-                freq=250))
+                freq=250,
+                stimulation_phase="Peak",
+                buffer_time=0.3))
         print(res)
 
     def tearDown(self):

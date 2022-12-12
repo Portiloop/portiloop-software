@@ -3,6 +3,8 @@ from enum import Enum
 import time
 from threading import Thread, Lock
 from pathlib import Path
+import numpy as np
+import matplotlib.pyplot as plt
 
 from portiloop.src import ADS
 
@@ -146,20 +148,18 @@ class SleepSpindleRealTimeStimulator(Stimulator):
 
 # Class that delays stimulation to always stimulate peak or through
 class UpStateDelayer:
-    def __init__(self, sample_freq, spindle_freq, peak, time_to_buffer): 
+    def __init__(self, sample_freq, peak, time_to_buffer, stimulate=None): 
         '''
         args:
             sample_freq: int -> Sampling frequency of signal in Hz
             time_to_wait: float -> Time to wait to build buffer in seconds
         '''
         # Get number of timesteps for a whole spindle
-        self.spindle_timesteps = (1/spindle_freq) * sample_freq # s * 
         self.sample_freq = sample_freq
-        self.buffer_size = 1.5 * self.spindle_timesteps
         self.peak = peak
         self.buffer = []
         self.time_to_buffer = time_to_buffer
-        self.stimulate = None
+        self.stimulate = stimulate
         
         self.state = States.NO_SPINDLE
 
@@ -192,10 +192,39 @@ class UpStateDelayer:
                 return True
             return False
 
+    def step_timesteps(self, point):
+        '''
+        Step the delayer, ads a point to buffer if necessary.
+        Returns True if stimulation is actually done
+        '''
+        if self.state == States.NO_SPINDLE:
+            return False
+        elif self.state == States.BUFFERING:
+            self.buffer.append(point)
+            # If we are done buffering, move on to the waiting stage
+            if len(self.buffer) >= self.time_to_buffer * self.sample_freq:
+                # Compute the necessary time to wait
+                self.time_to_wait = self.compute_time_to_wait()
+                self.state = States.DELAYING
+                self.buffer = []
+                self.delaying_counter = 0
+            return False
+        elif self.state == States.DELAYING:
+            # Check if we are done delaying
+            self.delaying_counter += 1
+            if self.delaying_counter >= self.time_to_wait * self.sample_freq:
+                # Actually stimulate the patient after the delay
+                if self.stimulate is not None:
+                    self.stimulate()
+                # Reset state
+                self.time_to_wait = -1
+                self.state = States.NO_SPINDLE
+                return True
+            return False
+
     def detected(self):
         if self.state == States.NO_SPINDLE:
             self.state = States.BUFFERING
-            self.time_started = time.time()
 
     def compute_time_to_wait(self):
         """
@@ -208,8 +237,27 @@ class UpStateDelayer:
         # Returns the index of the last peak in the buffer
         peaks, _ = find_peaks(self.buffer, prominence=1)
 
+        # Make a figure to show the peaks
+        if False:
+            plt.figure()
+            plt.plot(self.buffer)
+            for peak in peaks:
+                plt.axvline(x=peak)
+            plt.plot(np.zeros_like(self.buffer), "--", color="gray")
+            plt.show()
+
+        if len(peaks) == 0:
+            print("No peaks found, increase buffer size")
+            return (self.sample_freq / 10) * (1.0 / self.sample_freq)
+
+        # Compute average distance between each peak
+        avg_dist = np.mean(np.diff(peaks))
+
         # Compute the time until next peak and return it
-        return (len(self.buffer) - peaks[-1]) * (1 / self.sample_freq)
+        if (avg_dist < len(self.buffer) - peaks[-1]):
+            print("Average distance between peaks is smaller than the time to last peak, decrease buffer size")
+            return (len(self.buffer) - peaks[-1]) * (1.0 / self.sample_freq)
+        return (avg_dist - (len(self.buffer) - peaks[-1])) * (1.0 / self.sample_freq)
 
 class States(Enum):
     NO_SPINDLE = 0
