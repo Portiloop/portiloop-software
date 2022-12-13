@@ -13,6 +13,32 @@ STREAM_NAMES = {
 }
 
 
+def sleep_stage(data, threshold=150, group_size=2):
+    """Sleep stage approximation using a threshold and a group size.
+        Returns a numpy array containing all indices in the input data which CAN be used for offline detection. 
+        These indices can then be used to reconstruct the signal from the original data.
+    """
+    # Find all indexes where the signal is above or below the threshold
+    above = np.where(data > threshold)
+    below = np.where(data < -threshold)
+    indices = np.concatenate((above, below), axis=1)[0]
+
+    indices = np.sort(indices)
+    # Get all the indices where the difference between two consecutive indices is larger than 100
+    groups = np.where(np.diff(indices) <= group_size)[0] + 1
+    # Get the important indices
+    important_indices = indices[groups]
+    # Get all the indices between the important indices
+    group_filler = [np.arange(indices[groups[n] - 1] + 1, index) for n, index in enumerate(important_indices)]
+    # Create flat array from fillers
+    group_filler = np.concatenate(group_filler)
+    # Append all group fillers to the indices
+    masked_indices = np.sort(np.concatenate((indices, group_filler)))
+    unmasked_indices = np.setdiff1d(np.arange(len(data)), masked_indices)
+
+    return unmasked_indices
+
+
 class OfflineSleepSpindleRealTimeStimulator(Stimulator):
     def __init__(self):
         self.last_detected_ts = time.time()
@@ -87,15 +113,19 @@ def xdf2array(xdf_path, channel):
     return np.array(csv_list), columns
     
 
-def offline_detect(method, data, timesteps, freq):
+def offline_detect(method, data, timesteps, freq, mask):
+    # Extract only the interesting elements from the mask
+    data_masked = data[mask]
+
     # Get the spindle data from the offline methods
     time = np.arange(0, len(data)) / freq
+    time_masked = time[mask] 
     if method == "Lacourse":
         detector = DetectSpindle(method='Lacourse2018')
-        spindles, _, _ = detect_Lacourse2018(data, freq, time, detector)
+        spindles, _, _ = detect_Lacourse2018(data_masked, freq, time_masked, detector)
     elif method == "Wamsley":
         detector = DetectSpindle(method='Wamsley2012')
-        spindles, _, _ = detect_Wamsley2012(data, freq, time, detector)
+        spindles, _, _ = detect_Wamsley2012(data_masked, freq, time_masked, detector)
     else:
         raise ValueError("Invalid method")
 
@@ -155,3 +185,4 @@ def compute_output_table(online_stimulation, lacourse_spindles, wamsley_spindles
     if wamsley_spindles is not None:
         table += f"| Wamsley | {wamsley_spindles_count} | {both_online_wamsley} |\n"
     return table
+    

@@ -2,7 +2,7 @@ import numpy as np
 from portiloop.src.detection import SleepSpindleRealTimeDetector
 from portiloop.src.stimulation import UpStateDelayer
 from portiloop.src.processing import FilterPipeline
-from portiloop.src.demo.utils import compute_output_table, xdf2array, offline_detect, offline_filter, OfflineSleepSpindleRealTimeStimulator
+from portiloop.src.demo.utils import compute_output_table, sleep_stage, xdf2array, offline_detect, offline_filter, OfflineSleepSpindleRealTimeStimulator
 import gradio as gr
 
 
@@ -29,6 +29,7 @@ def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq, stim
     # Read the xdf file to a numpy array
     print("Loading xdf file...")
     data_whole, columns = xdf2array(xdf_file.name, int(channel_num))
+
     # Do the offline filtering of the data
     if offline_filtering:
         print("Filtering offline...")
@@ -38,13 +39,18 @@ def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq, stim
         data_whole = np.concatenate((data_whole, offline_filtered_data), axis=1)
         columns.append("offline_filtered_signal")
 
+    # Do the sleep staging approximation
+    if wamsley or lacourse:
+        print("Sleep staging...")
+        mask = sleep_stage(data_whole[:, columns.index("offline_filtered_signal")], threshold=150, group_size=100)
+
     #  Do Wamsley's method
     if wamsley:
         print("Running Wamsley detection...")
         wamsley_data = offline_detect("Wamsley", \
             data_whole[:, columns.index("offline_filtered_signal")],\
                 data_whole[:, columns.index("time_stamps")],\
-                    freq)
+                    freq, mask)
         wamsley_data = np.expand_dims(wamsley_data, axis=1)
         data_whole = np.concatenate((data_whole, wamsley_data), axis=1)
         columns.append("wamsley_spindles")
@@ -55,7 +61,7 @@ def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq, stim
         lacourse_data = offline_detect("Lacourse", \
             data_whole[:, columns.index("offline_filtered_signal")],\
                 data_whole[:, columns.index("time_stamps")],\
-                    freq)
+                    freq, mask)
         lacourse_data = np.expand_dims(lacourse_data, axis=1)
         data_whole = np.concatenate((data_whole, lacourse_data), axis=1)
         columns.append("lacourse_spindles")
