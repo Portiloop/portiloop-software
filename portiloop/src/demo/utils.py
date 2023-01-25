@@ -43,18 +43,21 @@ class OfflineSleepSpindleRealTimeStimulator(Stimulator):
     def __init__(self):
         self.last_detected_ts = time.time()
         self.wait_t = 0.4  # 400 ms
+        self.wait_timesteps = int(self.wait_t * 250)
         self.delayer = None
+        self.index = 0
     
     def stimulate(self, detection_signal):
+        self.index += 1
         stim = False
         for sig in detection_signal:
             # We detect a stimulation
             if sig:
                 # Record time of stimulation
-                ts = time.time()
+                ts = self.index
                 
                 # Check if time since last stimulation is long enough
-                if ts - self.last_detected_ts > self.wait_t:
+                if ts - self.last_detected_ts > self.wait_timesteps:
                     if self.delayer is not None:
                         # If we have a delayer, notify it
                         self.delayer.detected()
@@ -86,7 +89,6 @@ def xdf2array(xdf_path, channel):
 
     # Add all samples from raw and filtered signals
     csv_list = []
-    diffs = []
     shortest_stream = min(int(filtered_stream['footer']['info']['sample_count'][0]),
                           int(raw_stream['footer']['info']['sample_count'][0]))
     for i in range(shortest_stream):
@@ -99,7 +101,6 @@ def xdf2array(xdf_path, channel):
             datapoint = [filtered_stream['time_stamps'][i], 
                         float(filtered_stream['time_series'][i, channel-1]), 
                         raw_stream['time_series'][i, channel-1]]
-        diffs.append(abs(filtered_stream['time_stamps'][i] - raw_stream['time_stamps'][i]))
         csv_list.append(datapoint)
 
     # Add markers
