@@ -6,6 +6,7 @@
 output.csv
 # Any xdf file used for testing
 *.xdf
+*.edf
 
 # Vagrant
 .vagrant/
