@@ -52,6 +52,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
         self._lock = Lock()
         self.last_detected_ts = time.time()
         self.wait_t = 0.4  # 400 ms
+        self.delayer = None
         
         lsl_markers_info = pylsl.StreamInfo(name='Portiloop_stimuli',
                                   type='Markers',
