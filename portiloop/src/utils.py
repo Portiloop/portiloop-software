@@ -2,9 +2,13 @@ from EDFlib.edfwriter import EDFwriter
 from portilooplot.jupyter_plot import ProgressPlot
 from pathlib import Path
 import numpy as np
+import csv
+import time
+
 
 EDF_PATH = Path.home() / 'workspace' / 'edf_recording'
-
+# Path to the recordings
+RECORDING_PATH = Path.home() / 'portiloop-software' / 'portiloop' / 'recordings'
 
 
 class DummyAlsaMixer:
@@ -102,7 +106,21 @@ class LiveDisplay():
 
 class FileReader:
     def __init__(self, filename):
-        raise NotImplementedError
+        file = open(filename, 'r')
+        # Open a csv file
+        print(f"Reading from file {filename}")
+        self.csv_reader = csv.reader(file, delimiter=',')
+        self.wait_time = 1/250.0
+        self.index = -1
+        self.last_time = time.time()
 
     def get_point(self):
-        raise NotImplementedError
+        """
+        Returns the next point in the file
+        """
+        point = next(self.csv_reader)
+        self.index += 1
+        while time.time() - self.last_time < self.wait_time:
+            continue
+        self.last_time = time.time()
+        return self.index, float(point[0]), float(point[1]), point[2] == '1', point[3] == '1'
