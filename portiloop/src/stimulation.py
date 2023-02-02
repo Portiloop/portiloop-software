@@ -14,6 +14,11 @@ if ADS:
     
 import wave
 from scipy.signal import find_peaks
+import numpy as np
+import matplotlib.pyplot as plt
+
+import alsaaudio
+import pylsl
 
 
 # Abstract interface for developers:
@@ -54,14 +59,14 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                                   channel_format='string',
                                   source_id='portiloop1')  # TODO: replace this by unique device identifier
         
-        lsl_markers_info_fast = pylsl.StreamInfo(name='Portiloop_stimuli_fast',
-                                  type='Markers',
-                                  channel_count=1,
-                                  channel_format='string',
-                                  source_id='portiloop1')  # TODO: replace this by unique device identifier
+#         lsl_markers_info_fast = pylsl.StreamInfo(name='Portiloop_stimuli_fast',
+#                                   type='Markers',
+#                                   channel_count=1,
+#                                   channel_format='string',
+#                                   source_id='portiloop1')  # TODO: replace this by unique device identifier
         
         self.lsl_outlet_markers = pylsl.StreamOutlet(lsl_markers_info)
-        self.lsl_outlet_markers_fast = pylsl.StreamOutlet(lsl_markers_info_fast)
+#         self.lsl_outlet_markers_fast = pylsl.StreamOutlet(lsl_markers_info_fast)
         
         # Initialize Alsa stuff
         # Open WAV file and set PCM device
@@ -121,6 +126,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                 self.last_detected_ts = ts
 
     def send_stimulation(self, lsl_text, sound):
+        print(f"Stimulating with text: {lsl_text}")
         # Send lsl stimulation
         self.lsl_outlet_markers.push_sample([lsl_text])
         # Send sound to patient

@@ -20,7 +20,7 @@ from portiloop.src.stimulation import UpStateDelayer
 
 from portiloop.src.processing import FilterPipeline, int_to_float
 from portiloop.src.config import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
-from portiloop.src.utils import FileReader, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH
+from portiloop.src.utils import FileReader, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH, RECORDING_PATH
 from IPython.display import clear_output, display
 import ipywidgets as widgets
 
@@ -500,6 +500,7 @@ class Capture:
         
         self.b_capture.observe(self.on_b_capture, 'value')
         self.b_clock.observe(self.on_b_clock, 'value')
+        self.b_signal_input.observe(self.on_b_signal_input, 'value')
         self.b_frequency.observe(self.on_b_frequency, 'value')
         self.b_threshold.observe(self.on_b_threshold, 'value')
         self.b_duration.observe(self.on_b_duration, 'value')
@@ -909,6 +910,8 @@ class Capture:
                 self.__capture_on = True
                 p_msg_io, p_msg_io_2 = mp.Pipe()
                 p_data_i, p_data_o = mp.Pipe(duplex=False)
+        else:
+            p_msg_io, _ = mp.Pipe()
 
         # Initialize filtering pipeline
         if filter:
@@ -941,7 +944,7 @@ class Capture:
             self._p_capture.start()
             print(f"PID capture: {self._p_capture.pid}")
         else:
-            filename = "INSERT FILENAME" # TODO
+            filename = RECORDING_PATH / 'test_recording.csv'
             file_reader = FileReader(filename)
 
         # Initialize display if requested
@@ -974,7 +977,7 @@ class Capture:
 
         # Initialize stimulation delayer if requested
         if not self.spindle_detection_mode == 'Fast' and stimulator is not None:
-            stimulation_delayer = UpStateDelayer(self.frequency, self.spindle_freq, self.spindle_detection_mode == 'Peak', time_to_buffer=0.1)
+            stimulation_delayer = UpStateDelayer(self.frequency, self.spindle_detection_mode == 'Peak', 0.3)
             stimulator.add_delayer(stimulation_delayer)
         else:
             stimulation_delayer = None
@@ -1006,7 +1009,14 @@ class Capture:
                 # Convert point from int to corresponding value in microvolts
                 n_array_raw = int_to_float(np.array([point]))
             elif self.signal_input == "File":
-                n_array_raw, gt_stimulation = file_reader.get_point()
+                # Check if the message to stop has been sent
+                with self._lock_msg_out:
+                    if self._msg_out == "STOP":
+                        break
+
+                index, raw_point, off_filtered_point, past_stimulation, lacourse_stimulation = file_reader.get_point()
+                n_array_raw = np.array([0, raw_point, 0, 0, 0, 0, 0, 0])
+                n_array_raw = np.reshape(n_array_raw, (1, 8))
             
             # Go through filtering pipeline
             if filter:
@@ -1025,7 +1035,7 @@ class Capture:
             
             # Adds point to buffer for delayed stimulation
             if stimulation_delayer is not None:
-                stimulation_delayer.step(filtered_point[0][channel-1])
+                stimulation_delayer.step_timesteps(filtered_point[0][channel-1])
 
             # Check if detection is on or off
             with self._pause_detect_lock:
@@ -1045,8 +1055,10 @@ class Capture:
                     if test_stimulus:
                         stimulator.test_stimulus()
                 
-                if self.signal_input == "File" and gt_stimulation:
-                    stimulator.send_stimulation("GROUND_TRUTH_STIM", False)
+                # Send the stimulation from the file reader
+                if stimulator is not None:
+                    if self.signal_input == "File" and lacourse_stimulation:
+                        stimulator.send_stimulation("GROUND_TRUTH_STIM", False)
             
             # Add point to the buffer to send to viz and recorder
             buffer += filtered_point
@@ -1070,7 +1082,7 @@ class Capture:
             p_data_i.close()
             p_msg_io.close()
             self._p_capture.join()
-            self.__capture_on = False
+        self.__capture_on = False
         
         if record:
             recorder.close_recording_file()
