@@ -146,9 +146,11 @@ def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq, dete
     # Output the data to a csv file
     np.savetxt("output.csv", data_whole, delimiter=",", header=",".join(columns), comments="")
 
+    # Compute the overlap of online stimulations with the 
 
     output_table = compute_output_table(
-        data_whole[:, columns.index("online_stimulations")] if online_detection else data_whole[:, columns.index("online_stimulations_portiloop")],
+        data_whole[:, columns.index("online_stimulations")],
+        data_whole[:, columns.index("online_stimulations_portiloop")],
         data_whole[:, columns.index("lacourse_spindles")] if lacourse else None, 
         data_whole[:, columns.index("wamsley_spindles")] if wamsley else None,)
 

@@ -211,7 +211,14 @@ def offline_filter(signal, freq):
 
     return signal
 
-def compute_output_table(online_stimulation, lacourse_spindles, wamsley_spindles):
+def compute_output_table(irl_online_stimulations, online_stimulation, lacourse_spindles, wamsley_spindles, time_overlap_s=2.0):
+
+
+    # Count the number of spindles in this run which overlap with spindles found IRL
+    irl_spindles_count = sum(irl_online_stimulations)
+    both_online_irl = sum([1 for index, spindle in enumerate(online_stimulation)\
+         if spindle == 1 and 1 in irl_online_stimulations[index - int((time_overlap_s / 2) * 250):index + int((time_overlap_s / 2) * 250)]])
+
     # Count the number of spindles detected by each method
     online_stimulation_count = np.sum(online_stimulation)
     if lacourse_spindles is not None:
@@ -224,12 +231,11 @@ def compute_output_table(online_stimulation, lacourse_spindles, wamsley_spindles
         # Count how many spindles were detected by both online and wamsley
         both_online_wamsley = sum([1 for index, spindle in enumerate(online_stimulation) if spindle == 1 and wamsley_spindles[index] == 1])
     
-    
-
     # Create markdown table with the results
-    table = "| Method | Detected spindles | Overlap with Portiloop |\n"
+    table = "| Method | # of Detected spindles | Overlap with Online (in tool) |\n"
     table += "| --- | --- | --- |\n"
-    table += f"| Online | {online_stimulation_count} | {online_stimulation_count} |\n"
+    table += f"| Online in Tool | {online_stimulation_count} | {online_stimulation_count} |\n"
+    table += f"| Online detection IRL | {irl_spindles_count} | {both_online_irl} |\n"
     if lacourse_spindles is not None:
         table += f"| Lacourse | {lacourse_spindles_count} | {both_online_lacourse} |\n"
     if wamsley_spindles is not None:
