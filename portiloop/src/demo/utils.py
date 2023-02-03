@@ -39,6 +39,7 @@ def sleep_stage(data, threshold=150, group_size=2):
     return unmasked_indices
 
 
+
 class OfflineSleepSpindleRealTimeStimulator(Stimulator):
     def __init__(self):
         self.last_detected_ts = time.time()
@@ -69,6 +70,54 @@ class OfflineSleepSpindleRealTimeStimulator(Stimulator):
     def add_delayer(self, delayer):
         self.delayer = delayer
         self.delayer.stimulate = lambda: True
+
+
+class OfflineSpindleTrainRealTimeStimulator(OfflineSleepSpindleRealTimeStimulator):
+    def __init__(self):
+        super().__init__()
+        self.max_spindle_train_t = 6.0
+    
+    def stimulate(self, detection_signal):
+        self.index += 1
+        stim = False
+        for sig in detection_signal:
+            # We detect a stimulation
+            if sig:
+                # Record time of stimulation
+                ts = self.index
+                
+                elapsed = ts - self.last_detected_ts
+                # Check if time since last stimulation is long enough
+                if self.wait_timesteps < elapsed < int(self.max_spindle_train_t * 250):
+                    if self.delayer is not None:
+                        # If we have a delayer, notify it
+                        self.delayer.detected()
+                    stim = True
+
+                self.last_detected_ts = ts
+        return stim
+    
+class OfflineIsolatedSpindleRealTimeStimulator(OfflineSpindleTrainRealTimeStimulator):
+    def stimulate(self, detection_signal):
+        self.index += 1
+        stim = False
+        for sig in detection_signal:
+            # We detect a stimulation
+            if sig:
+                # Record time of stimulation
+                ts = self.index
+                
+                elapsed = ts - self.last_detected_ts
+                # Check if time since last stimulation is long enough
+                if int(self.max_spindle_train_t * 250) < elapsed:
+                    if self.delayer is not None:
+                        # If we have a delayer, notify it
+                        self.delayer.detected()
+                    stim = True
+
+                self.last_detected_ts = ts
+        return stim
+
 
 def xdf2array(xdf_path, channel):
     xdf_data, _ = pyxdf.load_xdf(xdf_path)
@@ -162,7 +211,14 @@ def offline_filter(signal, freq):
 
     return signal
 
-def compute_output_table(online_stimulation, lacourse_spindles, wamsley_spindles):
+def compute_output_table(irl_online_stimulations, online_stimulation, lacourse_spindles, wamsley_spindles, time_overlap_s=2.0):
+
+
+    # Count the number of spindles in this run which overlap with spindles found IRL
+    irl_spindles_count = sum(irl_online_stimulations)
+    both_online_irl = sum([1 for index, spindle in enumerate(online_stimulation)\
+         if spindle == 1 and 1 in irl_online_stimulations[index - int((time_overlap_s / 2) * 250):index + int((time_overlap_s / 2) * 250)]])
+
     # Count the number of spindles detected by each method
     online_stimulation_count = np.sum(online_stimulation)
     if lacourse_spindles is not None:
@@ -175,12 +231,11 @@ def compute_output_table(online_stimulation, lacourse_spindles, wamsley_spindles
         # Count how many spindles were detected by both online and wamsley
         both_online_wamsley = sum([1 for index, spindle in enumerate(online_stimulation) if spindle == 1 and wamsley_spindles[index] == 1])
     
-    
-
     # Create markdown table with the results
-    table = "| Method | Detected spindles | Overlap with Portiloop |\n"
+    table = "| Method | # of Detected spindles | Overlap with Online (in tool) |\n"
     table += "| --- | --- | --- |\n"
-    table += f"| Online | {online_stimulation_count} | {online_stimulation_count} |\n"
+    table += f"| Online in Tool | {online_stimulation_count} | {online_stimulation_count} |\n"
+    table += f"| Online detection IRL | {irl_spindles_count} | {both_online_irl} |\n"
     if lacourse_spindles is not None:
         table += f"| Lacourse | {lacourse_spindles_count} | {both_online_lacourse} |\n"
     if wamsley_spindles is not None:
