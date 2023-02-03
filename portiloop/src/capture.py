@@ -1013,8 +1013,11 @@ class Capture:
                 with self._lock_msg_out:
                     if self._msg_out == "STOP":
                         break
-
-                index, raw_point, off_filtered_point, past_stimulation, lacourse_stimulation = file_reader.get_point()
+                
+                file_point = file_reader.get_point()
+                if file_point is None:
+                    break
+                index, raw_point, off_filtered_point, past_stimulation, lacourse_stimulation = file_point
                 n_array_raw = np.array([0, raw_point, 0, 0, 0, 0, 0, 0])
                 n_array_raw = np.reshape(n_array_raw, (1, 8))
             

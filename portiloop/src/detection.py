@@ -14,14 +14,12 @@ import numpy as np
 
 class Detector(ABC):
     
-    def __init__(self, threshold=None):
+    def __init__(self, threshold=None, channel=None):
         """
-        If implementing __init__() in your subclass, it must take threshold as a keyword argument.
-        This is the value of the threshold that the user can set in the Portiloop GUI.
-        Caution: even if you don't need this manual threshold in your application,
-        your implementation of __init__() still needs to have this keyword argument.
+        Mandatory arguments are from the in the Portiloop GUI.
         """
         self.threshold = threshold
+        self.channel = channel
 
     @abstractmethod
     def detect(self, datapoints):
@@ -47,10 +45,16 @@ DEFAULT_MODEL_PATH = str(Path(__file__).parent.parent / "models/portiloop_model_
 # print(DEFAULT_MODEL_PATH)
 
 class SleepSpindleRealTimeDetector(Detector):
-    def __init__(self, threshold=0.5, num_models_parallel=8, window_size=54, seq_stride=42, model_path=None, verbose=False, channel=2):
+    def __init__(self,
+                 threshold=0.5,
+                 num_models_parallel=8,
+                 window_size=54,
+                 seq_stride=42,
+                 model_path=None,
+                 verbose=False,
+                 channel=2):
         model_path = DEFAULT_MODEL_PATH if model_path is None else model_path
         self.verbose = verbose
-        self.channel = channel
         self.num_models_parallel = num_models_parallel
         
         self.interpreters = []
@@ -78,12 +82,15 @@ class SleepSpindleRealTimeDetector(Detector):
             
         self.current_stride_counter = self.stride_counters[0] - 1
         
-        super().__init__(threshold)
+        super().__init__(threshold, channel)
 
     def detect(self, datapoints):
         """
         Takes datapoints as input and outputs a detection signal.
         datapoints is a list of lists of n channels: may contain several datapoints.
+        
+        The output signal is a list of tuples (is_spindle, is_train_of_spindles).
+        
         """
         res = []
         for inp in datapoints:

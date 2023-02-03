@@ -118,9 +118,12 @@ class FileReader:
         """
         Returns the next point in the file
         """
-        point = next(self.csv_reader)
-        self.index += 1
-        while time.time() - self.last_time < self.wait_time:
-            continue
-        self.last_time = time.time()
-        return self.index, float(point[0]), float(point[1]), point[2] == '1', point[3] == '1'
+        try:
+            point = next(self.csv_reader)
+            self.index += 1
+            while time.time() - self.last_time < self.wait_time:
+                continue
+            self.last_time = time.time()
+            return self.index, float(point[0]), float(point[1]), point[2] == '1', point[3] == '1'
+        except StopIteration:
+            return None

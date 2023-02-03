@@ -17,8 +17,6 @@ from scipy.signal import find_peaks
 import numpy as np
 import matplotlib.pyplot as plt
 
-import alsaaudio
-import pylsl
 
 
 # Abstract interface for developers:
@@ -152,6 +150,55 @@ class SleepSpindleRealTimeStimulator(Stimulator):
     def add_delayer(self, delayer):
         self.delayer = delayer
         self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", True)
+
+
+class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
+    def __init__(self):
+        self.max_spindle_train_t = 6.0
+        super().__init__()
+        
+    def stimulate(self, detection_signal):
+        for sig in detection_signal:
+            # We detect a stimulation
+            if sig:
+                # Record time of stimulation
+                ts = time.time()
+                
+                # Check if time since last stimulation is long enough
+                elapsed = ts - self.last_detected_ts
+                if self.wait_t < elapsed < self.max_spindle_train_t:
+                    if self.delayer is not None:
+                        # If we have a delayer, notify it
+                        self.delayer.detected()
+                        # Send the LSL marer for the fast stimulation 
+                        self.send_stimulation("FAST_STIM", False)
+                    else:
+                        self.send_stimulation("STIM", True)
+
+                self.last_detected_ts = ts
+
+
+class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
+    def stimulate(self, detection_signal):
+        for sig in detection_signal:
+            # We detect a stimulation
+            if sig:
+                # Record time of stimulation
+                ts = time.time()
+                
+                # Check if time since last stimulation is long enough
+                elapsed = ts - self.last_detected_ts
+                if self.max_spindle_train_t < elapsed:
+                    if self.delayer is not None:
+                        # If we have a delayer, notify it
+                        self.delayer.detected()
+                        # Send the LSL marer for the fast stimulation 
+                        self.send_stimulation("FAST_STIM", False)
+                    else:
+                        self.send_stimulation("STIM", True)
+
+                self.last_detected_ts = ts
+
 
 # Class that delays stimulation to always stimulate peak or through
 class UpStateDelayer:
