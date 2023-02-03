@@ -39,6 +39,7 @@ def sleep_stage(data, threshold=150, group_size=2):
     return unmasked_indices
 
 
+
 class OfflineSleepSpindleRealTimeStimulator(Stimulator):
     def __init__(self):
         self.last_detected_ts = time.time()
@@ -69,6 +70,54 @@ class OfflineSleepSpindleRealTimeStimulator(Stimulator):
     def add_delayer(self, delayer):
         self.delayer = delayer
         self.delayer.stimulate = lambda: True
+
+
+class OfflineSpindleTrainRealTimeStimulator(OfflineSleepSpindleRealTimeStimulator):
+    def __init__(self):
+        super().__init__()
+        self.max_spindle_train_t = 6.0
+    
+    def stimulate(self, detection_signal):
+        self.index += 1
+        stim = False
+        for sig in detection_signal:
+            # We detect a stimulation
+            if sig:
+                # Record time of stimulation
+                ts = self.index
+                
+                elapsed = ts - self.last_detected_ts
+                # Check if time since last stimulation is long enough
+                if self.wait_timesteps < elapsed < int(self.max_spindle_train_t * 250):
+                    if self.delayer is not None:
+                        # If we have a delayer, notify it
+                        self.delayer.detected()
+                    stim = True
+
+                self.last_detected_ts = ts
+        return stim
+    
+class OfflineIsolatedSpindleRealTimeStimulator(OfflineSpindleTrainRealTimeStimulator):
+    def stimulate(self, detection_signal):
+        self.index += 1
+        stim = False
+        for sig in detection_signal:
+            # We detect a stimulation
+            if sig:
+                # Record time of stimulation
+                ts = self.index
+                
+                elapsed = ts - self.last_detected_ts
+                # Check if time since last stimulation is long enough
+                if int(self.max_spindle_train_t * 250) < elapsed:
+                    if self.delayer is not None:
+                        # If we have a delayer, notify it
+                        self.delayer.detected()
+                    stim = True
+
+                self.last_detected_ts = ts
+        return stim
+
 
 def xdf2array(xdf_path, channel):
     xdf_data, _ = pyxdf.load_xdf(xdf_path)

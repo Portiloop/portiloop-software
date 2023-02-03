@@ -29,9 +29,14 @@ def main():
             # Threshold value
             threshold = gr.Slider(0, 1, value=0.82, step=0.01, label="Threshold", interactive=True)
             # Detection Channel
+        
+        with gr.Row():
             detect_channel = gr.Dropdown(choices=["1", "2", "3", "4", "5", "6", "7", "8"], value="2", label="Detection Channel in XDF recording", interactive=True) 
             # Frequency
             freq = gr.Dropdown(choices=["100", "200", "250", "256", "500", "512", "1000", "1024"], value="250", label="Sampling Frequency (Hz)", interactive=True)
+
+            # Detect trains dropdown
+            detect_trains = gr.Dropdown(choices=["All Spindles", "Isolated & First", "Trains"], value="All Spindles", label="Detection mode:", interactive=True)
 
         with gr.Row():
             output_array = gr.File(label="Output CSV File")
@@ -45,7 +50,8 @@ def main():
                 detect_filter,
                 threshold, 
                 detect_channel,
-                freq], 
+                freq,
+                detect_trains], 
             outputs=[output_array, output_table])
 
     demo.queue()

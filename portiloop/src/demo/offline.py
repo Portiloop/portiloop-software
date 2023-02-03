@@ -2,11 +2,11 @@ import numpy as np
 from portiloop.src.detection import SleepSpindleRealTimeDetector
 from portiloop.src.stimulation import UpStateDelayer
 from portiloop.src.processing import FilterPipeline
-from portiloop.src.demo.utils import compute_output_table, sleep_stage, xdf2array, offline_detect, offline_filter, OfflineSleepSpindleRealTimeStimulator
+from portiloop.src.demo.utils import OfflineIsolatedSpindleRealTimeStimulator, OfflineSpindleTrainRealTimeStimulator, compute_output_table, sleep_stage, xdf2array, offline_detect, offline_filter, OfflineSleepSpindleRealTimeStimulator
 import gradio as gr
 
 
-def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq, stimulation_phase="Fast", buffer_time=0.25):
+def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq, detect_trains, stimulation_phase="Fast", buffer_time=0.25):
     # Get the options from the checkbox group
     offline_filtering = 0 in detect_filter_opts
     lacourse = 1 in detect_filter_opts
@@ -76,7 +76,14 @@ def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq, stim
     # Create the detector
     if online_detection:
         detector = SleepSpindleRealTimeDetector(threshold=threshold, channel=1) # always 1 because we have only one channel
-        stimulator = OfflineSleepSpindleRealTimeStimulator()
+
+        if detect_trains == "All Spindles":
+            stimulator = OfflineSleepSpindleRealTimeStimulator()
+        elif detect_trains == "Trains":
+            stimulator = OfflineSpindleTrainRealTimeStimulator()
+        elif detect_trains == "Isolated & First":
+            stimulator = OfflineIsolatedSpindleRealTimeStimulator()
+
         if stimulation_phase != "Fast":
             stimulation_delayer = UpStateDelayer(freq, stimulation_phase == 'Peak', time_to_buffer=buffer_time, stimulate=lambda: None)
             stimulator.add_delayer(stimulation_delayer)
