@@ -23,13 +23,14 @@ class DummyAlsaMixer:
 
 
 class EDFRecorder:
-    def __init__(self, signal_labels):
-        self.filename = EDF_PATH / 'recording.edf'
-        self.nb_signals = 8
-        self.samples_per_datarecord_array = self.frequency
+    def __init__(self, signal_labels, filename, frequency):
+        self.filename = filename
+        self.nb_signals = len(signal_labels)
+        self.samples_per_datarecord_array = frequency
         self.physical_max = 5
         self.physical_min = -5
         self.signal_labels = signal_labels
+        self.edf_buffer = []
 
     def open_recording_file(self):
         nb_signals = self.nb_signals

@@ -953,7 +953,8 @@ class Capture:
 
         # Initialize recording if requested
         if record:
-            recorder = EDFRecorder(self.signal_label)
+            recorder = EDFRecorder(self.signal_labels, self.filename, self.frequency)
+            recorder.open_recording_file()
         
         # Initialize LSL to stream if requested
         if lsl:
