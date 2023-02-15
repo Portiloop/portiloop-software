@@ -143,7 +143,7 @@ class Capture:
         self.record = False
         self.detect = False
         self.stimulate = False
-        self.threshold = 0.5
+        self.threshold = 0.82
         self.lsl = False
         self.display = False
         self.signal_input = "ADS"
