@@ -1,4 +1,4 @@
-from EDFlib.edfwriter import EDFwriter
+# from EDFlib.edfwriter import EDFwriter
 from pyedflib import highlevel
 from portilooplot.jupyter_plot import ProgressPlot
 from pathlib import Path
