@@ -161,17 +161,148 @@ class LiveDisplay():
         self.pp.update(disp_list)
 
 
-class FileReader:
+class Dummy:
+    def __getattr__(self, attr):
+        return lambda *args, **kwargs: None
+
+class CaptureFrontend(ABC):
+    """
+    Interface that defines how we talk to a capture frontend:
+    """
+    @abstractmethod
+    def init_capture(self):
+        pass
+
+    @abstractmethod
+    def get_data(self):
+        pass
+
+    @abstractmethod
+    def get_msg(self):
+        pass
+
+    @abstractmethod
+    def send_msg(self, msg):
+        pass
+
+    @abstractmethod
+    def close(self):
+        pass
+
+
+class ADSFrontend(CaptureFrontend):
+    def __init__(self, duration, frequency, python_clock, channel_states):
+        """
+        duration (float): duration of the capture in seconds
+        frequency (float): sampling frequency in Hz
+        python_clock (bool): if True, use the python clock to time the capture
+        channel_states (list): list of channel states
+        """
+        # Initialize the variables
+        self.duration = duration
+        self.frequency = frequency
+        self.python_clock = python_clock
+        self.channel_states = channel_states
+
+        # Initialize The data pipes to talk to the data process
+        self.capture_started = False
+        self.p_msg_io, self.p_msg_io_2 = mp.Pipe()
+        self.p_data_i, self.p_data_o = mp.Pipe(duplex=False)
+
+    def init_capture(self):
+        """
+        Actually initialize the capture process
+        """
+        self._p_capture = mp.Process(target=capture_process,
+                                        args=(self.p_data_o,
+                                            self.p_msg_io_2,
+                                            self.duration,
+                                            self.frequency,
+                                            self.python_clock,
+                                            1.0,
+                                            self.channel_states)
+                                        )
+        self._p_capture.start()
+        self.capture_started = True
+        # If any issue arises, we want to kill this process
+        print(f"PID capture: {self._p_capture.pid}. Kill this process if program crashes before end of execution.")
+
+    def send_msg(self, msg):
+        """
+        Send message STOP to stop capture process
+        """
+        if self.capture_started:
+            self.p_msg_io.send(msg)
+
+    def get_msg(self):
+        """
+        Returns messages from capture process
+        """
+        if self.capture_started:
+            if self.p_msg_io.poll():
+                return self.p_msg_io.recv()
+            
+    def get_data(self):
+        """
+        Returns data from capture process if any available. Otherwise returns None.
+        The value returned is a numpy array of shape (n, 8) containing the data points in MicroVolts.
+        n depends on how many datapoints have been added to the pipe since the last check.
+        """
+        point = None
+        if self.p_data_i.poll(timeout=(1 / self.frequency)):
+            point = self.p_data_i.recv()
+
+        # Convert point from int to corresponding value in microvolts
+        return int_to_float(np.array([point])) if point is not None else None
+
+    def close(self):
+        # Empty pipes 
+        while True:
+            if self.p_data_i.poll():
+                _ = self.p_data_i.recv()
+            elif self.p_msg_io.poll():
+                _ = self.p_msg_io.recv()
+            else:
+                break
+
+        self.p_data_i.close()
+        self.p_msg_io.close()
+        self._p_capture.join()
+
+
+class FileFrontend(CaptureFrontend):
     def __init__(self, filename):
-        file = open(filename, 'r')
-        # Open a csv file
+        """
+        Frontend that reads from a csv file. Mostly used for debugging.
+        """
+        self.filename = filename
         print(f"Reading from file {filename}")
-        self.csv_reader = csv.reader(file, delimiter=',')
+        self.stop_msg = False
+    
+    def init_capture(self):
+        """
+        Initialize the file reader
+        """
+        self.file = open(self.filename, 'r')
+        self.csv_reader = csv.reader(self.file, delimiter=',')
         self.wait_time = 1/250.0
         self.index = -1
         self.last_time = time.time()
 
-    def get_point(self):
+    def send_msg(self, msg):
+        """
+        Does nothing
+        """
+        pass
+
+    def get_msg(self):
+        """
+        If we have reached the end of the file, this tells the main loop to stop
+        """
+        if self.stop_msg:
+            return "STOP"
+
+    def get_data(self):
         """
         Returns the next point in the file
         """
@@ -181,6 +312,52 @@ class FileReader:
             while time.time() - self.last_time < self.wait_time:
                 continue
             self.last_time = time.time()
-            return self.index, float(point[0]), float(point[1]), point[2] == '1', point[3] == '1'
+            n_array_raw = np.array([0, float(point[0]), 0, 0, 0, 0, 0, 0])
+            n_array_raw = np.reshape(n_array_raw, (1, 8))
+            return n_array_raw
         except StopIteration:
-            return None
+            self.stop_msg = True
+
+    def close(self):
+        self.file.close()
+
+
+class LSLStreamer:
+    def __init__(self, streams, channel_count, frequency, id):
+        from pylsl import StreamInfo, StreamOutlet
+
+        self.streams = streams
+
+        lsl_info_raw = StreamInfo(name='Portiloop Raw Data',
+                        type='Raw EEG signal',
+                        channel_count=channel_count,
+                        nominal_srate=self.frequency,
+                        channel_format='float32',
+                        source_id=id)  
+        self.lsl_outlet_raw = StreamOutlet(lsl_info_raw)
+
+        if streams['filtered']:
+            lsl_info = StreamInfo(name='Portiloop Filtered',
+                                    type='Filtered EEG',
+                                    channel_count=channel_count,
+                                    nominal_srate=frequency,
+                                    channel_format='float32',
+                                    source_id=id)  
+            self.lsl_outlet = StreamOutlet(lsl_info)
+
+        if streams['markers']:
+            lsl_markers_info = StreamInfo(name='Portiloop_stimuli',
+                                    type='Markers',
+                                    channel_count=1,
+                                    channel_format='string',
+                                    source_id=id) 
+            self.lsl_outlet_markers = StreamOutlet(lsl_markers_info)
+
+    def push_filtered(self, data):
+        self.lsl_outlet.push_sample(data)
+
+    def push_raw(self, data):
+        self.lsl_outlet_raw.push_sample(data)
+
+    def push_marker(self, text):
+        self.lsl_outlet.push_sample([text])

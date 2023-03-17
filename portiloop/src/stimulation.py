@@ -51,21 +51,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
         self.last_detected_ts = time.time()
         self.wait_t = 0.4  # 400 ms
         self.delayer = None
-        
-        lsl_markers_info = pylsl.StreamInfo(name='Portiloop_stimuli',
-                                  type='Markers',
-                                  channel_count=1,
-                                  channel_format='string',
-                                  source_id='portiloop1')  # TODO: replace this by unique device identifier
-        
-#         lsl_markers_info_fast = pylsl.StreamInfo(name='Portiloop_stimuli_fast',
-#                                   type='Markers',
-#                                   channel_count=1,
-#                                   channel_format='string',
-#                                   source_id='portiloop1')  # TODO: replace this by unique device identifier
-        
-        self.lsl_outlet_markers = pylsl.StreamOutlet(lsl_markers_info)
-#         self.lsl_outlet_markers_fast = pylsl.StreamOutlet(lsl_markers_info_fast)
+    
         
         # Initialize Alsa stuff
         # Open WAV file and set PCM device
