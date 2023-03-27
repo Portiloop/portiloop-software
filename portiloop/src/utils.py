@@ -1,4 +1,5 @@
 # from EDFlib.edfwriter import EDFwriter
+from abc import ABC, abstractmethod
 from pyedflib import highlevel
 from portilooplot.jupyter_plot import ProgressPlot
 from pathlib import Path
@@ -7,6 +8,9 @@ import csv
 import time
 import os
 import warnings
+import multiprocessing as mp
+
+from portiloop.src.processing import int_to_float
 
 
 EDF_PATH = Path.home() / 'workspace' / 'edf_recording'
@@ -150,6 +154,8 @@ class LiveDisplay():
                 self.history += d[1]
         
         if not self.matplotlib:
+            # print(disp_list)
+            # print(datapoints)
             self.pp.update_with_datapoints(disp_list)
         elif len(self.history) == 1000:
             plt.plot(self.history)
@@ -191,7 +197,7 @@ class CaptureFrontend(ABC):
 
 
 class ADSFrontend(CaptureFrontend):
-    def __init__(self, duration, frequency, python_clock, channel_states):
+    def __init__(self, duration, frequency, python_clock, channel_states, process):
         """
         duration (float): duration of the capture in seconds
         frequency (float): sampling frequency in Hz
@@ -208,12 +214,13 @@ class ADSFrontend(CaptureFrontend):
         self.capture_started = False
         self.p_msg_io, self.p_msg_io_2 = mp.Pipe()
         self.p_data_i, self.p_data_o = mp.Pipe(duplex=False)
+        self.process = process
 
     def init_capture(self):
         """
         Actually initialize the capture process
         """
-        self._p_capture = mp.Process(target=capture_process,
+        self._p_capture = mp.Process(target=self.process,
                                         args=(self.p_data_o,
                                             self.p_msg_io_2,
                                             self.duration,
@@ -331,7 +338,7 @@ class LSLStreamer:
         lsl_info_raw = StreamInfo(name='Portiloop Raw Data',
                         type='Raw EEG signal',
                         channel_count=channel_count,
-                        nominal_srate=self.frequency,
+                        nominal_srate=frequency,
                         channel_format='float32',
                         source_id=id)  
         self.lsl_outlet_raw = StreamOutlet(lsl_info_raw)

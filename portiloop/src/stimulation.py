@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from portiloop.src import ADS
+from portiloop.src.utils import Dummy
 
 if ADS:
     import alsaaudio
@@ -43,7 +44,7 @@ class Stimulator(ABC):
 # Example implementation for sleep spindles
 
 class SleepSpindleRealTimeStimulator(Stimulator):
-    def __init__(self):
+    def __init__(self, lsl_streamer):
         self._sound = Path(__file__).parent.parent / 'sounds' / 'stimulus.wav'
         print(f"DEBUG:{self._sound}")
         self._thread = None
@@ -51,8 +52,8 @@ class SleepSpindleRealTimeStimulator(Stimulator):
         self.last_detected_ts = time.time()
         self.wait_t = 0.4  # 400 ms
         self.delayer = None
-    
-        
+        self.lsl_streamer = lsl_streamer
+
         # Initialize Alsa stuff
         # Open WAV file and set PCM device
         with wave.open(str(self._sound), 'rb') as f: 
@@ -75,8 +76,12 @@ class SleepSpindleRealTimeStimulator(Stimulator):
 
             self.periodsize = f.getframerate() // 8
 
-            self.pcm = alsaaudio.PCM(channels=f.getnchannels(), rate=f.getframerate(), format=format, periodsize=self.periodsize, device=device)
-            
+            try:
+                self.pcm = alsaaudio.PCM(channels=f.getnchannels(), rate=f.getframerate(), format=format, periodsize=self.periodsize, device=device)
+            except alsaaudio.ALSAAudioError as e:
+                print("WARNING: Could not open ALSA device as it is already playing a sound. To test stimulation, stop recording and try again.")
+                self.pcm = Dummy()
+                
             # Store data in list to avoid reopening the file
             data = f.readframes(self.periodsize)
             self.wav_list = [data]
@@ -113,7 +118,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
     def send_stimulation(self, lsl_text, sound):
         print(f"Stimulating with text: {lsl_text}")
         # Send lsl stimulation
-        self.lsl_outlet_markers.push_sample([lsl_text])
+        self.lsl_streamer.push_marker(lsl_text)
         # Send sound to patient
         if sound:
             with self._lock:
@@ -136,6 +141,9 @@ class SleepSpindleRealTimeStimulator(Stimulator):
     def add_delayer(self, delayer):
         self.delayer = delayer
         self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", True)
+
+    def close(self):
+        del self.pcm
 
 
 class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
