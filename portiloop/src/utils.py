@@ -1,5 +1,6 @@
 # from EDFlib.edfwriter import EDFwriter
 from abc import ABC, abstractmethod
+import io
 from pyedflib import highlevel
 from portilooplot.jupyter_plot import ProgressPlot
 from pathlib import Path
@@ -16,6 +17,22 @@ from portiloop.src.processing import int_to_float
 EDF_PATH = Path.home() / 'workspace' / 'edf_recording'
 # Path to the recordings
 RECORDING_PATH = Path.home() / 'portiloop-software' / 'portiloop' / 'recordings'
+
+
+def get_portiloop_version():
+    # Check if we are on a Portiloop V1 or V2.
+    try:
+        with io.open('/sys/firmware/devicetree/base/model', 'r') as m:
+            string = m.read().lower()
+            if "phanbell" in string:
+                version = 1
+            elif "coral" in string:
+                version = 2
+            else: 
+                version = -1
+    except Exception:
+        version = -1
+    return version
 
 
 class DummyAlsaMixer:

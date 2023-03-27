@@ -20,7 +20,7 @@ from portiloop.src.stimulation import UpStateDelayer
 
 from portiloop.src.processing import FilterPipeline
 from portiloop.src.config import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
-from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH, RECORDING_PATH
+from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH, RECORDING_PATH, get_portiloop_version
 from IPython.display import clear_output, display
 import ipywidgets as widgets
 
@@ -43,16 +43,10 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
     
     sample_time = 1 / frequency
 
-    frontend = Frontend()
-    leds = LEDs()
-    leds.led2(Color.PURPLE)
-    leds.aquisition(True)
+    version = get_portiloop_version()
+    frontend = Frontend(version)
     
     try:
-        data = frontend.read_regs(0x00, 1)
-        assert data == [0x3E], "The communication with the ADS failed, please try again."
-        leds.led2(Color.BLUE)
-        
         config = FRONTEND_CONFIG
         if python_clock:  # set ADS to 2 * frequency
             datarate = 2 * frequency
@@ -61,19 +55,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         config = mod_config(config, datarate, channel_states)
         
         frontend.write_regs(0x00, config)
-        data = frontend.read_regs(0x00, len(config))
-        assert data == config, f"Wrong config: {data} vs {config}"
-        frontend.start()
-        leds.led2(Color.PURPLE)
-        while not frontend.is_ready():
-            pass
-
-        # Set up of leds
-        leds.aquisition(True)
-        sleep(0.5)
-        leds.aquisition(False)
-        sleep(0.5)
-        leds.aquisition(True)
+        # data = frontend.read_regs(0x00, len(config))
 
         c = True
 
@@ -117,9 +99,6 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         p_msg_io.send(("PRT", f"Average frequency: {1 / tot} Hz for {it} samples"))
 
     finally:
-        leds.aquisition(False)
-        leds.close()
-        frontend.close()
         p_msg_io.send('STOP')
         p_msg_io.close()
         p_data_o.close()
@@ -141,6 +120,15 @@ def start_capture(
         process=capture_process,
     ) if capture_object.signal_input == "ADS" else FileFrontend(fake_filename)
 
+    # Initialize detector, LSL streamer and stimulatorif requested
+    detector = detector_cls(capture_object.threshold, channel=capture_object.channel_detection) if detector_cls is not None else None
+    streams = {
+            'filtered': filter,
+            'markers': detector is not None,
+        }
+    lsl_streamer = LSLStreamer(streams, capture_object.nb_channels, capture_object.frequency, id=PORTILOOP_ID) if capture_object.lsl else Dummy()
+    stimulator = stimulator_cls(lsl_streamer=lsl_streamer) if stimulator_cls is not None else None
+
     # Initialize filtering pipeline
     if filter:
         fp = FilterPipeline(nb_channels=capture_object.nb_channels,
@@ -154,10 +142,6 @@ def start_capture(
                             epsilon=capture_object.filter_settings['epsilon'],
                             filter_args=capture_object.filter_settings['filter_args'])
     
-    # Initialize detector and stimulator
-    detector = detector_cls(capture_object.threshold, channel=capture_object.channel_detection) if detector_cls is not None else None
-    stimulator = stimulator_cls() if stimulator_cls is not None else None
-
     # Launch the capture process
     capture_frontend.init_capture()
 
@@ -167,13 +151,6 @@ def start_capture(
     # Initialize recording if requested
     recorder = EDFRecorder(capture_object.signal_labels, capture_object.filename, capture_object.frequency) if capture_object.record else Dummy()
     recorder.open_recording_file()
-    
-    # Initialize LSL to stream if requested
-    streams = {
-            'filtered': filter,
-            'markers': detector is not None,
-        }
-    lsl_streamer = LSLStreamer(streams, capture_object.nb_channels, capture_object.frequency, id=PORTILOOP_ID) if capture_object.lsl else Dummy()
 
     # Buffer used for the visualization and the recording
     buffer = []
@@ -261,8 +238,14 @@ class Capture:
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
         self.filename = EDF_PATH / 'recording.edf'
         
-        # Hardware options
-        self.nb_channels = 8 # TODO: Change that to adapt according to portiloop version
+        version = get_portiloop_version()
+
+        # Check which version of the ADS we are in.
+        if version != -1:
+            frontend = Frontend(version)
+            self.nb_channels = frontend.get_version()
+
+        print(f"Current hardware: ADS1299 {self.nb_channels} channels | Portiloop Version: {version}")
 
         # General default parameters
         self.frequency = 250

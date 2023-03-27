@@ -44,7 +44,7 @@ class Stimulator(ABC):
 # Example implementation for sleep spindles
 
 class SleepSpindleRealTimeStimulator(Stimulator):
-    def __init__(self, lsl_streamer):
+    def __init__(self, lsl_streamer=Dummy()):
         self._sound = Path(__file__).parent.parent / 'sounds' / 'stimulus.wav'
         print(f"DEBUG:{self._sound}")
         self._thread = None
