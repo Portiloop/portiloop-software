@@ -93,10 +93,9 @@ def to_ads_frequency(frequency):
             break
     return dr
     
-def mod_config(config, datarate, channel_modes):
+def mod_config(config, datarate, channel_modes, ads_version):
     
     # datarate:
-
     possible_datarates = [(250, 0x06),
                           (500, 0x05),
                           (1000, 0x04),
@@ -120,6 +119,11 @@ def mod_config(config, datarate, channel_modes):
     config[14] = 0x00  # clear BIAS_SENSN
     for chan_i, chan_mode in enumerate(channel_modes):
         n = 6 + chan_i
+
+        if (ads_version == 0 and chan_i > 3) or (ads_version == 1 and chan_i > 5):
+            config[n] = 0x00
+            continue
+
         mod = config[n] & 0x78  # clear PDn and MUX[2:0]
         if chan_mode == 'simple':
             # If channel is activated, we send the channel's output to the BIAS mechanism

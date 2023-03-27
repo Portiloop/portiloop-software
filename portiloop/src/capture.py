@@ -41,36 +41,39 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
     sample_time = 1 / frequency
 
     frontend = Frontend()
-    leds = LEDs()
-    leds.led2(Color.PURPLE)
-    leds.aquisition(True)
+    # leds = LEDs()
+    # leds.led2(Color.PURPLE)
+    # leds.aquisition(True)
     
     try:
         data = frontend.read_regs(0x00, 1)
-        assert data == [0x3E], "The communication with the ADS failed, please try again."
-        leds.led2(Color.BLUE)
+        ads_version = data[0] & 0x03
+
+        data[0] = data[0] & 0x1C
+        assert data == [0x1C], "The communication with the ADS failed, please try again."         
+        # leds.led2(Color.BLUE)
         
         config = FRONTEND_CONFIG
         if python_clock:  # set ADS to 2 * frequency
             datarate = 2 * frequency
         else:  # set ADS to frequency
             datarate = frequency
-        config = mod_config(config, datarate, channel_states)
+        config = mod_config(config, datarate, channel_states, ads_version)
         
         frontend.write_regs(0x00, config)
         data = frontend.read_regs(0x00, len(config))
-        assert data == config, f"Wrong config: {data} vs {config}"
-        frontend.start()
-        leds.led2(Color.PURPLE)
-        while not frontend.is_ready():
-            pass
+        # assert data[1:] == config[1:], f"Wrong config: {data} vs {config}"
+        # frontend.start()
+        # leds.led2(Color.PURPLE)
+        # while not frontend.is_ready():
+        #     print("Waiting for ready frontend")
 
         # Set up of leds
-        leds.aquisition(True)
-        sleep(0.5)
-        leds.aquisition(False)
-        sleep(0.5)
-        leds.aquisition(True)
+        # leds.aquisition(True)
+        # sleep(0.5)
+        # leds.aquisition(False)
+        # sleep(0.5)
+        # leds.aquisition(True)
 
         c = True
 
@@ -114,8 +117,8 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         p_msg_io.send(("PRT", f"Average frequency: {1 / tot} Hz for {it} samples"))
 
     finally:
-        leds.aquisition(False)
-        leds.close()
+        # leds.aquisition(False)
+        # leds.close()
         frontend.close()
         p_msg_io.send('STOP')
         p_msg_io.close()

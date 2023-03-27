@@ -4,7 +4,8 @@ import io
 def is_coral():
     try:
         with io.open('/sys/firmware/devicetree/base/model', 'r') as m:
-            if 'phanbell' in m.read().lower(): return True
+            string = m.read().lower()
+            return any([x in string for x in ["phanbell", "coral"]])
     except Exception: pass
     return False
 

@@ -1,12 +1,11 @@
 from time import sleep
-from playsound import playsound
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 from datetime import datetime, timedelta
 
-from frontend import Frontend
-from leds import LEDs, Color
+from portiloop.src.hardware.frontend import Frontend
+from portiloop.src.hardware.leds import LEDs, Color
 
 DEFAULT_FRONTEND_CONFIG = [
     0x3E, # ID (RO)
@@ -45,10 +44,10 @@ FRONTEND_CONFIG = [
     0x68, # Channel 2 active, 24 gain, no SRB2 & normal input
     0x68, # Channel 3 active, 24 gain, no SRB2 & normal input
     0x68, # Channel 4 active, 24 gain, no SRB2 & normal input
-    0x68, # Channel 5 active, 24 gain, no SRB2 & normal input
-    0x68, # Channel 6 active, 24 gain, no SRB2 & normal input
-    0x68, # Channel 7 active, 24 gain, no SRB2 & normal input
-    0xE0, # Channel 8 disabled, 24 gain, no SRB2 & normal input
+    0x00, # Channel 5 active, 24 gain, no SRB2 & normal input
+    0x00, # Channel 6 active, 24 gain, no SRB2 & normal input
+    0x00, # Channel 7 active, 24 gain, no SRB2 & normal input
+    0x00, # Channel 8 disabled, 24 gain, no SRB2 & normal input
     0x00, # No bias
     0x00, # No bias
     0xFF, # Lead-off on all positive pins?
@@ -61,13 +60,16 @@ FRONTEND_CONFIG = [
 ]
 
 frontend = Frontend()
-leds = LEDs()
+# leds = LEDs()
 
 try:
     data = frontend.read_regs(0x00, 1)
-    assert data == [0x3E], "Wrong output"
+    data[0] = data[0] & 0x1C
+    print(len(data))
+
+    # assert data == [0x1C], "The communication with the ADS failed, please try again."    
     print("EEG Frontend responsive")
-    leds.led2(Color.BLUE)
+    # leds.led2(Color.BLUE)
 
     print("Configuring EEG Frontend")
     frontend.write_regs(0x00, FRONTEND_CONFIG)
@@ -78,19 +80,19 @@ try:
     #    config[i] = 0x05 # Channel active, 1 gain, no SRB2 & Test signal
     #frontend.write_regs(0x00, config)
     data = frontend.read_regs(0x00, len(FRONTEND_CONFIG))
-    assert data == FRONTEND_CONFIG, f"Wrong config: {data} vs {FRONTEND_CONFIG}"
-    frontend.start()
+    assert data[1:] == FRONTEND_CONFIG[1:], f"Wrong config: {data} vs {FRONTEND_CONFIG}"
+    # frontend.start()
     print("EEG Frontend configured")
-    leds.led2(Color.PURPLE)
-    while not frontend.is_ready():
-        pass
+    # leds.led2(Color.PURPLE)
+    # while not frontend.is_ready():
+    #     pass
     print("Ready for data")
 
-    leds.aquisition(True)
-    sleep(0.5)
-    leds.aquisition(False)
-    sleep(0.5)
-    leds.aquisition(True)
+    # leds.aquisition(True)
+    # sleep(0.5)
+    # leds.aquisition(False)
+    # sleep(0.5)
+    # leds.aquisition(True)
 
     points = []
     START = datetime.now()
@@ -98,14 +100,14 @@ try:
     #times = [timedelta(milliseconds=i) for i in range(NUM_STEPS)]
     times = [i / 250 for i in range(NUM_STEPS)]
     for x in range(NUM_STEPS):
-        while not frontend.is_ready():
-            pass
+        # while not frontend.is_ready():
+        #     pass
         values = frontend.read()
         print(values.channels())
         points.append(values.channels())
         while frontend.is_ready():
             pass
-    leds.aquisition(False)
+    # leds.aquisition(False)
 
     points = np.transpose(np.array(points))
     fig, ax = plt.subplots()
@@ -119,4 +121,4 @@ try:
 
 finally:
     frontend.close()
-    leds.close()
+    # leds.close()
