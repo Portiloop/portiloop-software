@@ -21,7 +21,7 @@ These first steps will help you set up an SSH connection to the device.
 
 ## Dependencies
 
-To install all dependencies, clone it and run the installation.sh script. This script takes care of all the installations for you so it may take a while (~25 minutes).
+To install all dependencies, run the installation.sh script. This script takes care of all the installations for you so it may take a while (~25 minutes).
 
 ## Setting up the Access Point
 
@@ -42,7 +42,7 @@ Next, you will need to set up a systemd service to configure and enable the `ap0
 First, we can create a script to create the interface using `sudo nano /usr/local/bin/create_ap0.sh`. The script should contain the following content:
 
 ```bash
-!/bin/bash
+#!/bin/bash
 
 # Delete the existing p2p0 interface
 sudo iw dev p2p0 del
@@ -63,7 +63,9 @@ sudo systemctl restart NetworkManager
 sudo ifconfig ap0 192.168.4.1 up
 ```
 
-To avoid configuration issues, we need to tell NetworkManager to ignore this interface. Create a file called `/etc/NetworkManager/conf.d/unmanaged.conf`. In this file, write the following:
+To be able to run this file like a script, run `sudo chmod +x /usr/local/bin/create_ap0.sh`
+
+To avoid configuration issues, we need to tell NetworkManager to ignore this interface. First, run `nmcli device set ap0 managed no`. Then, create a file called `/etc/NetworkManager/conf.d/unmanaged.conf`. In this file, write the following:
 
 ```ini
 [keyfile]
@@ -91,7 +93,7 @@ This service file specifies that it should run the `create_ap0.sh` script once o
 
 Hostapd is the software that will create the wireless access point. First, you will need to open the in `/etc/sysctl.conf` file and change the line for ip_forwarding to `net.ipv4.ip_forward=1`.
 
-Next, you will need to create a configuration file at `/etc/hostapd/hostapd.conf` with the following content:
+Next, you will create a configuration file at `/etc/hostapd/hostapd.conf` with the following content:
 
 ```ini
 interface=ap0
@@ -120,7 +122,7 @@ Dnsmasq is the software that will provide DHCP and DNS services for the access p
 # Configuration for Access Point
 interface=ap0
 dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
-dhcp-option=3,192.168.4.2
+dhcp-option=3,192.168.4.1
 dhcp-option=6,192.168.4.1
 server=8.8.8.8
 ```
