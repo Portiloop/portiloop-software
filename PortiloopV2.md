@@ -44,23 +44,32 @@ First, we can create a script to create the interface using `sudo nano /usr/loca
 ```bash
 #!/bin/bash
 
-# Delete the existing p2p0 interface
-sudo iw dev p2p0 del
+# Get the name of the interface on phy1
+phy1_interface=$(sudo iw dev | awk '/phy#1/ {getline; print $2}')
 
-# Reload the Network Manager utility
-sudo systemctl restart NetworkManager
+# Check if the interface name is p2p0
+if [[ $phy1_interface == "ap0" ]]; then
+    echo "ap0 already set up, not running script..."
+else
+    echo $phy1_interface
+    # Delete the existing p2p0 interface
+    /sbin/iw dev $phy1_interface del
 
-# Create a new ap0 interface in AP mode
-sudo iw phy phy1 interface add ap0 type __ap
+    # Reload the Network Manager utility
+    systemctl restart NetworkManager
 
-# Disable power management for the ap0 interface
-sudo iw dev ap0 set power_save off
+    # Create a new ap0 interface in AP mode
+    /sbin/iw phy phy1 interface add ap0 type __ap
 
-# Reload the Network Manager utility again
-sudo systemctl restart NetworkManager
+    # Disable power management for the ap0 interface
+    /sbin/iw dev ap0 set power_save off
 
-# Get an IPV4 address for the server
-sudo ifconfig ap0 192.168.4.1 up
+    # Reload the Network Manager utility again
+    systemctl restart NetworkManager
+
+    # Get an IPV4 address for the server
+    ifconfig ap0 192.168.4.1 up
+fi
 ```
 
 To be able to run this file like a script, run `sudo chmod +x /usr/local/bin/create_ap0.sh`
@@ -78,6 +87,8 @@ To make sure this starts works everytime we turn the Portiloop on, we need to cr
 [Unit]
 Description=Create The Access Point for the coral
 Before=hostapd.service dnsmasq.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
