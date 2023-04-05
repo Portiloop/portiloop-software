@@ -78,7 +78,7 @@ To avoid configuration issues, we need to tell NetworkManager to ignore this int
 
 ```ini
 [keyfile]
-unmanaged-devices=interface-name:ap0
+unmanaged-devices=interface-name:ap0,interface-name:p2p0
 ```
 
 To make sure this starts works everytime we turn the Portiloop on, we need to create a new service. First, you can create a new service file at `/etc/systemd/system/create_ap.service` with the following content:
