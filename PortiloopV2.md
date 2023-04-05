@@ -30,7 +30,8 @@ To install all dependencies, run the installation.sh script. This script takes c
 To set up an access point, you will need to install a few dependencies. To install them, you can use the following command:
 
 ```bash
-sudo apt-get update && sudo apt-get install hostapd dnsmasq
+sudo apt-get update
+sudo apt-get install hostapd dnsmasq
 ```
 
 This will update your system's package list and install the `hostapd` and `dnsmasq` packages.
@@ -123,6 +124,8 @@ macaddr_acl=0
 
 This configuration file specifies the `ap0` interface, the SSID and password for the access point, and the encryption type to use. Make sure to replace `YOUR-SSID-HERE` and `YOUR-PASSWORD-HERE` with your own values. You now need to specify to hostapd which configuration file to do. Open the hostapd configuration file using `sudo nano /etc/default/hostapd`. Uncomment the DAEMON_CONF line and set it to the path of the configuration file you just created:
 `DAEMON_CONF="/etc/hostapd/hostapd.conf"`.
+
+Lastly, run `sudo systemctl unmask hostapd`.
 
 ### 4. Configure dnsmasq
 
