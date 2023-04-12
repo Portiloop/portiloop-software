@@ -143,7 +143,53 @@ server=8.8.8.8
 
 This configuration file specifies the `ap0` interface, the range of IP addresses to assign to clients, and the DNS server to use. Note that the IP address of the `dhcp-option=6,...` should be the same as the IP address set in step 2.
 
-### 5. Start Systemd services
+### 5. Configure IP Tables for internet access
+
+To make sure you get internet access on your home computer when you are connected to the Portiloop, we need to setup IP tables. Create the following script `sudo nano /usr/local/bin/setup_tables.sh` and copy paste the following code:
+
+```bash
+#!/bin/bash
+
+echo "Telling kernel to turn on ipv4 ip_forwarding"
+echo 1 > /proc/sys/net/ipv4/ip_forward
+echo "Done. Setting up iptables rules to allow FORWARDING"
+
+DOWNSTREAM=ap0 # ap0 is client network (running hostapd)
+UPSTREAM=wlan0 # upstream network (internet)
+
+# Allow IP Masquerading (NAT) of packets from clients (downstream) to upstream network (internet)
+iptables -t nat -A POSTROUTING -o $UPSTREAM -j MASQUERADE
+
+# Forward packets from downstream clients to the upstream internet
+iptables -A FORWARD -i $DOWNSTREAM -o $UPSTREAM -j ACCEPT
+
+# Forward packers from the internet to clients IF THE CONNECTION IS ALREADY OPEN!
+iptables -A FORWARD -i $UPSTREAM  -o $DOWNSTREAM -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# Setup the external DNS server
+iptables -t nat -A PREROUTING -i $DOWNSTREAM -p udp --dport 53 -j DNAT --to-destination 8.8.8.8:53
+
+echo "Done setting up iptables rules. Forwarding enabled"
+```
+
+Then, create a file called `/etc/systemd/system/setup_tables.service` and paste the following configuration:
+
+```ini
+[Unit]
+Description=Setup tables service
+After=create_ap.service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/setup_tables.sh
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 6. Start Systemd services
 
 To make sure that everything happens on startup, we need to enable all services. Execute the following commands:
 
@@ -151,6 +197,7 @@ To make sure that everything happens on startup, we need to enable all services.
 sudo systemctl enable create_ap.service
 sudo systemctl enable hostapd.service
 sudo systemctl enable dnsmasq.service
+sudo systemctl enable setup_tables.service
 ```
 
 ## Jupyter notebook
