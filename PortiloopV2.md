@@ -189,6 +189,8 @@ ExecStart=/usr/local/bin/setup_tables.sh
 WantedBy=multi-user.target
 ```
 
+Finally, make sure the script is executable by running: `sudo chmod +x /usr/local/bin/setup_tables.sh`
+
 ### 6. Start Systemd services
 
 To make sure that everything happens on startup, we need to enable all services. Execute the following commands:
