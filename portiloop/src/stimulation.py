@@ -44,7 +44,12 @@ class Stimulator(ABC):
 # Example implementation for sleep spindles
 
 class SleepSpindleRealTimeStimulator(Stimulator):
-    def __init__(self, lsl_streamer=Dummy()):
+    def __init__(self, lsl_streamer=Dummy(), stimulation_delay=0.0, inter_stim_delay=0.0):
+        """
+        params: 
+            stimulation_delay (float): simple delay between a detection and a stimulation
+            inter_stim_delay (float): time to wait between a stimulation and the next detection 
+        """
         self._sound = Path(__file__).parent.parent / 'sounds' / 'stimulus.wav'
         print(f"DEBUG:{self._sound}")
         self._thread = None
@@ -193,8 +198,97 @@ class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
                 self.last_detected_ts = ts
 
 
+class Delayer(ABC):
+    """
+    Interface that defines Delayers for stimulation
+    """
+    @abstractmethod
+    def step(self, point):
+        pass
+
+    @abstractmethod
+    def step_timestep(self, point):
+        pass
+
+    @abstractmethod
+    def detect(self):
+        pass
+
+class TimingStates(Enum):
+    READY = 0
+    DELAYING = 1
+    WAITING = 2 
+
+class TimingDelayer(Delayer):
+    def __init__(self, stimulation_delay=0.0, inter_stim_delay=0.0, sample_freq=250):
+        """
+        Delays based on the timing 
+        params:
+            stimulation_delay (float): How much time to wait after a detection before stimulation
+            inter_stim_delay (float): How much time to wait after a stimulation before going back to a detection state
+        """
+        self.state = TimingStates.READY
+        self.stimulation_delay = stimulation_delay
+        self.inter_stim_delay = inter_stim_delay
+        self.time_counter = 0
+        self.sample_freq = sample_freq
+
+    def step(self, point):
+        """
+        Moves through the state machine
+        """
+        if self.state == TimingStates.READY:
+            return False
+        elif self.state == TimingStates.DELAYING:
+            if time.time() - self.delaying_start > self.stimulation_delay:
+                self.state = TimingStates.WAITING
+                self.waiting_start = time.time()
+                return True
+            return False
+        elif self.state == TimingStates.WAITING:
+            if time.time() - self.waiting_start > self.inter_stim_delay:
+                self.state = TimingStates.READY
+            return False
+
+    def step_timesteps(self, point):
+        """
+        Moves through the state machine
+        """
+        if self.state == TimingStates.READY:
+            return False
+        elif self.state == TimingStates.DELAYING:
+            self.delaying_counter += 1
+            if self.delaying_counter > self.stimulation_delay * self.sample_freq:
+                self.state = TimingStates.WAITING
+                self.waiting_counter = 0
+                return True
+            return False
+        elif self.state == TimingStates.WAITING:
+            self.waiting_counter += 1
+            if self.waiting_counter > self.inter_stim_delay * self.sample_freq:
+                self.state = TimingStates.READY
+            return False
+        
+    def detect(self):
+        """
+        Defines what happens when a detection comes depending on what state you are in
+        """
+        if self.state == TimingStates.READY:
+            self.state = TimingStates.DELAYING
+            self.delaying_start = time.time()
+            self.delaying_counter = 0
+
+
+
+class UpStateStates(Enum):
+    NO_SPINDLE = 0
+    BUFFERING = 1
+    DELAYING = 2 
+
+
 # Class that delays stimulation to always stimulate peak or through
-class UpStateDelayer:
+class UpStateDelayer(Delayer):
+
     def __init__(self, sample_freq, peak, time_to_buffer, stimulate=None): 
         '''
         args:
@@ -208,26 +302,26 @@ class UpStateDelayer:
         self.time_to_buffer = time_to_buffer
         self.stimulate = stimulate
         
-        self.state = States.NO_SPINDLE
+        self.state = UpStateStates.NO_SPINDLE
 
     def step(self, point):
         '''
         Step the delayer, ads a point to buffer if necessary.
         Returns True if stimulation is actually done
         '''
-        if self.state == States.NO_SPINDLE:
+        if self.state == UpStateStates.NO_SPINDLE:
             return False
-        elif self.state == States.BUFFERING:
+        elif self.state == UpStateStates.BUFFERING:
             self.buffer.append(point)
             # If we are done buffering, move on to the waiting stage
             if time.time() - self.time_started >= self.time_to_buffer:
                 # Compute the necessary time to wait
                 self.time_to_wait = self.compute_time_to_wait()
-                self.state = States.DELAYING
+                self.state = UpStateStates.DELAYING
                 self.buffer = []
                 self.time_started = time.time()
             return False
-        elif self.state == States.DELAYING:
+        elif self.state == UpStateStates.DELAYING:
             # Check if we are done delaying
             if time.time() - self.time_started >= self.time_to_wait:
                 # Actually stimulate the patient after the delay
@@ -235,7 +329,7 @@ class UpStateDelayer:
                     self.stimulate()
                 # Reset state
                 self.time_to_wait = -1
-                self.state = States.NO_SPINDLE
+                self.state = UpStateStates.NO_SPINDLE
                 return True
             return False
 
@@ -244,19 +338,19 @@ class UpStateDelayer:
         Step the delayer, ads a point to buffer if necessary.
         Returns True if stimulation is actually done
         '''
-        if self.state == States.NO_SPINDLE:
+        if self.state == UpStateStates.NO_SPINDLE:
             return False
-        elif self.state == States.BUFFERING:
+        elif self.state == UpStateStates.BUFFERING:
             self.buffer.append(point)
             # If we are done buffering, move on to the waiting stage
             if len(self.buffer) >= self.time_to_buffer * self.sample_freq:
                 # Compute the necessary time to wait
                 self.time_to_wait = self.compute_time_to_wait()
-                self.state = States.DELAYING
+                self.state = UpStateStates.DELAYING
                 self.buffer = []
                 self.delaying_counter = 0
             return False
-        elif self.state == States.DELAYING:
+        elif self.state == UpStateStates.DELAYING:
             # Check if we are done delaying
             self.delaying_counter += 1
             if self.delaying_counter >= self.time_to_wait * self.sample_freq:
@@ -265,13 +359,13 @@ class UpStateDelayer:
                     self.stimulate()
                 # Reset state
                 self.time_to_wait = -1
-                self.state = States.NO_SPINDLE
+                self.state = UpStateStates.NO_SPINDLE
                 return True
             return False
 
     def detected(self):
-        if self.state == States.NO_SPINDLE:
-            self.state = States.BUFFERING
+        if self.state == UpStateStates.NO_SPINDLE:
+            self.state = UpStateStates.BUFFERING
 
     def compute_time_to_wait(self):
         """
@@ -305,11 +399,6 @@ class UpStateDelayer:
             print("Average distance between peaks is smaller than the time to last peak, decrease buffer size")
             return (len(self.buffer) - peaks[-1]) * (1.0 / self.sample_freq)
         return (avg_dist - (len(self.buffer) - peaks[-1])) * (1.0 / self.sample_freq)
-
-class States(Enum):
-    NO_SPINDLE = 0
-    BUFFERING = 1
-    DELAYING = 2 
 
 
 if __name__ == "__main__":

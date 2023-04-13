@@ -314,7 +314,9 @@ class Capture:
         # Delayer parameters
         self.spindle_detection_mode = 'Fast'
         self.spindle_freq = 10
-        
+        self.stim_delay = 0.0
+        self.inter_stim_delay = 0.0
+
         # Stimulator and detector classes
         self.detector_cls = detector_cls
         self.stimulator_cls = stimulator_cls
@@ -359,21 +361,6 @@ class Capture:
             options=[(f'{i+1}', i+1) for i in range(self.nb_channels)],
             value=2,
             description='Detection Channel:',
-            disabled=False,
-            style={'description_width': 'initial'}
-        )
-        
-        self.b_spindle_mode = widgets.Dropdown(
-            options=['Fast', 'Peak', 'Through'],
-            value='Fast',
-            description='Spindle Stimulation Mode',
-            disabled=False,
-            style={'description_width': 'initial'}
-        )
-        
-        self.b_spindle_freq = widgets.IntText(
-            value=self.spindle_freq,
-            description='Spindle Freq (Hz):',
             disabled=False,
             style={'description_width': 'initial'}
         )
@@ -598,6 +585,57 @@ class Capture:
             button_style='', # 'success', 'info', 'warning', 'danger' or ''
             tooltip='Check if electrodes are properly connected'
         )
+
+        self.b_stim_delay = widgets.FloatSlider(
+            value=self.stim_delay,
+            min=0.0,
+            max=10.0,
+            step=0.01,
+            description="Stim Delay",
+            tooltip="Time delay in seconds between detection and stimulation", 
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
+
+        self.b_inter_stim_delay = widgets.FloatSlider(
+            value=self.inter_stim_delay,
+            min=0.0,
+            max=10.0,
+            step=0.01,
+            description="Inter Stim Delay",
+            tooltip="Minimum time delay in seconds between stimulation and next detection", 
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
+        
+        self.b_spindle_mode = widgets.Dropdown(
+            options=['Fast', 'Peak', 'Through'],
+            value='Fast',
+            description='Spindle Stimulation Mode',
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
+        
+        self.b_spindle_freq = widgets.IntText(
+            value=self.spindle_freq,
+            description='Spindle Freq (Hz):',
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
+
+        self.b_accordion_delaying = widgets.Accordion(
+            children=[
+                widgets.VBox([
+                    self.b_stim_delay,
+                    self.b_inter_stim_delay,
+                    widgets.HBox([
+                        self.b_spindle_mode, 
+                        self.b_spindle_freq
+                    ])
+                ]),
+            ]
+        )
+        self.b_accordion_delaying.set_title(index = 0, title = 'Delaying')
         
         self.register_callbacks()
 
@@ -684,8 +722,8 @@ class Capture:
                               widgets.HBox([self.b_filter, self.b_detect, self.b_stimulate, self.b_record, self.b_lsl, self.b_display]),
                               widgets.HBox([self.b_threshold, self.b_test_stimulus]),
                               self.b_volume,
-                              widgets.HBox([self.b_spindle_mode, self.b_spindle_freq]),
-                              self.b_test_impedance,
+                            #   self.b_test_impedance,
+                              self.b_accordion_delaying,
                               self.b_accordion_filter,
                               self.b_capture,
                               self.b_pause]))
