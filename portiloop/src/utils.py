@@ -295,13 +295,15 @@ class ADSFrontend(CaptureFrontend):
 
 
 class FileFrontend(CaptureFrontend):
-    def __init__(self, filename):
+    def __init__(self, filename, num_channels, channel_detect):
         """
         Frontend that reads from a csv file. Mostly used for debugging.
         """
         self.filename = filename
         print(f"Reading from file {filename}")
         self.stop_msg = False
+        self.num_channels = num_channels
+        self.channel_detect = channel_detect
     
     def init_capture(self):
         """
@@ -317,7 +319,8 @@ class FileFrontend(CaptureFrontend):
         """
         Does nothing
         """
-        pass
+        if msg == "STOP":
+            self.stop_msg = True
 
     def get_msg(self):
         """
@@ -336,10 +339,12 @@ class FileFrontend(CaptureFrontend):
             while time.time() - self.last_time < self.wait_time:
                 continue
             self.last_time = time.time()
-            n_array_raw = np.array([0, float(point[0]), 0, 0, 0, 0, 0, 0])
-            n_array_raw = np.reshape(n_array_raw, (1, 8))
+            n_array_raw = np.zeros(self.num_channels)
+            n_array_raw[self.channel_detect-1] = float(point[0])
+            n_array_raw = np.reshape(n_array_raw, (1, self.num_channels))
             return n_array_raw
         except StopIteration:
+            print("Reached end of file, stopping...")
             self.stop_msg = True
 
     def close(self):
@@ -384,4 +389,9 @@ class LSLStreamer:
         self.lsl_outlet_raw.push_sample(data)
 
     def push_marker(self, text):
-        self.lsl_outlet.push_sample([text])
+        print(f"Sending marker {text}")
+        self.lsl_outlet_markers.push_sample([text])
+
+    @staticmethod
+    def string_for_detection_activation(pause):
+        return "DETECT_OFF" if pause else "DETECT_ON"

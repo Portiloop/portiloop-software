@@ -105,7 +105,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                 
                 # Check if time since last stimulation is long enough
                 if ts - self.last_detected_ts > self.wait_t:
-                    if self.delayer is not None:
+                    if not isinstance(self.delayer, Dummy):
                         # If we have a delayer, notify it
                         self.delayer.detected()
                         # Send the LSL marer for the fast stimulation 
@@ -116,7 +116,6 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                 self.last_detected_ts = ts
 
     def send_stimulation(self, lsl_text, sound):
-        print(f"Stimulating with text: {lsl_text}")
         # Send lsl stimulation
         self.lsl_streamer.push_marker(lsl_text)
         # Send sound to patient

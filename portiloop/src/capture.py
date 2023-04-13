@@ -1,6 +1,8 @@
 
 
 from abc import ABC, abstractmethod
+import json
+import os
 from time import sleep
 import time
 import numpy as np
@@ -23,9 +25,9 @@ from portiloop.src.config import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to
 from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH, RECORDING_PATH, get_portiloop_version
 from IPython.display import clear_output, display
 import ipywidgets as widgets
+import socket
 
-
-PORTILOOP_ID = "PortiloopV1_Lab"
+PORTILOOP_ID = f"{socket.gethostname()}-portiloop"
 
 
 def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_msg_in, channel_states):
@@ -118,7 +120,7 @@ def start_capture(
         python_clock=capture_object.python_clock,
         channel_states=capture_object.channel_states,
         process=capture_process,
-    ) if capture_object.signal_input == "ADS" else FileFrontend(fake_filename)
+    ) if capture_object.signal_input == "ADS" else FileFrontend(fake_filename, capture_object.nb_channels, capture_object.channel_detection)
 
     # Initialize detector, LSL streamer and stimulatorif requested
     detector = detector_cls(capture_object.threshold, channel=capture_object.channel_detection) if detector_cls is not None else None
@@ -126,6 +128,7 @@ def start_capture(
             'filtered': filter,
             'markers': detector is not None,
         }
+    print(PORTILOOP_ID)
     lsl_streamer = LSLStreamer(streams, capture_object.nb_channels, capture_object.frequency, id=PORTILOOP_ID) if capture_object.lsl else Dummy()
     stimulator = stimulator_cls(lsl_streamer=lsl_streamer) if stimulator_cls is not None else None
 
@@ -160,6 +163,28 @@ def start_capture(
     stimulation_delayer = UpStateDelayer(capture_object.frequency, capture_object.spindle_detection_mode == 'Peak', 0.3) if delay else Dummy()
     if stimulator is not None:
         stimulator.add_delayer(stimulation_delayer)
+
+    # Get the metadata and save it to a file
+    metadata = capture_object.get_metadata()
+    # Split the original path into its components
+    dirname, basename = os.path.split(capture_object.filename)
+    # Split the file name into its name and extension components
+    name, _ = os.path.splitext(basename)
+    # Define the new file name
+    new_name = f"{name}_metadata.json"
+    # Join the components back together into the new file path
+    metadata_path = os.path.join(dirname, new_name)
+    print(f"Saving metadata to {metadata_path}")
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f, indent=4)
+ 
+    # Initialize the variable to keep track of whether we are in a detection state or not for the markers
+    with capture_object._pause_detect_lock:
+        prev_pause = capture_object._pause_detect
+
+    if detector is not None:
+        marker_str = LSLStreamer.string_for_detection_activation(prev_pause)
+        lsl_streamer.push_marker(marker_str)
 
     # Main capture loop
     while True:
@@ -204,6 +229,11 @@ def start_capture(
         with capture_object._pause_detect_lock:
             pause = capture_object._pause_detect
 
+        # If the state has changed since last iteration, we send a marker
+        if pause != prev_pause and detector is not None:
+            lsl_streamer.push_marker(LSLStreamer.string_for_detection_activation(pause))
+            prev_pause = pause
+
         # If detection is on
         if detector is not None and not pause:
             # Detect using the latest point
@@ -222,7 +252,6 @@ def start_capture(
             live_disp.add_datapoints(buffer)
             recorder.add_recording_data(buffer)
             buffer = []
-
     # close the frontend
     capture_frontend.close()
     recorder.close_recording_file()
@@ -238,14 +267,14 @@ class Capture:
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
         self.filename = EDF_PATH / 'recording.edf'
         
-        version = get_portiloop_version()
+        self.version = get_portiloop_version()
 
         # Check which version of the ADS we are in.
-        if version != -1:
-            frontend = Frontend(version)
+        if self.version != -1:
+            frontend = Frontend(self.version)
             self.nb_channels = frontend.get_version()
 
-        print(f"Current hardware: ADS1299 {self.nb_channels} channels | Portiloop Version: {version}")
+        print(f"Current hardware: ADS1299 {self.nb_channels} channels | Portiloop Version: {self.version}")
 
         # General default parameters
         self.frequency = 250
@@ -300,13 +329,12 @@ class Capture:
                 if len(mixers) <= 0:
                     warnings.warn(f"No ALSA mixer found.")
                     self.mixer = DummyAlsaMixer()
-                elif 'PCM' in mixers:
+                elif 'PCM' in mixers :
                     self.mixer = alsaaudio.Mixer(control='PCM')
                 else:
-                    warnings.warn(f"Could not find mixer PCM, using {mixers[0]} instead.")
-                    self.mixer = alsaaudio.Mixer(control=mixers[0])
+                    self.mixer = alsaaudio.Mixer()
             except ALSAAudioError as e:
-                warnings.warn(f"No ALSA mixer found.")
+                warnings.warn(f"No ALSA mixer found. Volume control will not be available from notebook.")
                 self.mixer = DummyAlsaMixer()
             
             self.volume = self.mixer.getvolume()[0]  # we will set the same volume on all channels
@@ -575,6 +603,26 @@ class Capture:
 
         self.display_buttons()
 
+        # Get all the metadata from this recording: 
+
+    def get_metadata(self):
+        input_dict = vars(self)
+        basic_types = (int, float, bool, str, list, dict, tuple, set)
+        output_dict = {}
+        for key, value in input_dict.items():
+            # Remove all buttons and button lists from the metadata
+            if "button" in key or "_b" in key:
+                continue
+            if isinstance(value, basic_types):
+                output_dict[key] = value
+
+        # Make sure we dont have the filter settings in duplicates 
+        for key, value in output_dict['filter_settings'].items():
+            if key in output_dict:
+                output_dict.pop(key)
+
+        return output_dict
+
 
     def on_b_channel_state(self, value, i):
         self.channel_states[i] = value['new']
@@ -812,7 +860,6 @@ class Capture:
                 val += '.edf'
             self.filename = EDF_PATH / val
         else:
-            now = datetime.now()
             self.filename = EDF_PATH / 'recording.edf'
         
     def on_b_duration(self, value):
