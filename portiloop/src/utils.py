@@ -389,7 +389,6 @@ class LSLStreamer:
         self.lsl_outlet_raw.push_sample(data)
 
     def push_marker(self, text):
-        print(f"Sending marker {text}")
         self.lsl_outlet_markers.push_sample([text])
 
     @staticmethod

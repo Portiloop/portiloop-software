@@ -18,7 +18,7 @@ if ADS:
     from portiloop.src.hardware.frontend import Frontend
     from portiloop.src.hardware.leds import LEDs, Color
 
-from portiloop.src.stimulation import UpStateDelayer
+from portiloop.src.stimulation import TimingDelayer, UpStateDelayer
 
 from portiloop.src.processing import FilterPipeline
 from portiloop.src.config import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
@@ -159,8 +159,20 @@ def start_capture(
     buffer = []
 
     # Initialize stimulation delayer if requested
-    delay = not capture_object.spindle_detection_mode == 'Fast' and stimulator is not None
-    stimulation_delayer = UpStateDelayer(capture_object.frequency, capture_object.spindle_detection_mode == 'Peak', 0.3) if delay else Dummy()
+    delay = not ((capture_object.stim_delay == 0.0) and (capture_object.inter_stim_delay == 0.0)) and (stimulator is not None)
+    delay_phase = (not delay) and (not capture_object.spindle_detection_mode == 'Fast') and (stimulator is not None)
+    if delay:
+        stimulation_delayer = TimingDelayer(
+            stimulation_delay=capture_object.stim_delay,
+            inter_stim_delay=capture_object.inter_stim_delay
+        )
+    elif delay_phase:
+        stimulation_delayer = UpStateDelayer(
+            capture_object.frequency, 
+            capture_object.spindle_detection_mode == 'Peak', 0.3)
+    else:
+        stimulation_delayer = Dummy()
+        
     if stimulator is not None:
         stimulator.add_delayer(stimulation_delayer)
 
@@ -244,7 +256,7 @@ def start_capture(
                 stimulator.stimulate(detection_signal)
 
             # Adds point to buffer for delayed stimulation
-            stimulation_delayer.step_timesteps(filtered_point[0][capture_object.channel_detection-1])
+            stimulation_delayer.step(filtered_point[0][capture_object.channel_detection-1])
         
         # Add point to the buffer to send to viz and recorder
         buffer += filtered_point
@@ -690,7 +702,6 @@ class Capture:
         self.b_lsl.observe(self.on_b_lsl, 'value')
         self.b_display.observe(self.on_b_display, 'value')
         self.b_filename.observe(self.on_b_filename, 'value')
-
         self.b_channel_detect.observe(self.on_b_channel_detect, 'value')
         self.b_spindle_mode.observe(self.on_b_spindle_mode, 'value')
         self.b_spindle_freq.observe(self.on_b_spindle_freq, 'value')
@@ -706,6 +717,9 @@ class Capture:
         self.b_test_stimulus.on_click(self.on_b_test_stimulus)
         self.b_test_impedance.on_click(self.on_b_test_impedance)
         self.b_pause.observe(self.on_b_pause, 'value')
+        self.b_stim_delay.observe(self.on_b_delay, 'value')
+        self.b_inter_stim_delay.observe(self.on_b_inter_delay, 'value')
+
 
     def __del__(self):
         self.b_capture.close()
@@ -759,6 +773,8 @@ class Capture:
         self.b_pause.disabled = not self.detect
         self.b_test_stimulus.disabled = False # only enabled when running
         self.b_test_impedance.disabled = False
+        self.b_stim_delay.disabled = False
+        self.b_inter_stim_delay.disabled = False
     
     def disable_buttons(self):
         self.b_frequency.disabled = True
@@ -791,7 +807,9 @@ class Capture:
         self.b_threshold.disabled = True
         # self.b_test_stimulus.disabled = not self.stimulate # only enabled when running
         self.b_test_impedance.disabled = True
-        
+        self.b_stim_delay.disabled = True
+        self.b_inter_stim_delay.disabled = True
+
     def on_b_channel_detect(self, value):
         self.channel_detection = value['new']
         
@@ -997,6 +1015,14 @@ class Capture:
         elif val == 'Paused':
             with self._pause_detect_lock:
                 self._pause_detect = True
+    
+    def on_b_delay(self, value):
+        val = value['new']
+        self.stim_delay = val
+
+    def on_b_inter_delay(self, value):
+        val = value['new']
+        self.inter_stim_delay = val
 
     def run_test_stimulus(self):
         stimulator_class = self.stimulator_cls()

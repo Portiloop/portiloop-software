@@ -211,7 +211,7 @@ class Delayer(ABC):
         pass
 
     @abstractmethod
-    def detect(self):
+    def detected(self):
         pass
 
 class TimingStates(Enum):
@@ -241,6 +241,9 @@ class TimingDelayer(Delayer):
             return False
         elif self.state == TimingStates.DELAYING:
             if time.time() - self.delaying_start > self.stimulation_delay:
+                # Actually stimulate the patient after the delay
+                if self.stimulate is not None:
+                    self.stimulate() 
                 self.state = TimingStates.WAITING
                 self.waiting_start = time.time()
                 return True
@@ -250,7 +253,7 @@ class TimingDelayer(Delayer):
                 self.state = TimingStates.READY
             return False
 
-    def step_timesteps(self, point):
+    def step_timestep(self, point):
         """
         Moves through the state machine
         """
@@ -259,6 +262,9 @@ class TimingDelayer(Delayer):
         elif self.state == TimingStates.DELAYING:
             self.delaying_counter += 1
             if self.delaying_counter > self.stimulation_delay * self.sample_freq:
+                # Actually stimulate the patient after the delay
+                if self.stimulate is not None:
+                    self.stimulate()
                 self.state = TimingStates.WAITING
                 self.waiting_counter = 0
                 return True
@@ -269,7 +275,7 @@ class TimingDelayer(Delayer):
                 self.state = TimingStates.READY
             return False
         
-    def detect(self):
+    def detected(self):
         """
         Defines what happens when a detection comes depending on what state you are in
         """
