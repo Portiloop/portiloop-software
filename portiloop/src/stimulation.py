@@ -50,7 +50,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
             stimulation_delay (float): simple delay between a detection and a stimulation
             inter_stim_delay (float): time to wait between a stimulation and the next detection 
         """
-        self._sound = Path(__file__).parent.parent / 'sounds' / 'stimulus.wav'
+        self._sound = Path(__file__).parent.parent / 'sounds' / 'stimul_15ms.wav'
         print(f"DEBUG:{self._sound}")
         self._thread = None
         self._lock = Lock()
@@ -88,11 +88,13 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                 self.pcm = Dummy()
                 
             # Store data in list to avoid reopening the file
-            data = f.readframes(self.periodsize)
-            self.wav_list = [data]
-            while data:
-                self.wav_list.append(data)
-                data = f.readframes(self.periodsize)            
+            self.wav_list = []
+            while True:
+                data = f.readframes(self.periodsize)  
+                if data:
+                    self.wav_list.append(data)
+                else: 
+                    break           
 
     def play_sound(self):
         '''
