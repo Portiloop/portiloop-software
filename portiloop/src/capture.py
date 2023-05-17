@@ -202,7 +202,7 @@ def start_capture(
 
     # Main capture loop
     while True:
-
+        
         # First, we send all outgoing messages to the capture process
         try:
             msg = q_msg.get_nowait()
@@ -667,6 +667,8 @@ class Capture:
                 continue
             if isinstance(value, basic_types):
                 output_dict[key] = value
+                
+        output_dict['filename'] = str(self.filename)
 
         # Make sure we dont have the filter settings in duplicates 
         for key, value in output_dict['filter_settings'].items():
@@ -1011,9 +1013,9 @@ class Capture:
     def on_b_pause(self, value):
         val = value['new']
         if val == 'Active':
-            self.pause_value = False
+            self.pause_value.value = False
         elif val == 'Paused':
-            self.pause_value = True
+            self.pause_value.value = True
     
     def on_b_delay(self, value):
         val = value['new']
