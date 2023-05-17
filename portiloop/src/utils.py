@@ -391,6 +391,14 @@ class LSLStreamer:
     def push_marker(self, text):
         self.lsl_outlet_markers.push_sample([text])
 
+    def __del__(self):
+        print("Closing LSL streams")
+        self.lsl_outlet_raw.__del__()
+        if self.streams['filtered']:
+            self.lsl_outlet.__del__()
+        if self.streams['markers']:
+            self.lsl_outlet_markers.__del__()
+
     @staticmethod
     def string_for_detection_activation(pause):
         return "DETECT_OFF" if pause else "DETECT_ON"
