@@ -1,0 +1,12 @@
+[Unit]
+Description=Setup tables service
+After=create_ap.service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/setup_tables.sh
+
+[Install]
+WantedBy=multi-user.target
