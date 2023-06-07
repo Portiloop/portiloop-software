@@ -27,6 +27,8 @@ from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, L
 from IPython.display import clear_output, display
 import ipywidgets as widgets
 import socket
+from pathlib import Path
+
 
 PORTILOOP_ID = f"{socket.gethostname()}-portiloop"
 
@@ -113,7 +115,7 @@ def start_capture(
         q_msg, 
         pause_value
 ): 
-    print(capture_dictionary['channel_states'])
+#     print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
 
     # Initialize data frontend
     fake_filename = RECORDING_PATH / 'test_recording.csv'
@@ -131,9 +133,9 @@ def start_capture(
             'filtered': filter,
             'markers': detector is not None,
         }
-    print(PORTILOOP_ID)
+#     print(f"DEBUG: Portiloop ID: {PORTILOOP_ID}")
     lsl_streamer = LSLStreamer(streams, capture_dictionary['nb_channels'], capture_dictionary['frequency'], id=PORTILOOP_ID) if capture_dictionary['lsl'] else Dummy()
-    stimulator = stimulator_cls(lsl_streamer=lsl_streamer) if stimulator_cls is not None else None
+    stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer) if stimulator_cls is not None else None
 
     # Initialize filtering pipeline
     if filter:
@@ -189,7 +191,7 @@ def start_capture(
     new_name = f"{name}_metadata.json"
     # Join the components back together into the new file path
     metadata_path = os.path.join(dirname, new_name)
-    print(f"Saving metadata to {metadata_path}")
+#     print(f"DEBUG: Saving metadata to {metadata_path}")
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=4)
  
@@ -271,8 +273,6 @@ def start_capture(
     # close the frontend
     capture_frontend.close()
     recorder.close_recording_file()
-    if stimulator is not None:
-        stimulator.close()
 
     del lsl_streamer
     del stimulation_delayer
@@ -291,7 +291,7 @@ class Capture:
             frontend = Frontend(self.version)
             self.nb_channels = frontend.get_version()
 
-        print(f"Current hardware: ADS1299 {self.nb_channels} channels | Portiloop Version: {self.version}")
+#         print(f"DEBUG: Current hardware: ADS1299 {self.nb_channels} channels | Portiloop Version: {self.version}")
 
         # General default parameters
         self.frequency = 250
@@ -327,6 +327,7 @@ class Capture:
         self.signal_labels = [f"ch{i+1}" for i in range(self.nb_channels)]
         self.channel_states = ['bias'] + ['disabled' for _ in range(self.nb_channels - 1)]
         self.channel_detection = 2
+        self.detection_sound = "stimul_15ms.wav"
 
         # Delayer parameters
         self.spindle_detection_mode = 'Fast'
@@ -338,18 +339,18 @@ class Capture:
         self.detector_cls = detector_cls
         self.stimulator_cls = stimulator_cls
 
-        
         if ADS:
             try:
                 mixers = alsaaudio.mixers()
                 if len(mixers) <= 0:
                     warnings.warn(f"No ALSA mixer found.")
                     self.mixer = DummyAlsaMixer()
-                elif 'PCM' in mixers :
-                    self.mixer = alsaaudio.Mixer(control='PCM')
+#                 elif 'PCM' in mixers :
+#                     self.mixer = alsaaudio.Mixer(control='PCM')
                 else:
-                    self.mixer = alsaaudio.Mixer()
+                    self.mixer = alsaaudio.Mixer(control='SoftMaster', device='dmixer')
             except ALSAAudioError as e:
+                print(e)
                 warnings.warn(f"No ALSA mixer found. Volume control will not be available from notebook.")
                 self.mixer = DummyAlsaMixer()
             
@@ -379,6 +380,16 @@ class Capture:
             style={'description_width': 'initial'}
         )
         
+        sound_dir = Path.home() / 'portiloop-software' / 'portiloop' / 'sounds'
+        options = [(sound[:-4], sound) for sound in os.listdir(sound_dir) if sound[-4:] == ".wav"]
+        self.b_sound_detect = widgets.Dropdown(
+            options=options,
+            value="stimul_15ms.wav",
+            description='Sound:',
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
+        
         self.b_accordion_channels = widgets.Accordion(
             children=[
                 widgets.GridBox([widgets.Label(f"CH{i+1}") for i in range(self.nb_channels)] + self.chann_buttons, 
@@ -402,7 +413,7 @@ class Capture:
             description='Detection',
             disabled=True,
             button_style='', # 'success', 'info', 'warning', 'danger' or ''
-            tooltips=['Detector and stimulator active', 'Detector and stimulator paused'],
+            tooltips=['Detector and stimulator paused', 'Detector and stimulator active'],
         )
         
         self.b_clock = widgets.ToggleButtons(
@@ -410,8 +421,7 @@ class Capture:
             description='Clock:',
             disabled=False,
             button_style='', # 'success', 'info', 'warning', 'danger' or ''
-            tooltips=['Use Coral clock (very precise, not very timely)',
-                      'Use ADS clock (not very precise, very timely)'],
+            tooltips=['Use ADS clock (not very precise, very timely)', 'Use Coral clock (very precise, not very timely)'],
         )
         
         self.b_power_line = widgets.ToggleButtons(
@@ -707,6 +717,7 @@ class Capture:
         self.b_display.observe(self.on_b_display, 'value')
         self.b_filename.observe(self.on_b_filename, 'value')
         self.b_channel_detect.observe(self.on_b_channel_detect, 'value')
+        self.b_sound_detect.observe(self.on_b_sound_detect, 'value')
         self.b_spindle_mode.observe(self.on_b_spindle_mode, 'value')
         self.b_spindle_freq.observe(self.on_b_spindle_freq, 'value')
         self.b_power_line.observe(self.on_b_power_line, 'value')
@@ -723,6 +734,7 @@ class Capture:
         self.b_pause.observe(self.on_b_pause, 'value')
         self.b_stim_delay.observe(self.on_b_delay, 'value')
         self.b_inter_stim_delay.observe(self.on_b_inter_delay, 'value')
+        
 
 
     def __del__(self):
@@ -731,6 +743,7 @@ class Capture:
     def display_buttons(self):
         display(widgets.VBox([self.b_accordion_channels,
                               self.b_channel_detect,
+                              self.b_sound_detect,
                               self.b_frequency,
                               self.b_duration,
                               self.b_filename,
@@ -779,6 +792,7 @@ class Capture:
         self.b_test_impedance.disabled = False
         self.b_stim_delay.disabled = False
         self.b_inter_stim_delay.disabled = False
+        self.b_sound_detect.disabled = False
     
     def disable_buttons(self):
         self.b_frequency.disabled = True
@@ -813,6 +827,11 @@ class Capture:
         self.b_test_impedance.disabled = True
         self.b_stim_delay.disabled = True
         self.b_inter_stim_delay.disabled = True
+        self.b_sound_detect.disabled = True
+
+        
+    def on_b_sound_detect(self, value):
+        self.detection_sound = value['new']
 
     def on_b_channel_detect(self, value):
         self.channel_detection = value['new']
@@ -854,7 +873,7 @@ class Capture:
             }
 
             self.width_display = 5 * self.frequency # Display 5 seconds of signal
-
+            
             self._t_capture = Process(target=start_capture,
                                      args=(detector_cls,
                                            stimulator_cls,
@@ -862,6 +881,7 @@ class Capture:
                                            self.q_msg,
                                            self.pause_value,))
             self._t_capture.start()
+            print(f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
         elif val == 'Stop':
             self.q_msg.put('STOP')
             assert self._t_capture is not None
@@ -1026,7 +1046,7 @@ class Capture:
         self.inter_stim_delay = val
 
     def run_test_stimulus(self):
-        stimulator_class = self.stimulator_cls()
+        stimulator_class = self.stimulator_cls(soundname=self.detection_sound)
         stimulator_class.test_stimulus()
         del stimulator_class
 

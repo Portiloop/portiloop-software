@@ -128,13 +128,15 @@ class EDFRecorder:
                 physical_max=phys_max,
                 physical_min=phys_min,))
         self.filename = str(self.filename)
-        print(f"Saving to {self.filename}")
+        print(f"Saving to {self.filename} ...")
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             highlevel.write_edf(str(self.filename), data, signal_headers)
 
         os.remove(self.csv_filename)
+        
+        print("Done.")
 
     def add_recording_data(self, data):
         self.writing_buffer += data

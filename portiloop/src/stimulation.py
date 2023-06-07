@@ -44,14 +44,17 @@ class Stimulator(ABC):
 # Example implementation for sleep spindles
 
 class SleepSpindleRealTimeStimulator(Stimulator):
-    def __init__(self, lsl_streamer=Dummy(), stimulation_delay=0.0, inter_stim_delay=0.0):
+    def __init__(self, soundname=None, lsl_streamer=Dummy(), stimulation_delay=0.0, inter_stim_delay=0.0):
         """
         params: 
             stimulation_delay (float): simple delay between a detection and a stimulation
             inter_stim_delay (float): time to wait between a stimulation and the next detection 
         """
-        self._sound = Path(__file__).parent.parent / 'sounds' / 'stimul_15ms.wav'
-        print(f"DEBUG:{self._sound}")
+        if soundname is None:
+            self.soundname = 'stimulus.wav' # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
+        else:
+            self.soundname = soundname
+        self._sound = Path(__file__).parent.parent / 'sounds' / self.soundname
         self._thread = None
         self._lock = Lock()
         self.last_detected_ts = time.time()
@@ -62,8 +65,10 @@ class SleepSpindleRealTimeStimulator(Stimulator):
         # Initialize Alsa stuff
         # Open WAV file and set PCM device
         with wave.open(str(self._sound), 'rb') as f: 
-            device = 'default'
-
+            device = 'softvol'
+            
+            self.duration = f.getnframes() / float(f.getframerate())
+            
             format = None
 
             # 8bit is unsigned in wav files
@@ -84,8 +89,8 @@ class SleepSpindleRealTimeStimulator(Stimulator):
             try:
                 self.pcm = alsaaudio.PCM(channels=f.getnchannels(), rate=f.getframerate(), format=format, periodsize=self.periodsize, device=device)
             except alsaaudio.ALSAAudioError as e:
-                print("WARNING: Could not open ALSA device as it is already playing a sound. To test stimulation, stop recording and try again.")
                 self.pcm = Dummy()
+                raise e
                 
             # Store data in list to avoid reopening the file
             self.wav_list = []
@@ -94,14 +99,21 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                 if data:
                     self.wav_list.append(data)
                 else: 
-                    break           
+                    break
+                    
+#         print(f"DEBUG: Stimulator will play sound {self.soundname}, duration: {self.duration:.3f} seconds")
+
 
     def play_sound(self):
         '''
         Open the wav file and play a sound
         '''
+        self.end = time.time()
         for data in self.wav_list:
             self.pcm.write(data) 
+            
+        # Added this to make sure the thread does not stop before the sound is done playing
+        time.sleep(self.duration)
     
     def stimulate(self, detection_signal):
         for sig in detection_signal:
@@ -139,16 +151,20 @@ class SleepSpindleRealTimeStimulator(Stimulator):
             self._thread = None
     
     def test_stimulus(self):
+        start = time.time()
         with self._lock:
             if self._thread is None:
                 self._thread = Thread(target=self._t_sound, daemon=True)
                 self._thread.start()
+        
+#         print(f"DEBUG: Stimulation delay: {((self.end - start) * 1000):.2f}ms")
 
     def add_delayer(self, delayer):
         self.delayer = delayer
         self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", True)
 
-    def close(self):
+    def __del__(self):
+#         print("DEBUG: releasing PCM")
         del self.pcm
 
 
