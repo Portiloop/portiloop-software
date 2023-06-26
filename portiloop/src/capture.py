@@ -23,7 +23,7 @@ from portiloop.src.stimulation import TimingDelayer, UpStateDelayer
 
 from portiloop.src.processing import FilterPipeline
 from portiloop.src.config import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
-from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH, RECORDING_PATH, get_portiloop_version
+from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, EDFFileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH, RECORDING_PATH, get_portiloop_version
 from IPython.display import clear_output, display
 import ipywidgets as widgets
 import socket
@@ -118,14 +118,14 @@ def start_capture(
 #     print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
 
     # Initialize data frontend
-    fake_filename = RECORDING_PATH / 'test_recording.csv'
+    fake_filename = RECORDING_PATH / 'demo.edf'
     capture_frontend = ADSFrontend(
         duration=capture_dictionary['duration'],
         frequency=capture_dictionary['frequency'],
         python_clock=capture_dictionary['python_clock'],
         channel_states=capture_dictionary['channel_states'],
         process=capture_process,
-    ) if capture_dictionary['signal_input'] == "ADS" else FileFrontend(fake_filename, capture_dictionary['nb_channels'], capture_dictionary['channel_detection'])
+    ) if capture_dictionary['signal_input'] == "ADS" else EDFFileFrontend(fake_filename, capture_dictionary['nb_channels'])
 
     # Initialize detector, LSL streamer and stimulatorif requested
     detector = detector_cls(capture_dictionary['threshold'], channel=capture_dictionary['channel_detection']) if detector_cls is not None else None

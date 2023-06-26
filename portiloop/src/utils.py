@@ -12,6 +12,7 @@ import warnings
 import multiprocessing as mp
 
 from portiloop.src.processing import int_to_float
+import pyedflib
 
 
 EDF_PATH = Path.home() / 'workspace' / 'edf_recording'
@@ -351,6 +352,75 @@ class FileFrontend(CaptureFrontend):
 
     def close(self):
         self.file.close()
+        
+class EDFFileFrontend():
+    def __init__(self, filename, num_channels):
+        """
+        Frontend that reads from a csv file. Mostly used for debugging.
+        """
+        self.filename = filename
+        print(f"Reading from file {filename}")
+        self.stop_msg = False
+        self.num_channels = num_channels
+    
+    def read_edf_file(self):
+        edf_data = pyedflib.EdfReader(str(self.filename))
+        num_channels = edf_data.signals_in_file
+
+        # Read channel names and data
+        channel_names = edf_data.getSignalLabels()
+        channel_data = [edf_data.readSignal(i) for i in range(num_channels)]
+
+        # Convert channel data to NumPy array
+        data = np.array(channel_data)
+
+        edf_data.close()
+
+        self.data = data
+        self.channel_names = channel_names
+        self.len = len(data[0, :])
+    
+    def init_capture(self):
+        """
+        Initialize the file reader
+        """
+        self.read_edf_file()
+        self.wait_time = 1/250.0
+        self.index = 0
+        self.last_time = time.time()
+
+    def send_msg(self, msg):
+        """
+        Does nothing
+        """
+        if msg == "STOP":
+            self.stop_msg = True
+
+    def get_msg(self):
+        """
+        If we have reached the end of the file, this tells the main loop to stop
+        """
+        if self.stop_msg:
+            return "STOP"
+
+    def get_data(self):
+        """
+        Returns the next point in the file
+        """
+        if self.index <= self.len:
+            point = self.data[:, self.index]
+            self.index += 1
+            while time.time() - self.last_time < self.wait_time:
+                continue
+            self.last_time = time.time()
+            n_array_raw = np.reshape(point, (1, self.num_channels))
+            return n_array_raw
+        else:
+            print("Reached end of file, stopping...")
+            self.stop_msg = True
+
+    def close(self):
+        self.data = None
 
 
 class LSLStreamer:
