@@ -348,7 +348,7 @@ class Capture:
 #                 elif 'PCM' in mixers :
 #                     self.mixer = alsaaudio.Mixer(control='PCM')
                 else:
-                    self.mixer = alsaaudio.Mixer(control='SoftMaster', device='dmixer')
+                    self.mixer = alsaaudio.Mixer(control='Headphone', device='dmixer')
             except ALSAAudioError as e:
                 print(e)
                 warnings.warn(f"No ALSA mixer found. Volume control will not be available from notebook.")
