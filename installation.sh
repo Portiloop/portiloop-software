@@ -25,6 +25,8 @@ wget https://github.com/google-coral/pycoral/releases/download/v2.0.0/pycoral-2.
 wget https://github.com/google-coral/pycoral/releases/download/v2.0.0/tflite_runtime-2.5.0.post1-cp37-cp37m-linux_aarch64.whl
 pip3 install tflite_runtime-2.5.0.post1-cp37-cp37m-linux_aarch64.whl --user
 pip3 install pycoral-2.0.0-cp37-cp37m-linux_aarch64.whl --user
+rm tflite_runtime-2.5.0.post1-cp37-cp37m-linux_aarch64.whl
+rm pycoral-2.0.0-cp37-cp37m-linux_aarch64.whl
 
 echo "Installing the Portiloop software [This may take a while]"
 cd ~/portiloop-software
@@ -49,13 +51,11 @@ sudo cp unmanaged.conf /etc/NetworkManager/conf.d/unmanaged.conf
 sudo cp create_ap.service /etc/systemd/system/create_ap.service
 sudo cp sysctl.conf /etc/sysctl.conf
 
-echo "Enter access point wifi SSID:"
+echo "Enter the access point wifi SSID:"
 read portiloop_SSID
-echo $portiloop_SSID
-echo "Enter access point wifi password:"
+echo "Enter the access point wifi password:"
 read portiloop_password
-echo $portiloop_password
-echo "Enter jupyter notebook password:"
+echo "Enter the jupyter notebook password:"
 jupyter notebook password
 
 sudo touch /etc/hostapd/hostapd.conf
