@@ -55,6 +55,8 @@ echo $portiloop_SSID
 echo "Enter access point wifi password:"
 read portiloop_password
 echo $portiloop_password
+echo "Enter jupyter notebook password:"
+jupyter notebook password
 
 sudo touch /etc/hostapd/hostapd.conf
 sudo truncate -s 0 /etc/hostapd/hostapd.conf
@@ -64,13 +66,26 @@ sudo -E sh -c "echo \"ssid=${portiloop_SSID}\" >> /etc/hostapd/hostapd.conf"
 sudo sh -c 'echo "hw_mode=g" >> /etc/hostapd/hostapd.conf'
 sudo sh -c 'echo "channel=6" >> /etc/hostapd/hostapd.conf'
 sudo sh -c 'echo "wpa=2" >> /etc/hostapd/hostapd.conf'
-sudo -E sh -c "echo \"wpa_passphrase==${portiloop_password}\" >> /etc/hostapd/hostapd.conf"
+sudo -E sh -c "echo \"wpa_passphrase=${portiloop_password}\" >> /etc/hostapd/hostapd.conf"
 sudo sh -c 'echo "wpa_key_mgmt=WPA-PSK" >> /etc/hostapd/hostapd.conf'
 sudo sh -c 'echo "wpa_pairwise=TKIP CCMP" >> /etc/hostapd/hostapd.conf'
 sudo sh -c 'echo "rsn_pairwise=CCMP" >> /etc/hostapd/hostapd.conf'
 sudo sh -c 'echo "auth_algs=1" >> /etc/hostapd/hostapd.conf'
 sudo sh -c 'echo "macaddr_acl=0" >> /etc/hostapd/hostapd.conf'
 
+sudo cp hostapd /etc/default/hostapd
+sudo systemctl unmask hostapd
+sudo cp dnsmasq.conf /etc/dnsmasq.conf
+sudo cp setup_tables.sh /usr/local/bin/setup_tables.sh
+sudo cp setup_tables.service /etc/systemd/system/setup_tables.service
+sudo chmod +x /usr/local/bin/setup_tables.sh
 
+sudo systemctl daemon-reload
+sudo systemctl enable create_ap.service
+sudo systemctl enable hostapd.service
+sudo systemctl enable dnsmasq.service
+sudo systemctl enable setup_tables.service
 
-
+sudo cp jupyter.service /etc/systemd/system/jupyter.service
+sudo systemctl daemon-reload
+sudo systemctl enable jupyter
