@@ -15,6 +15,10 @@ cd ~
 
 echo "Updating apt..."
 sudo apt-get update
+sudo apt install locales
+
+echo "Asking the user for locales..."
+sudo dpkg-reconfigure locales
 
 echo "Upgrading pip3..."
 sudo /usr/bin/python3 -m pip install --upgrade pip
@@ -79,12 +83,18 @@ sudo cp setup_tables.service /etc/systemd/system/setup_tables.service
 sudo chmod +x /usr/local/bin/setup_tables.sh
 sudo cp jupyter.service /etc/systemd/system/jupyter.service
 
+echo "Reloading systemctl daemon..."
 sudo systemctl daemon-reload
+echo "Enabling AP service..."
 sudo systemctl enable create_ap.service
+echo "Enabling hostapd service..."
 sudo systemctl enable hostapd.service
+echo "Enabling dnsmask service..."
 sudo systemctl enable dnsmasq.service
+echo "Enabling setup_tables service..."
 sudo systemctl enable setup_tables.service
-sudo systemctl enable jupyter
+echo "Enabling jupyter service..."
+sudo systemctl enable jupyter.service
 
 # jupyter notebook --generate-config
 echo "Launching jupyter notebook password manager..."
