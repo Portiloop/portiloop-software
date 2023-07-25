@@ -56,9 +56,10 @@ cd ~
 mkdir workspace
 mkdir workspace/edf_recording
 
-echo "Setting up access point..."
+echo "Copying files ansd setting up access point..."
 sudo apt-get install hostapd dnsmasq
 cd ~/portiloop-software/portiloop/setup_files
+sudo cp asound.conf /etc/asound.conf
 sudo cp create_ap0.sh /usr/local/bin/create_ap0.sh
 sudo chmod +x /usr/local/bin/create_ap0.sh
 sudo bash /usr/local/bin/create_ap0.sh
