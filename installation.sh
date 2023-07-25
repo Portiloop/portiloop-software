@@ -46,6 +46,8 @@ rm pycoral-2.0.0-cp37-cp37m-linux_aarch64.whl
 
 echo "Installing the Portiloop software [This may take a while]"
 cd ~/portiloop-software
+sudo apt-get install git-lfs
+git lfs pull
 pip3 install -e . --user
 
 echo "Activating the widgets for the jupyter notebook..."
