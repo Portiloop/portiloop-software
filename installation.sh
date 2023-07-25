@@ -55,6 +55,7 @@ echo "Enter the access point wifi SSID:"
 read portiloop_SSID
 echo "Enter the access point wifi password:"
 read portiloop_password
+# jupyter notebook --generate-config
 echo "Enter the jupyter notebook password:"
 jupyter notebook password
 
