@@ -13,13 +13,22 @@ echo "The script will now update your system."
 
 cd ~
 
+echo "Preparing apt..."
+export LC_ALL="en_US.UTF-8"
 sudo apt remove -y reportbug python3-reportbug
+gpg --keyserver keyserver.ubuntu.com --recv-keys B53DC80D13EDEF05
+gpg --export --armor B53DC80D13EDEF05 | sudo apt-key add -
+
 echo "Updating apt..."
-sudo apt-get update
+sudo apt-get --allow-releaseinfo-change-suite update
 
 echo "Upgrading pip3..."
 # sudo /usr/bin/python3 -m pip install --upgrade pip
-pip3 install --upgrade pip
+pip3 install --upgrade pip --user
+export PATH="$PATH:/home/mendel/.local/bin"
+echo "pip3 is now at the following location:"
+which pip3
+echo "Note, should be: /home/mendel/.local/bin/pip3"
 
 echo "Installing dependencies..."
 sudo apt-get install -y python3-matplotlib python3-scipy python3-dev libasound2-dev jupyter-notebook jupyter
@@ -37,7 +46,7 @@ rm pycoral-2.0.0-cp37-cp37m-linux_aarch64.whl
 
 echo "Installing the Portiloop software [This may take a while]"
 cd ~/portiloop-software
-pip3 install -e .  --user
+pip3 install -e . --user
 
 echo "Activating the widgets for the jupyter notebook..."
 jupyter nbextension enable --py widgetsnbextension
