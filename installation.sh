@@ -77,19 +77,17 @@ sudo cp dnsmasq.conf /etc/dnsmasq.conf
 sudo cp setup_tables.sh /usr/local/bin/setup_tables.sh
 sudo cp setup_tables.service /etc/systemd/system/setup_tables.service
 sudo chmod +x /usr/local/bin/setup_tables.sh
+sudo cp jupyter.service /etc/systemd/system/jupyter.service
 
 sudo systemctl daemon-reload
 sudo systemctl enable create_ap.service
 sudo systemctl enable hostapd.service
 sudo systemctl enable dnsmasq.service
 sudo systemctl enable setup_tables.service
-
-sudo cp jupyter.service /etc/systemd/system/jupyter.service
-sudo systemctl daemon-reload
 sudo systemctl enable jupyter
 
 # jupyter notebook --generate-config
-echo "Enter the desired jupyter notebook password:"
+echo "Launching jupyter notebook password manager..."
 jupyter notebook password
 
 echo "All done!"
