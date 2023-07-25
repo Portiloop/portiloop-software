@@ -13,15 +13,13 @@ echo "The script will now update your system."
 
 cd ~
 
+sudo apt remove -y reportbug python3-reportbug
 echo "Updating apt..."
 sudo apt-get update
-sudo apt install locales
-
-echo "Asking the user for locales..."
-sudo dpkg-reconfigure locales
 
 echo "Upgrading pip3..."
-sudo /usr/bin/python3 -m pip install --upgrade pip
+# sudo /usr/bin/python3 -m pip install --upgrade pip
+pip3 install --upgrade pip
 
 echo "Installing dependencies..."
 sudo apt-get install -y python3-matplotlib python3-scipy python3-dev libasound2-dev jupyter-notebook jupyter
