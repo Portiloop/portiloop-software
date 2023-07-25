@@ -4,6 +4,11 @@
 
 echo "--- PORTILOOP V2 INSTALLATION SCRIPT ---"
 
+echo "Enter the desired access point wifi SSID:"
+read portiloop_SSID
+echo "Enter the desired access point wifi password:"
+read portiloop_password
+
 echo "The script will now update your system."
 
 cd ~
@@ -51,14 +56,6 @@ sudo cp unmanaged.conf /etc/NetworkManager/conf.d/unmanaged.conf
 sudo cp create_ap.service /etc/systemd/system/create_ap.service
 sudo cp sysctl.conf /etc/sysctl.conf
 
-echo "Enter the access point wifi SSID:"
-read portiloop_SSID
-echo "Enter the access point wifi password:"
-read portiloop_password
-# jupyter notebook --generate-config
-echo "Enter the jupyter notebook password:"
-jupyter notebook password
-
 sudo touch /etc/hostapd/hostapd.conf
 sudo truncate -s 0 /etc/hostapd/hostapd.conf
 sudo sh -c 'echo "interface=ap0" >> /etc/hostapd/hostapd.conf'
@@ -90,3 +87,9 @@ sudo systemctl enable setup_tables.service
 sudo cp jupyter.service /etc/systemd/system/jupyter.service
 sudo systemctl daemon-reload
 sudo systemctl enable jupyter
+
+# jupyter notebook --generate-config
+echo "Enter the desired jupyter notebook password:"
+jupyter notebook password
+
+echo "All done!"
