@@ -351,7 +351,7 @@ class Capture:
                     self.mixer = alsaaudio.Mixer(control='Headphone', device='dmixer')
             except ALSAAudioError as e:
                 print(e)
-                warnings.warn(f"No ALSA mixer found. Volume control will not be available from notebook.")
+                warnings.warn(f"No ALSA mixer found. Volume control will not be available from notebook.\nAvailable mixers were:\n{mixers}")
                 self.mixer = DummyAlsaMixer()
             
             self.volume = self.mixer.getvolume()[0]  # we will set the same volume on all channels
