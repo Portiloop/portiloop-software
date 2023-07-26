@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Get the name of the interface on phy1
-phy1_interface=$(sudo iw dev | awk '/phy#1/ {getline; print $2}')
+# phy1_interface=$(sudo iw dev | awk '/phy#1/ {getline; print $2}')
+phy1_interface=$(iw dev | awk '/phy#1/ {getline; print $2}')
 
 # Check if the interface name is p2p0
 if [[ $phy1_interface == "ap0" ]]; then
