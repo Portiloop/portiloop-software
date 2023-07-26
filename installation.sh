@@ -61,7 +61,6 @@ mkdir workspace/edf_recording
 echo "Copying files ansd setting up access point..."
 sudo apt-get install hostapd dnsmasq
 cd ~/portiloop-software/portiloop/setup_files
-sudo cp asound.conf /etc/asound.conf
 sudo cp create_ap0.sh /usr/local/bin/create_ap0.sh
 sudo chmod +x /usr/local/bin/create_ap0.sh
 sudo bash /usr/local/bin/create_ap0.sh
@@ -110,4 +109,5 @@ sudo systemctl enable jupyter.service
 echo "Launching jupyter notebook password manager..."
 jupyter notebook password
 
-echo "All done!"
+sudo cp asound.conf /etc/asound.conf
+echo "All done! Please reboot the device."
