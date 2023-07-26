@@ -104,19 +104,21 @@ These first steps will help you set up an SSH connection to the device.
   - `screen /dev/ttyACM0`
     If you see a message telling you that screen is busy, you can use `sudo lsof /dev/ttyMC0` and then retry the screen step.
   - Login to the board using default username and password: mendel
-- Once you are logged in, you can now connect to you desired wifi network using nmtui.
-- If you want to access the board through ssh (which is recommended for any sort of development):
-  - On the serial console, open the `/etc/ssh/sshd_config` file.
+- Once you are logged in, you can now connect to you desired wifi network using `nmtui`.
+- Enable SSH access:
+  - Execute `sudo nano /etc/ssh/sshd_config`.
   - Scroll down to the `PasswordAuthenticated` line and change the 'no' to a 'yes'.
-- Reboot the device.
-  Once all of that is done, you should be able to ssh into your device, using either the ip address or the hostname. If some issues arise, make sure you are connected to the same network.
+  - Press `CTRL` + `o` to save your changes, and `CTRL` + `x` to exit the nano editor.
+- Shutdown the device (`sudo shutdown now`).
+- Pull the OTG-port cable off before the Coral board reboots (which happens automatically after a few seconds as long as this cable is plugged in)
 
-### Installation
+Next time you turn the Coral board on, you should be able to ssh into it, using either the ip address or the hostname. If some issues arise, make sure you are connected to the same network.
+
+### Software installation
 
 - Clone this repository in the home folder,
 - `cd` into the cloned repository,
-- Run `bash miniforge_install.sh` and follow the instructions,
-- Shut the Portiloop down (`sudo shutdown now`, then unplug the battery),
-- Plug the battery and turn the Portiloop on. After a minute, you should see the WiFi network appear on your computer. Connect to this network.
+- Run `bash miniforge_install.sh` (if you want the anaconda-based version) or `old_install.sh` (if you want the normal version) and follow the instructions,
+- Note that you may have to reboot and relaunch this script if you are prompted to.
 
 That's it! Your Jupyter server should now be up and running, listening on IP address 192.168.4.1 and port 8080, and automatically starting whenever the system boots up. You can now access it by typing 192.168.4.1:8080 in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arise, try with a different web browser.
