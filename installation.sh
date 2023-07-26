@@ -93,7 +93,7 @@ sudo sh -c 'echo "auth_algs=1" >> /etc/hostapd/hostapd.conf'
 sudo sh -c 'echo "macaddr_acl=0" >> /etc/hostapd/hostapd.conf'
 
 sudo cp hostapd /etc/default/hostapd
-sudo systemctl unmask hostapd
+# sudo systemctl unmask hostapd
 sudo cp dnsmasq.conf /etc/dnsmasq.conf
 sudo cp setup_tables.sh /usr/local/bin/setup_tables.sh
 sudo cp setup_tables.service /etc/systemd/system/setup_tables.service
