@@ -50,6 +50,11 @@ echo "Copying files..."
 cd ~/portiloop-software/portiloop/setup_files
 sudo cp jupyter.service /etc/systemd/system/jupyter.service
 
+echo "Reloading systemctl daemon..."
+sudo systemctl daemon-reload
+echo "Enabling jupyter service..."
+sudo systemctl enable jupyter.service
+
 # jupyter notebook --generate-config
 echo "Launching jupyter notebook password manager..."
 ~/miniforge3/envs/portiloop/bin/jupyter notebook password
