@@ -4,11 +4,6 @@
 
 echo "--- PORTILOOP V2 INSTALLATION SCRIPT ---"
 
-echo "Enter the desired access point wifi SSID:"
-read portiloop_SSID
-echo "Enter the desired access point wifi password:"
-read portiloop_password
-
 echo "The script will now update your system."
 
 cd ~

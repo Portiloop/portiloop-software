@@ -1,5 +1,10 @@
  #!/bin/bash
 
+echo "Enter the desired access point wifi SSID:"
+read portiloop_SSID
+echo "Enter the desired access point wifi password:"
+read portiloop_password
+
 cd ~
 echo "Preparing apt..."
 export LC_ALL="en_US.UTF-8"
