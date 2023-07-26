@@ -51,13 +51,8 @@ cd ~
 mkdir workspace
 mkdir workspace/edf_recording
 
-echo "Copying files and setting up access point..."
-sudo apt-get install hostapd dnsmasq
+echo "Copying files..."
 cd ~/portiloop-software/portiloop/setup_files
-sudo cp create_ap0.sh /usr/local/bin/create_ap0.sh
-sudo chmod +x /usr/local/bin/create_ap0.sh
-sudo bash /usr/local/bin/create_ap0.sh
-nmcli device set ap0 managed no
 sudo cp unmanaged.conf /etc/NetworkManager/conf.d/unmanaged.conf
 sudo cp create_ap.service /etc/systemd/system/create_ap.service
 sudo cp sysctl.conf /etc/sysctl.conf
