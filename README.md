@@ -16,7 +16,7 @@ This software works with the [Coral implementation](https://github.com/Portiloop
 It enables controlling the `Portiloop` from a simple Graphical User Interface (GUI).
 
 ## Quick links
-- [Installation on the Portiloop](#installation)
+- [Installation on the Portiloop](#installation-portiloop-v2)
 - [GUI usage](#usage)
 
 ## Usage:
