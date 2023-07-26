@@ -27,3 +27,5 @@ else
     # Get an IPV4 address for the server
     ifconfig ap0 192.168.4.1 up
 fi
+
+nmcli device set ap0 managed no
