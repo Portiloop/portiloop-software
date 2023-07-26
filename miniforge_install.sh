@@ -5,11 +5,6 @@
 
 echo "--- PORTILOOP V2 INSTALLATION SCRIPT (Miniforge version) ---"
 
-echo "Enter the desired access point wifi SSID:"
-read portiloop_SSID
-echo "Enter the desired access point wifi password:"
-read portiloop_password
-
 cd ~
 
 # echo "Installing dependencies..."
@@ -53,47 +48,7 @@ mkdir workspace/edf_recording
 
 echo "Copying files..."
 cd ~/portiloop-software/portiloop/setup_files
-sudo cp unmanaged.conf /etc/NetworkManager/conf.d/unmanaged.conf
-sudo cp create_ap.service /etc/systemd/system/create_ap.service
-sudo cp sysctl.conf /etc/sysctl.conf
-
-sudo touch /etc/hostapd/hostapd.conf
-sudo truncate -s 0 /etc/hostapd/hostapd.conf
-sudo sh -c 'echo "interface=ap0" >> /etc/hostapd/hostapd.conf'
-sudo sh -c 'echo "driver=nl80211" >> /etc/hostapd/hostapd.conf'
-sudo -E sh -c "echo \"ssid=${portiloop_SSID}\" >> /etc/hostapd/hostapd.conf"
-sudo sh -c 'echo "hw_mode=g" >> /etc/hostapd/hostapd.conf'
-sudo sh -c 'echo "channel=6" >> /etc/hostapd/hostapd.conf'
-sudo sh -c 'echo "wpa=2" >> /etc/hostapd/hostapd.conf'
-sudo -E sh -c "echo \"wpa_passphrase=${portiloop_password}\" >> /etc/hostapd/hostapd.conf"
-sudo sh -c 'echo "wpa_key_mgmt=WPA-PSK" >> /etc/hostapd/hostapd.conf'
-sudo sh -c 'echo "wpa_pairwise=TKIP CCMP" >> /etc/hostapd/hostapd.conf'
-sudo sh -c 'echo "rsn_pairwise=CCMP" >> /etc/hostapd/hostapd.conf'
-sudo sh -c 'echo "auth_algs=1" >> /etc/hostapd/hostapd.conf'
-sudo sh -c 'echo "macaddr_acl=0" >> /etc/hostapd/hostapd.conf'
-
-sudo cp hostapd /etc/default/hostapd
-sudo systemctl unmask hostapd
-
-sudo cp dnsmasq.conf /etc/dnsmasq.conf
-sudo cp setup_tables.sh /usr/local/bin/setup_tables.sh
-sudo cp setup_tables.service /etc/systemd/system/setup_tables.service
-sudo chmod +x /usr/local/bin/setup_tables.sh
-
-sudo cp miniforge_jupyter.service /etc/systemd/system/jupyter.service
-
-echo "Reloading systemctl daemon..."
-sudo systemctl daemon-reload
-echo "Enabling AP service..."
-sudo systemctl enable create_ap.service
-echo "Enabling hostapd service..."
-sudo systemctl enable hostapd.service
-echo "Enabling dnsmask service..."
-sudo systemctl enable dnsmasq.service
-echo "Enabling setup_tables service..."
-sudo systemctl enable setup_tables.service
-echo "Enabling jupyter service..."
-sudo systemctl enable jupyter.service
+sudo cp jupyter.service /etc/systemd/system/jupyter.service
 
 # jupyter notebook --generate-config
 echo "Launching jupyter notebook password manager..."
