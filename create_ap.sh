@@ -1,8 +1,14 @@
  #!/bin/bash
 
-echo "Creating access point interface...
-"
-sudo apt-get update
+cd ~
+echo "Preparing apt..."
+export LC_ALL="en_US.UTF-8"
+sudo apt remove -y reportbug python3-reportbug
+gpg --keyserver keyserver.ubuntu.com --recv-keys B53DC80D13EDEF05
+gpg --export --armor B53DC80D13EDEF05 | sudo apt-key add -
+sudo apt-get --allow-releaseinfo-change-suite update
+
+echo "Creating access point interface..."
 sudo apt-get install hostapd dnsmasq
 
 cd ~/portiloop-software/portiloop/setup_files
