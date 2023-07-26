@@ -118,7 +118,7 @@ Next time you turn the Coral board on, you should be able to ssh into it, using 
 
 - Clone this repository in the home folder,
 - `cd` into the cloned repository,
-- Run `create_ap.sh` and follow the instructions
+- Run `bash create_ap.sh` and follow the instructions
   - Don't forget to reboot the device
 - Run `bash miniforge_install.sh` (if you want the anaconda-based version) or `old_install.sh` (if you want the normal version) and follow the instructions,
   - Don't forget to reboot the device
