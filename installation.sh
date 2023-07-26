@@ -28,7 +28,15 @@ pip3 install --upgrade pip --user
 export PATH="$PATH:/home/mendel/.local/bin"
 echo "pip3 is now at the following location:"
 which pip3
-echo "Note, should be: /home/mendel/.local/bin/pip3"
+installed_path=$(which pip3)
+expected_path="/home/mendel/.local/bin/pip3"
+if [ "$installed_path" = "$expected_path" ]; then
+    echo "Installed pip3 path is correct: $installed_path"
+else
+    echo "Installed pip3 path is incorrect. Expected: $expected_path, Actual: $installed_path"
+    echo "Please reboot the device and launch installation.sh again."
+    exit 1
+fi
 
 echo "Installing dependencies..."
 sudo apt-get install -y python3-matplotlib python3-scipy python3-dev libasound2-dev jupyter-notebook jupyter
