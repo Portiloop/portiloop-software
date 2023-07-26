@@ -115,7 +115,7 @@ These first steps will help you set up an SSH connection to the device.
 
 - Clone this repository in the home folder,
 - `cd` into the cloned repository,
-- Run `bash installation.sh` and follow the instructions,
+- Run `bash miniforge_install.sh` and follow the instructions,
 - Shut the Portiloop down (`sudo shutdown now`, then unplug the battery),
 - Plug the battery and turn the Portiloop on. After a minute, you should see the WiFi network appear on your computer. Connect to this network.
 
