@@ -36,5 +36,16 @@ sudo cp setup_tables.sh /usr/local/bin/setup_tables.sh
 sudo cp setup_tables.service /etc/systemd/system/setup_tables.service
 sudo chmod +x /usr/local/bin/setup_tables.sh
 
+echo "Reloading systemctl daemon..."
+sudo systemctl daemon-reload
+echo "Enabling AP service..."
+sudo systemctl enable create_ap.service
+echo "Enabling hostapd service..."
+sudo systemctl enable hostapd.service
+echo "Enabling dnsmask service..."
+sudo systemctl enable dnsmasq.service
+echo "Enabling setup_tables service..."
+sudo systemctl enable setup_tables.service
+
 cd ~/portiloop-software
 echo "Interface created, please reboot the device and move on to the installation script."

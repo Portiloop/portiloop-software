@@ -78,14 +78,6 @@ sudo cp jupyter.service /etc/systemd/system/jupyter.service
 
 echo "Reloading systemctl daemon..."
 sudo systemctl daemon-reload
-echo "Enabling AP service..."
-sudo systemctl enable create_ap.service
-echo "Enabling hostapd service..."
-sudo systemctl enable hostapd.service
-echo "Enabling dnsmask service..."
-sudo systemctl enable dnsmasq.service
-echo "Enabling setup_tables service..."
-sudo systemctl enable setup_tables.service
 echo "Enabling jupyter service..."
 sudo systemctl enable jupyter.service
 
