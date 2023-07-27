@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # For this script to work, the repo must be located in the (mendel) home folder
 
 echo "--- PORTILOOP V2 INSTALLATION SCRIPT ---"
