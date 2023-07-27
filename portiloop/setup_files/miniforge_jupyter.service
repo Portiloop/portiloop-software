@@ -5,8 +5,8 @@ After=hostapd.service
 After=dnsmasq.service
 
 [Service]
-Type=simple
-ExecStart=/home/mendel/miniforge3/bin/conda run -n portiloop jupyter notebook --no-browser --ip 192.168.4.1 --port 8080 --notebook-dir=/home/mendel
+Type=exec
+ExecStart=/bin/bash -c "XDG_RUNTIME_DIR=/run/user/`id -u` /home/mendel/miniforge3/bin/conda run -n portiloop jupyter notebook --no-browser --ip 192.168.4.1 --port 8080 --notebook-dir=/home/mendel"
 User=mendel
 Group=mendel
 Restart=on-failure

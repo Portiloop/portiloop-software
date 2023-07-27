@@ -5,8 +5,8 @@ After=hostapd.service
 After=dnsmasq.service
 
 [Service]
-Type=simple
-ExecStart=/bin/bash -c "/usr/bin/jupyter notebook --no-browser --ip 192.168.4.1 --port 8080 --notebook-dir=/home/mendel"
+Type=exec
+ExecStart=/bin/bash -c "XDG_RUNTIME_DIR=/run/user/`id -u` /usr/bin/jupyter notebook --no-browser --ip 192.168.4.1 --port 8080 --notebook-dir=/home/mendel"
 User=mendel
 Group=mendel
 Restart=on-failure
