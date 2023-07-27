@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e
-
 # For this script to work, the repo must be located in the (mendel) home folder
 # This script installs the Miniforge-based solution of the Portiloop software
 
