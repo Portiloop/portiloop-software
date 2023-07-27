@@ -48,7 +48,7 @@ mkdir workspace/edf_recording
 
 echo "Copying files..."
 cd ~/portiloop-software/portiloop/setup_files
-sudo cp jupyter.service /etc/systemd/system/jupyter.service
+sudo cp miniforge_jupyter.service /etc/systemd/system/jupyter.service
 
 echo "Reloading systemctl daemon..."
 sudo systemctl daemon-reload
