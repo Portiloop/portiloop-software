@@ -1,4 +1,4 @@
-all: step3.temp
+all: miniforge
 
 step1.temp:
 	echo "--- PORTILOOP V2 INSTALLATION SCRIPT (Miniforge version) ---"
