@@ -32,7 +32,7 @@ step5.temp: step4.temp
 	echo "Installing the Portiloop software [This may take a while]"
 	cd ~/portiloop-software && sudo apt-get install git-lfs && git lfs pull && ~/miniforge3/envs/portiloop/bin/pip3 install notebook && ~/miniforge3/envs/portiloop/bin/pip3 install -e .
 	echo "Activating the widgets for the jupyter notebook..."
-	miniforge3/envs/portiloop/bin/jupyter nbextension enable --py widgetsnbextension
+	~/miniforge3/envs/portiloop/bin/jupyter nbextension enable --py widgetsnbextension
 	echo "Creating workspace directory..."
 	cd ~ && mkdir workspace && mkdir workspace/edf_recording
 	echo "Copying files..."
@@ -50,7 +50,9 @@ miniforge: step6.temp
 	echo "Launching jupyter notebook password manager..."
 	~/miniforge3/envs/portiloop/bin/jupyter notebook password
 	sudo cp asound.conf /etc/asound.conf
+	rm *.temp
 	echo "All done! Please reboot the device."
+
 
 clean:
 	rm *.temp
