@@ -15,7 +15,7 @@ step2.temp: step1.temp
 
 step3.temp: step2.temp
 	echo "Creating portiloop virtual environment..."
-	miniforge3/bin/conda create -n portiloop python=3.7 -y
+	~/miniforge3/bin/conda create -n portiloop python=3.7 -y
 	touch step3.temp
 
 step4.temp: step3.temp
