@@ -49,7 +49,7 @@ step6.temp: step5.temp
 miniforge: step6.temp
 	echo "Launching jupyter notebook password manager..."
 	~/miniforge3/envs/portiloop/bin/jupyter notebook password
-	sudo cp asound.conf /etc/asound.conf
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	rm *.temp
 	echo "All done! Please reboot the device."
 
