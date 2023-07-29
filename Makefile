@@ -76,16 +76,15 @@ vstep2.temp: vstep1.temp
 	echo "Upgrading pip3..."
 	# sudo /usr/bin/python3 -m pip install --upgrade pip
 	pip3 install --upgrade pip --user
-	# export PATH="$PATH:/home/mendel/.local/bin"
 	echo "pip3 is now at the following location:"
 	which pip3
-	ifeq ($(shell which pip3), "/home/mendel/.local/bin/pip3")
-		echo "Installed pip3 path is correct"
-	else
-		echo "Installed pip3 path is incorrect."
-		echo "Please reboot the device and launch installation.sh again."
-		exit 1
-	endif
+	@if [ $$(which pip3) = "/home/mendel/.local/bin/pip3" ]; then \
+		echo "Installed pip3 path is correct"; \
+	else \
+		echo "Installed pip3 path is incorrect."; \
+		echo "Please reboot the device and launch installation.sh again."; \
+		exit 1; \
+	fi
 	touch vstep2.temp
 
 vstep3.temp: vstep2.temp
