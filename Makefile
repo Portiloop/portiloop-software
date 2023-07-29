@@ -81,8 +81,8 @@ vstep2.temp: vstep1.temp
 	@if [ $$(which pip3) = "/home/mendel/.local/bin/pip3" ]; then \
 		echo "Installed pip3 path is correct"; \
 	else \
-		echo "Installed pip3 path is incorrect."; \
-		echo "Please reboot the device and launch installation.sh again."; \
+		echo "Installed pip3 path is incorrect, will now exit with an error."; \
+		echo "This is fine, please reboot the device and execute make again."; \
 		exit 1; \
 	fi
 	touch vstep2.temp
@@ -97,15 +97,15 @@ vstep4.temp: vstep3.temp
 	echo "Installing latest pycoral and tflite-runtime..."
 	wget https://github.com/google-coral/pycoral/releases/download/v2.0.0/pycoral-2.0.0-cp37-cp37m-linux_aarch64.whl
 	wget https://github.com/google-coral/pycoral/releases/download/v2.0.0/tflite_runtime-2.5.0.post1-cp37-cp37m-linux_aarch64.whl
-	pip3 install tflite_runtime-2.5.0.post1-cp37-cp37m-linux_aarch64.whl
-	pip3 install pycoral-2.0.0-cp37-cp37m-linux_aarch64.whl
+	pip3 install tflite_runtime-2.5.0.post1-cp37-cp37m-linux_aarch64.whl --user
+	pip3 install pycoral-2.0.0-cp37-cp37m-linux_aarch64.whl --user
 	rm tflite_runtime-2.5.0.post1-cp37-cp37m-linux_aarch64.whl
 	rm pycoral-2.0.0-cp37-cp37m-linux_aarch64.whl
 	touch vstep4.temp
 
 vstep5.temp: vstep4.temp
 	echo "Installing the Portiloop software [This may take a while]"
-	cd ~/portiloop-software && sudo apt-get install git-lfs && git lfs pull && pip3 install notebook && pip3 install -e .
+	cd ~/portiloop-software && sudo apt-get install git-lfs && git lfs pull && pip3 install notebook --user && pip3 install -e . --user
 	echo "Activating the widgets for the jupyter notebook..."
 	jupyter nbextension enable --py widgetsnbextension
 	echo "Creating workspace directory..."
