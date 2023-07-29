@@ -79,12 +79,12 @@ vstep2.temp: vstep1.temp
 	# export PATH="$PATH:/home/mendel/.local/bin"
 	echo "pip3 is now at the following location:"
 	which pip3
-	installed_path := $(shell which pip3)
-	expected_path := "/home/mendel/.local/bin/pip3"
+	installed_path:=$(shell which pip3)
+	expected_path:="/home/mendel/.local/bin/pip3"
 	ifeq ($(installed_path), $(expected_path))
-		echo "Installed pip3 path is correct: $(installed_path)"
+		echo "Installed pip3 path is correct: $${installed_path}"
 	else
-		echo "Installed pip3 path is incorrect. Expected: $(expected_path), Actual: $(installed_path)"
+		echo "Installed pip3 path is incorrect. Expected: $${expected_path}, Actual: $${installed_path}"
 		echo "Please reboot the device and launch installation.sh again."
 		exit 1
 	endif
