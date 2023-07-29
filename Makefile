@@ -105,7 +105,7 @@ vstep4.temp: vstep3.temp
 
 vstep5.temp: vstep4.temp
 	echo "Installing the Portiloop software [This may take a while]"
-	cd ~/portiloop-software && sudo apt-get install git-lfs && git lfs pull && pip3 install notebook --user && pip3 install -e . --user
+	cd ~/portiloop-software && sudo apt-get install git-lfs && git lfs pull && pip3 install -e . --user
 	echo "Activating the widgets for the jupyter notebook..."
 	jupyter nbextension enable --py widgetsnbextension
 	echo "Creating workspace directory..."
