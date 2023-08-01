@@ -40,6 +40,7 @@ step5.temp: step4.temp
 	echo "Creating workspace directory..."
 	cd ~ && mkdir workspace && mkdir workspace/edf_recording
 	echo "Copying files..."
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp miniforge_jupyter.service /etc/systemd/system/jupyter.service
 	touch step5.temp
 
@@ -50,13 +51,15 @@ step6.temp: step5.temp
 	sudo systemctl enable jupyter.service
 	touch step6.temp
 
-miniforge: step6.temp
-	echo "Launching jupyter notebook password manager..."
-	~/miniforge3/envs/portiloop/bin/jupyter notebook password
-	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
-	rm *.temp
+step7.temp: step6.temp
 	echo "Playing test sound to update ALSA:"
 	cd ~/portiloop-software/portiloop/sounds && aplay -Dplug:softvol stimulus.wav
+	touch step7.temp
+
+miniforge: step7.temp
+	echo "Launching jupyter notebook password manager..."
+	~/miniforge3/envs/portiloop/bin/jupyter notebook password
+	rm *.temp
 	echo "All done! Please reboot the device."
 
 
@@ -113,6 +116,7 @@ vstep5.temp: vstep4.temp
 	echo "Creating workspace directory..."
 	cd ~ && mkdir workspace && mkdir workspace/edf_recording
 	echo "Copying files..."
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp jupyter.service /etc/systemd/system/jupyter.service
 	touch vstep5.temp
 
@@ -123,13 +127,15 @@ vstep6.temp: vstep5.temp
 	sudo systemctl enable jupyter.service
 	touch vstep6.temp
 
-vanilla: vstep6.temp
-	echo "Launching jupyter notebook password manager..."
-	jupyter notebook password
-	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
-	rm *.temp
+vstep7.temp: vstep6.temp
 	echo "Playing test sound to update ALSA:"
 	cd ~/portiloop-software/portiloop/sounds && aplay -Dplug:softvol stimulus.wav
+	touch vstep7.temp
+
+vanilla: vstep7.temp
+	echo "Launching jupyter notebook password manager..."
+	jupyter notebook password
+	rm *.temp
 	echo "All done! Please reboot the device."
 
 
