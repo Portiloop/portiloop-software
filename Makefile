@@ -1,4 +1,4 @@
-all: vanilla
+all: miniforge
 
 # all can be either "vanilla" or "miniforge"
 
@@ -55,6 +55,8 @@ miniforge: step6.temp
 	~/miniforge3/envs/portiloop/bin/jupyter notebook password
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	rm *.temp
+	echo "Playing test sound to update ALSA:"
+	cd ~/portiloop-software/portiloop/sounds && aplay -Dplug:softvol stimulus.wav
 	echo "All done! Please reboot the device."
 
 
@@ -126,6 +128,8 @@ vanilla: vstep6.temp
 	jupyter notebook password
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	rm *.temp
+	echo "Playing test sound to update ALSA:"
+	cd ~/portiloop-software/portiloop/sounds && aplay -Dplug:softvol stimulus.wav
 	echo "All done! Please reboot the device."
 
 
