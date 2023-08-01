@@ -6,6 +6,8 @@ echo "Enter the desired access point wifi SSID:"
 read portiloop_SSID
 echo "Enter the desired access point wifi password:"
 read portiloop_password
+echo "Enter the desired access point wifi channel:"
+read portiloop_channel
 
 cd ~
 echo "Preparing apt..."
@@ -33,7 +35,7 @@ sudo sh -c 'echo "interface=ap0" >> /etc/hostapd/hostapd.conf'
 sudo sh -c 'echo "driver=nl80211" >> /etc/hostapd/hostapd.conf'
 sudo -E sh -c "echo \"ssid=${portiloop_SSID}\" >> /etc/hostapd/hostapd.conf"
 sudo sh -c 'echo "hw_mode=g" >> /etc/hostapd/hostapd.conf'
-sudo sh -c 'echo "channel=6" >> /etc/hostapd/hostapd.conf'
+sudo -E sh -c "echo \"channel=${portiloop_channel}\" >> /etc/hostapd/hostapd.conf"
 sudo sh -c 'echo "wpa=2" >> /etc/hostapd/hostapd.conf'
 sudo -E sh -c "echo \"wpa_passphrase=${portiloop_password}\" >> /etc/hostapd/hostapd.conf"
 sudo sh -c 'echo "wpa_key_mgmt=WPA-PSK" >> /etc/hostapd/hostapd.conf'
