@@ -1,6 +1,8 @@
 #!/bin/bash
 
-echo "--- PORTILOOP V2 ACCESS POINT SETUP SCRIPT ---"
+set -e
+
+echo "--- PORTILOOP V2 ACCESS POINT SETUP ---"
 
 echo "Enter the desired access point wifi SSID:"
 read portiloop_SSID
@@ -23,8 +25,6 @@ sudo apt-get install hostapd dnsmasq
 cd ~/portiloop-software/portiloop/setup_files
 sudo cp create_ap0.sh /usr/local/bin/create_ap0.sh
 sudo chmod +x /usr/local/bin/create_ap0.sh
-# sudo bash /usr/local/bin/create_ap0.sh
-# nmcli device set ap0 managed no
 sudo cp unmanaged.conf /etc/NetworkManager/conf.d/unmanaged.conf
 sudo cp create_ap.service /etc/systemd/system/create_ap.service
 sudo cp sysctl.conf /etc/sysctl.conf

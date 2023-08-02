@@ -118,10 +118,8 @@ Next time you turn the Coral board on, you should be able to ssh into it, using 
 
 - Clone this repository in the home folder,
 - `cd` into the cloned repository,
-- Run `bash create_ap.sh` and follow the instructions
-  - Don't forget to reboot the device
-- Run `make`
+- Run `make` and follow the instructions
   - Don't forget to reboot the device afterward
-- Note that you may have to reboot and relaunch `make` if you are prompted to with an error (because of a wrong pip3 location). This is a normal step of the installation.
+- Note that `make` may fail at several points during installation. Whenever it does, just call `make` again.
 
 That's it! Your Jupyter server should now be up and running, listening on IP address 192.168.4.1 and port 8080, and automatically starting whenever the system boots up. You can now access it by typing 192.168.4.1:8080 in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arise, try with a different web browser.

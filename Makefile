@@ -2,10 +2,16 @@ all: miniforge
 
 # all can be either "vanilla" or "miniforge"
 
+# === AP creation ===
+
+step0.temp:
+	cd ~/portiloop-software && bash create_ap.sh
+	touch step0.temp
+
 # === miniforge pipeline ===
 
-step1.temp:
-	echo "--- PORTILOOP V2 INSTALLATION SCRIPT (Miniforge version) ---"
+step1.temp: step0.temp
+	echo "--- PORTILOOP V2 INSTALLATION (Miniforge version) ---"
 	sudo apt-get update
 	sudo apt-get install -y python3-matplotlib python3-scipy python3-dev libasound2-dev
 	touch step1.temp
@@ -53,6 +59,7 @@ step6.temp: step5.temp
 
 step7.temp: step6.temp
 	echo "Playing test sound to update ALSA:"
+	echo "NOTE: This step may fail, just call make again when it does."
 	cd ~/portiloop-software/portiloop/sounds && aplay -Dplug:softvol stimulus.wav
 	touch step7.temp
 
@@ -65,8 +72,8 @@ miniforge: step7.temp
 
 # === vanilla pipeline ===
 
-vstep1.temp:
-	echo "--- PORTILOOP V2 INSTALLATION SCRIPT ---"
+vstep1.temp: step0.temp
+	echo "--- PORTILOOP V2 INSTALLATION (Vanilla version) ---"
 	echo "The script will now update your system."
 	echo "Preparing apt..."
 	export LC_ALL="en_US.UTF-8"
@@ -129,6 +136,7 @@ vstep6.temp: vstep5.temp
 
 vstep7.temp: vstep6.temp
 	echo "Playing test sound to update ALSA:"
+	echo "NOTE: This step may fail, just call make again when it does."
 	cd ~/portiloop-software/portiloop/sounds && aplay -Dplug:softvol stimulus.wav
 	touch vstep7.temp
 
