@@ -78,6 +78,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         t_chk_msg = t + time_msg_in
         
         # sampling loop:
+        print("STArTING")
         while c and t < t_max:
             t = time.time()
             if python_clock:
@@ -85,10 +86,13 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
                     time.sleep(t_next - t)
                 t_next += sample_time
                 reading = frontend.read()
+                # print("READ DONE")
             else:
                 reading = frontend.wait_new_data()
+
             datapoint = reading.channels()
             p_data_o.send(datapoint)
+            # print("SENT")
 
             # Check for messages
             if t >= t_chk_msg:
@@ -96,6 +100,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
                 if p_msg_io.poll():
                     message = p_msg_io.recv()
                     if message == 'STOP':
+                        print("STOPPING")
                         c = False
             it += 1
         t = time.time()
