@@ -1,5 +1,3 @@
-
-
 from abc import ABC, abstractmethod
 import json
 from multiprocessing import Process, Queue, Value
@@ -17,7 +15,6 @@ if ADS:
     import alsaaudio
     from alsaaudio import ALSAAudioError
     from portiloop.src.hardware.frontend import Frontend
-    from portiloop.src.hardware.leds import LEDs, Color
 
 from portiloop.src.stimulation import TimingDelayer, UpStateDelayer
 
@@ -351,7 +348,7 @@ class Capture:
                     self.mixer = alsaaudio.Mixer(control='SoftMaster', device='dmixer')
             except ALSAAudioError as e:
                 print(e)
-                warnings.warn(f"No ALSA mixer found. Volume control will not be available from notebook.")
+                warnings.warn(f"No ALSA mixer found. Volume control will not be available from notebook.\nAvailable mixers were:\n{mixers}")
                 self.mixer = DummyAlsaMixer()
             
             self.volume = self.mixer.getvolume()[0]  # we will set the same volume on all channels
@@ -829,7 +826,6 @@ class Capture:
         self.b_inter_stim_delay.disabled = True
         self.b_sound_detect.disabled = True
 
-        
     def on_b_sound_detect(self, value):
         self.detection_sound = value['new']
 
@@ -1051,7 +1047,7 @@ class Capture:
         del stimulator_class
 
     def run_impedance_test(self):
-        frontend = Frontend()
+        frontend = Frontend(portiloop_version=2)
         
         def is_set(x, n):
             return x & 1 << n != 0
@@ -1082,9 +1078,6 @@ class Capture:
             
         finally: 
             frontend.close()
-
-
-
 
 
 if __name__ == "__main__":

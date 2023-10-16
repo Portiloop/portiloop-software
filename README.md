@@ -16,7 +16,7 @@ This software works with the [Coral implementation](https://github.com/Portiloop
 It enables controlling the `Portiloop` from a simple Graphical User Interface (GUI).
 
 ## Quick links
-- [Installation on the Portiloop](#installation)
+- [Installation on the Portiloop](#installation-portiloop-v2)
 - [GUI usage](#usage)
 
 ## Usage:
@@ -85,60 +85,41 @@ The `Capture` switch lets you start and stop the experiment at any point in time
 
 _Note: once the experiment is started, all widgets are deactivated until you stop the experiment._
 
-## Installation:
+## Installation (Portiloop V2):
 
-Follow these instruction if the software is not readily installed on your `Portiloop` device.
+You've just got your hands on the hardware for the Portiloop V2 (A Google Coral Mini and a PiEEG board). Here are the steps you need to follow to get started using the EEG capture, the Spindle detection software, and the TPU processing.
 
-### Install the library:
+### Flashing the Google Coral
+Find the instructions to update your Coral Dev Board Mini to the last OS version [here](https://coral.ai/docs/dev-board-mini/reflash/).
 
-_(Requires python 3)_
+_(We recommend the force-fastboot method, as it works without `mdt`)_
 
-#### Install the following libraries from apt to avoid issues:
-- `sudo apt install python3-numpy`
-- `sudo apt install python3-scipy`
-- `sudo apt install python3-pycoral`
-- Clone this repository on the `Coral` board
-- `cd` to he root of the repository where the `setup.py` file is located
-- Execute `pip3 install -e .`
+### Accessing the Google Coral
 
-### Setup the Coral board as a wifi access point
+These first steps will help you set up an SSH connection to the device.
 
-You can find instructions [here](https://www.linux.com/training-tutorials/create-secure-linux-based-wireless-access-point/) to set Linux as a WiFi access point.
+- Power up the board through the USB power port.
+- Connect another USB cable to the OTG-port on the board and to your _linux_ host machine. Follow the following steps to connect to the board through serial:
+  - `ls /dev/ttyMC*`
+  - `screen /dev/ttyACM0`
+    If you see a message telling you that screen is busy, you can use `sudo lsof /dev/ttyMC0` and then retry the screen step.
+  - Login to the board using default username and password: mendel
+- Once you are logged in, you can now connect to you desired wifi network using `nmtui`.
+- Enable SSH access:
+  - Execute `sudo nano /etc/ssh/sshd_config`.
+  - Scroll down to the `PasswordAuthenticated` line and change the 'no' to a 'yes'.
+  - Press `CTRL` + `o` to save your changes, and `CTRL` + `x` to exit the nano editor.
+- Shutdown the device (`sudo shutdown now`).
+- Pull the OTG-port cable off before the Coral board reboots (which happens automatically after a few seconds as long as this cable is plugged in)
 
-### Setup a jupyter server:
+Next time you turn the Coral board on, you should be able to ssh into it, using either the ip address or the hostname. If some issues arise, make sure you are connected to the same network.
 
-- On your `Portiloop` device, execute `pip3 install notebook`
-- Generate a `jupyter` password and copy the result:
-```python
-from notebook.auth import passwd
-passwd()
-```
-- Execute `jupyter notebook --generate-config`
-- `cd` to the `.jupyter` folder and edit `jupyter_notebook_config.py`
-- Find the relevant lines, and uncomment them while setting the following values:
-  - `c.NotebookApp.ip = '*'`
-  - `c.NotebookApp.open_browser = False`
-  - `c.NotebookApp.password = u'your_generated_password_here'`
-  - `c.NotebookApp.port = 9000`
+### Software installation
 
-### Setup a service for your jupyter server to start automatically:
+- Clone this repository in the home folder,
+- `cd` into the cloned repository,
+- Run `make` and follow the instructions
+  - Don't forget to reboot the device afterward
+- Note that `make` may fail at several points during installation. Whenever it does, just call `make` again.
 
-- `cd /etc/systemd/system`
-- create an empty file named `notebook.service` and open it.
-- paste the following and save:
-```bash
-[Unit]
-Description=Autostarts jupyter server
-
-[Service]
-User=mendel
-WorkingDirectory=~
-ExecStart=jupyter notebook
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-- Execute `sudo systemctl daemon-reload`
-- Execute `sudo systemctl start notebook.service`
-- Check that your service is up and running: `sudo systemctl status notebook.service`
+That's it! Your Jupyter server should now be up and running, listening on IP address 192.168.4.1 and port 8080, and automatically starting whenever the system boots up. You can now access it by typing 192.168.4.1:8080 in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arise, try with a different web browser.
