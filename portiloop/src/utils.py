@@ -28,7 +28,7 @@ def get_portiloop_version():
                 version = 1
             elif "coral" in string:
                 version = 2
-            else: 
+            else:
                 version = -1
     except Exception:
         version = -1
@@ -38,12 +38,12 @@ def get_portiloop_version():
 class DummyAlsaMixer:
     def __init__(self):
         self.volume = 50
-    
+
     def getvolume(self):
         return [self.volume]
-    
+
     def setvolume(self, volume):
-        self.volume = volume   
+        self.volume = volume
 
 
 # class EDFRecorder:
@@ -68,7 +68,7 @@ class DummyAlsaMixer:
 #         self.edf_writer = EDFwriter(p_path=str(self.filename),
 #                                     f_file_type=EDFwriter.EDFLIB_FILETYPE_EDFPLUS,
 #                                     number_of_signals=nb_signals)
-        
+
 #         for signal in range(nb_signals):
 #             assert self.edf_writer.setSampleFrequency(signal, samples_per_datarecord_array) == 0
 #             assert self.edf_writer.setPhysicalMaximum(signal, physical_max) == 0
@@ -80,7 +80,7 @@ class DummyAlsaMixer:
 
 #     def close_recording_file(self):
 #         assert self.edf_writer.close() == 0
-    
+
 #     def add_recording_data(self, data):
 #         self.edf_buffer += data
 #         if len(self.edf_buffer) >= self.samples_per_datarecord_array:
@@ -110,7 +110,8 @@ class EDFRecorder:
         # Convert to float values
         data = data.astype(np.float32)
         data = data.transpose()
-        assert data.shape[0] == len(self.signal_labels), f"{data.shape[0]}!={len(self.signal_labels)}"
+        assert data.shape[0] == len(
+            self.signal_labels), f"{data.shape[0]}!={len(self.signal_labels)}"
         signal_headers = []
         for row_i in range(data.shape[0]):
             # If we only have zeros in that row, the channel was not activated so we must set the physical max and min manually
@@ -123,7 +124,7 @@ class EDFRecorder:
 
             # Create the signal header
             signal_headers.append(highlevel.make_signal_header(
-                self.signal_labels[row_i], 
+                self.signal_labels[row_i],
                 sample_frequency=self.frequency,
                 physical_max=phys_max,
                 physical_min=phys_min,))
@@ -135,7 +136,7 @@ class EDFRecorder:
             highlevel.write_edf(str(self.filename), data, signal_headers)
 
         os.remove(self.csv_filename)
-        
+
         print("Done.")
 
     def add_recording_data(self, data):
@@ -146,19 +147,19 @@ class EDFRecorder:
                 self.file.write(','.join([str(elt) for elt in point]) + '\n')
             self.writing_buffer = []
 
-        
 
 class LiveDisplay():
     def __init__(self, channel_names, window_len=100):
         self.datapoint_dim = len(channel_names)
         self.history = []
-        self.pp = ProgressPlot(plot_names=channel_names, max_window_len=window_len)
+        self.pp = ProgressPlot(plot_names=channel_names,
+                               max_window_len=window_len)
         self.matplotlib = False
 
     def add_datapoints(self, datapoints):
         """
         Adds 8 lists of datapoints to the plot
-        
+
         Args:
             datapoints: list of 8 lists of floats (or list of 8 floats)
         """
@@ -168,10 +169,10 @@ class LiveDisplay():
         for datapoint in datapoints:
             d = [[elt] for elt in datapoint]
             disp_list.append(d)
-            
+
             if self.matplotlib:
                 self.history += d[1]
-        
+
         if not self.matplotlib:
             # print(disp_list)
             # print(datapoints)
@@ -180,7 +181,7 @@ class LiveDisplay():
             plt.plot(self.history)
             plt.show()
             self.history = []
-    
+
     def add_datapoint(self, datapoint):
         disp_list = [[elt] for elt in datapoint]
         self.pp.update(disp_list)
@@ -189,6 +190,7 @@ class LiveDisplay():
 class Dummy:
     def __getattr__(self, attr):
         return lambda *args, **kwargs: None
+
 
 class CaptureFrontend(ABC):
     """
@@ -240,18 +242,19 @@ class ADSFrontend(CaptureFrontend):
         Actually initialize the capture process
         """
         self._p_capture = mp.Process(target=self.process,
-                                        args=(self.p_data_o,
-                                            self.p_msg_io_2,
-                                            self.duration,
-                                            self.frequency,
-                                            self.python_clock,
-                                            1.0,
-                                            self.channel_states)
-                                        )
+                                     args=(self.p_data_o,
+                                           self.p_msg_io_2,
+                                           self.duration,
+                                           self.frequency,
+                                           self.python_clock,
+                                           1.0,
+                                           self.channel_states)
+                                     )
         self._p_capture.start()
         self.capture_started = True
         # If any issue arises, we want to kill this process
-        print(f"PID capture: {self._p_capture.pid}. Kill this process if program crashes before end of execution.")
+        print(
+            f"PID capture: {self._p_capture.pid}. Kill this process if program crashes before end of execution.")
 
     def send_msg(self, msg):
         """
@@ -267,7 +270,7 @@ class ADSFrontend(CaptureFrontend):
         if self.capture_started:
             if self.p_msg_io.poll():
                 return self.p_msg_io.recv()
-            
+
     def get_data(self):
         """
         Returns data from capture process if any available. Otherwise returns None.
@@ -282,7 +285,7 @@ class ADSFrontend(CaptureFrontend):
         return int_to_float(np.array([point])) if point is not None else None
 
     def close(self):
-        # Empty pipes 
+        # Empty pipes
         while True:
             if self.p_data_i.poll():
                 _ = self.p_data_i.recv()
@@ -306,7 +309,7 @@ class FileFrontend(CaptureFrontend):
         self.stop_msg = False
         self.num_channels = num_channels
         self.channel_detect = channel_detect
-    
+
     def init_capture(self):
         """
         Initialize the file reader
@@ -360,28 +363,28 @@ class LSLStreamer:
         self.streams = streams
 
         lsl_info_raw = StreamInfo(name='Portiloop Raw Data',
-                        type='Raw EEG signal',
-                        channel_count=channel_count,
-                        nominal_srate=frequency,
-                        channel_format='float32',
-                        source_id=id)  
+                                  type='eeg',
+                                  channel_count=channel_count,
+                                  nominal_srate=frequency,
+                                  channel_format='float32',
+                                  source_id=id)
         self.lsl_outlet_raw = StreamOutlet(lsl_info_raw)
 
         if streams['filtered']:
             lsl_info = StreamInfo(name='Portiloop Filtered',
-                                    type='Filtered EEG',
-                                    channel_count=channel_count,
-                                    nominal_srate=frequency,
-                                    channel_format='float32',
-                                    source_id=id)  
+                                  type='eeg',
+                                  channel_count=channel_count,
+                                  nominal_srate=frequency,
+                                  channel_format='float32',
+                                  source_id=id)
             self.lsl_outlet = StreamOutlet(lsl_info)
 
         if streams['markers']:
             lsl_markers_info = StreamInfo(name='Portiloop_stimuli',
-                                    type='Markers',
-                                    channel_count=1,
-                                    channel_format='string',
-                                    source_id=id) 
+                                          type='Markers',
+                                          channel_count=1,
+                                          channel_format='string',
+                                          source_id=id)
             self.lsl_outlet_markers = StreamOutlet(lsl_markers_info)
 
     def push_filtered(self, data):
