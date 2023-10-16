@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from portiloop.src import ADS
+from portiloop.src.utils import Dummy
 
 if ADS:
     import alsaaudio
@@ -43,35 +44,31 @@ class Stimulator(ABC):
 # Example implementation for sleep spindles
 
 class SleepSpindleRealTimeStimulator(Stimulator):
-    def __init__(self):
-        self._sound = Path(__file__).parent.parent / 'sounds' / 'stimulus.wav'
-        print(f"DEBUG:{self._sound}")
+    def __init__(self, soundname=None, lsl_streamer=Dummy(), stimulation_delay=0.0, inter_stim_delay=0.0):
+        """
+        params: 
+            stimulation_delay (float): simple delay between a detection and a stimulation
+            inter_stim_delay (float): time to wait between a stimulation and the next detection 
+        """
+        if soundname is None:
+            self.soundname = 'stimulus.wav' # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
+        else:
+            self.soundname = soundname
+        self._sound = Path(__file__).parent.parent / 'sounds' / self.soundname
         self._thread = None
         self._lock = Lock()
         self.last_detected_ts = time.time()
         self.wait_t = 0.4  # 400 ms
         self.delayer = None
-        
-        lsl_markers_info = pylsl.StreamInfo(name='Portiloop_stimuli',
-                                  type='Markers',
-                                  channel_count=1,
-                                  channel_format='string',
-                                  source_id='portiloop1')  # TODO: replace this by unique device identifier
-        
-#         lsl_markers_info_fast = pylsl.StreamInfo(name='Portiloop_stimuli_fast',
-#                                   type='Markers',
-#                                   channel_count=1,
-#                                   channel_format='string',
-#                                   source_id='portiloop1')  # TODO: replace this by unique device identifier
-        
-        self.lsl_outlet_markers = pylsl.StreamOutlet(lsl_markers_info)
-#         self.lsl_outlet_markers_fast = pylsl.StreamOutlet(lsl_markers_info_fast)
-        
+        self.lsl_streamer = lsl_streamer
+
         # Initialize Alsa stuff
         # Open WAV file and set PCM device
         with wave.open(str(self._sound), 'rb') as f: 
-            device = 'default'
-
+            device = 'softvol'
+            
+            self.duration = f.getnframes() / float(f.getframerate())
+            
             format = None
 
             # 8bit is unsigned in wav files
@@ -89,21 +86,34 @@ class SleepSpindleRealTimeStimulator(Stimulator):
 
             self.periodsize = f.getframerate() // 8
 
-            self.pcm = alsaaudio.PCM(channels=f.getnchannels(), rate=f.getframerate(), format=format, periodsize=self.periodsize, device=device)
-            
+            try:
+                self.pcm = alsaaudio.PCM(channels=f.getnchannels(), rate=f.getframerate(), format=format, periodsize=self.periodsize, device=device)
+            except alsaaudio.ALSAAudioError as e:
+                self.pcm = Dummy()
+                raise e
+                
             # Store data in list to avoid reopening the file
-            data = f.readframes(self.periodsize)
-            self.wav_list = [data]
-            while data:
-                self.wav_list.append(data)
-                data = f.readframes(self.periodsize)            
+            self.wav_list = []
+            while True:
+                data = f.readframes(self.periodsize)  
+                if data:
+                    self.wav_list.append(data)
+                else: 
+                    break
+                    
+#         print(f"DEBUG: Stimulator will play sound {self.soundname}, duration: {self.duration:.3f} seconds")
+
 
     def play_sound(self):
         '''
         Open the wav file and play a sound
         '''
+        self.end = time.time()
         for data in self.wav_list:
             self.pcm.write(data) 
+            
+        # Added this to make sure the thread does not stop before the sound is done playing
+        time.sleep(self.duration)
     
     def stimulate(self, detection_signal):
         for sig in detection_signal:
@@ -114,7 +124,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                 
                 # Check if time since last stimulation is long enough
                 if ts - self.last_detected_ts > self.wait_t:
-                    if self.delayer is not None:
+                    if not isinstance(self.delayer, Dummy):
                         # If we have a delayer, notify it
                         self.delayer.detected()
                         # Send the LSL marer for the fast stimulation 
@@ -125,9 +135,8 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                 self.last_detected_ts = ts
 
     def send_stimulation(self, lsl_text, sound):
-        print(f"Stimulating with text: {lsl_text}")
         # Send lsl stimulation
-        self.lsl_outlet_markers.push_sample([lsl_text])
+        self.lsl_streamer.push_marker(lsl_text)
         # Send sound to patient
         if sound:
             with self._lock:
@@ -142,14 +151,21 @@ class SleepSpindleRealTimeStimulator(Stimulator):
             self._thread = None
     
     def test_stimulus(self):
+        start = time.time()
         with self._lock:
             if self._thread is None:
                 self._thread = Thread(target=self._t_sound, daemon=True)
                 self._thread.start()
+        
+#         print(f"DEBUG: Stimulation delay: {((self.end - start) * 1000):.2f}ms")
 
     def add_delayer(self, delayer):
         self.delayer = delayer
         self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", True)
+
+    def __del__(self):
+#         print("DEBUG: releasing PCM")
+        del self.pcm
 
 
 class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
@@ -200,8 +216,103 @@ class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
                 self.last_detected_ts = ts
 
 
+class Delayer(ABC):
+    """
+    Interface that defines Delayers for stimulation
+    """
+    @abstractmethod
+    def step(self, point):
+        pass
+
+    @abstractmethod
+    def step_timestep(self, point):
+        pass
+
+    @abstractmethod
+    def detected(self):
+        pass
+
+class TimingStates(Enum):
+    READY = 0
+    DELAYING = 1
+    WAITING = 2 
+
+class TimingDelayer(Delayer):
+    def __init__(self, stimulation_delay=0.0, inter_stim_delay=0.0, sample_freq=250):
+        """
+        Delays based on the timing 
+        params:
+            stimulation_delay (float): How much time to wait after a detection before stimulation
+            inter_stim_delay (float): How much time to wait after a stimulation before going back to a detection state
+        """
+        self.state = TimingStates.READY
+        self.stimulation_delay = stimulation_delay
+        self.inter_stim_delay = inter_stim_delay
+        self.time_counter = 0
+        self.sample_freq = sample_freq
+
+    def step(self, point):
+        """
+        Moves through the state machine
+        """
+        if self.state == TimingStates.READY:
+            return False
+        elif self.state == TimingStates.DELAYING:
+            if time.time() - self.delaying_start > self.stimulation_delay:
+                # Actually stimulate the patient after the delay
+                if self.stimulate is not None:
+                    self.stimulate() 
+                self.state = TimingStates.WAITING
+                self.waiting_start = time.time()
+                return True
+            return False
+        elif self.state == TimingStates.WAITING:
+            if time.time() - self.waiting_start > self.inter_stim_delay:
+                self.state = TimingStates.READY
+            return False
+
+    def step_timestep(self, point):
+        """
+        Moves through the state machine
+        """
+        if self.state == TimingStates.READY:
+            return False
+        elif self.state == TimingStates.DELAYING:
+            self.delaying_counter += 1
+            if self.delaying_counter > self.stimulation_delay * self.sample_freq:
+                # Actually stimulate the patient after the delay
+                if self.stimulate is not None:
+                    self.stimulate()
+                self.state = TimingStates.WAITING
+                self.waiting_counter = 0
+                return True
+            return False
+        elif self.state == TimingStates.WAITING:
+            self.waiting_counter += 1
+            if self.waiting_counter > self.inter_stim_delay * self.sample_freq:
+                self.state = TimingStates.READY
+            return False
+        
+    def detected(self):
+        """
+        Defines what happens when a detection comes depending on what state you are in
+        """
+        if self.state == TimingStates.READY:
+            self.state = TimingStates.DELAYING
+            self.delaying_start = time.time()
+            self.delaying_counter = 0
+
+
+
+class UpStateStates(Enum):
+    NO_SPINDLE = 0
+    BUFFERING = 1
+    DELAYING = 2 
+
+
 # Class that delays stimulation to always stimulate peak or through
-class UpStateDelayer:
+class UpStateDelayer(Delayer):
+
     def __init__(self, sample_freq, peak, time_to_buffer, stimulate=None): 
         '''
         args:
@@ -215,26 +326,26 @@ class UpStateDelayer:
         self.time_to_buffer = time_to_buffer
         self.stimulate = stimulate
         
-        self.state = States.NO_SPINDLE
+        self.state = UpStateStates.NO_SPINDLE
 
     def step(self, point):
         '''
         Step the delayer, ads a point to buffer if necessary.
         Returns True if stimulation is actually done
         '''
-        if self.state == States.NO_SPINDLE:
+        if self.state == UpStateStates.NO_SPINDLE:
             return False
-        elif self.state == States.BUFFERING:
+        elif self.state == UpStateStates.BUFFERING:
             self.buffer.append(point)
             # If we are done buffering, move on to the waiting stage
             if time.time() - self.time_started >= self.time_to_buffer:
                 # Compute the necessary time to wait
                 self.time_to_wait = self.compute_time_to_wait()
-                self.state = States.DELAYING
+                self.state = UpStateStates.DELAYING
                 self.buffer = []
                 self.time_started = time.time()
             return False
-        elif self.state == States.DELAYING:
+        elif self.state == UpStateStates.DELAYING:
             # Check if we are done delaying
             if time.time() - self.time_started >= self.time_to_wait:
                 # Actually stimulate the patient after the delay
@@ -242,7 +353,7 @@ class UpStateDelayer:
                     self.stimulate()
                 # Reset state
                 self.time_to_wait = -1
-                self.state = States.NO_SPINDLE
+                self.state = UpStateStates.NO_SPINDLE
                 return True
             return False
 
@@ -251,19 +362,19 @@ class UpStateDelayer:
         Step the delayer, ads a point to buffer if necessary.
         Returns True if stimulation is actually done
         '''
-        if self.state == States.NO_SPINDLE:
+        if self.state == UpStateStates.NO_SPINDLE:
             return False
-        elif self.state == States.BUFFERING:
+        elif self.state == UpStateStates.BUFFERING:
             self.buffer.append(point)
             # If we are done buffering, move on to the waiting stage
             if len(self.buffer) >= self.time_to_buffer * self.sample_freq:
                 # Compute the necessary time to wait
                 self.time_to_wait = self.compute_time_to_wait()
-                self.state = States.DELAYING
+                self.state = UpStateStates.DELAYING
                 self.buffer = []
                 self.delaying_counter = 0
             return False
-        elif self.state == States.DELAYING:
+        elif self.state == UpStateStates.DELAYING:
             # Check if we are done delaying
             self.delaying_counter += 1
             if self.delaying_counter >= self.time_to_wait * self.sample_freq:
@@ -272,13 +383,13 @@ class UpStateDelayer:
                     self.stimulate()
                 # Reset state
                 self.time_to_wait = -1
-                self.state = States.NO_SPINDLE
+                self.state = UpStateStates.NO_SPINDLE
                 return True
             return False
 
     def detected(self):
-        if self.state == States.NO_SPINDLE:
-            self.state = States.BUFFERING
+        if self.state == UpStateStates.NO_SPINDLE:
+            self.state = UpStateStates.BUFFERING
 
     def compute_time_to_wait(self):
         """
@@ -312,11 +423,6 @@ class UpStateDelayer:
             print("Average distance between peaks is smaller than the time to last peak, decrease buffer size")
             return (len(self.buffer) - peaks[-1]) * (1.0 / self.sample_freq)
         return (avg_dist - (len(self.buffer) - peaks[-1])) * (1.0 / self.sample_freq)
-
-class States(Enum):
-    NO_SPINDLE = 0
-    BUFFERING = 1
-    DELAYING = 2 
 
 
 if __name__ == "__main__":

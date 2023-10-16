@@ -127,7 +127,7 @@ class SleepSpindleRealTimeDetector(Detector):
         input_scale, input_zero_point = input_details[1]["quantization"]
         input_x = np.asarray(input_x) / input_scale + input_zero_point
         input_data_x = input_x.astype(input_details[1]["dtype"])
-        input_data_x = np.expand_dims(input_data_x, (0, 1))
+        input_data_x = input_data_x.reshape((1, 1) + input_data_x.shape)
 
         # input_scale, input_zero_point = input_details[0]["quantization"]
         # input = np.asarray(input) / input_scale + input_zero_point

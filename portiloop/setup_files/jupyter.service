@@ -1,0 +1,16 @@
+[Unit]
+Description=Jupyter Notebook Server
+After=create_ap.service
+After=hostapd.service
+After=dnsmasq.service
+
+[Service]
+Type=exec
+ExecStart=/bin/bash -c "XDG_RUNTIME_DIR=/run/user/`id -u` /usr/bin/jupyter notebook --no-browser --ip 192.168.4.1 --port 8080 --notebook-dir=/home/mendel"
+User=mendel
+Group=mendel
+Restart=on-failure
+RestartSec=60s
+
+[Install]
+WantedBy=multi-user.target

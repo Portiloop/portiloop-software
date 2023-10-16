@@ -96,7 +96,6 @@ def to_ads_frequency(frequency):
 def mod_config(config, datarate, channel_modes):
     
     # datarate:
-
     possible_datarates = [(250, 0x06),
                           (500, 0x05),
                           (1000, 0x04),
@@ -115,22 +114,26 @@ def mod_config(config, datarate, channel_modes):
     config[1] = new_cf1
     
     # bias:
-    assert len(channel_modes) == 7
+    # assert len(channel_modes) == 7
     config[13] = 0x00  # clear BIAS_SENSP
     config[14] = 0x00  # clear BIAS_SENSN
     for chan_i, chan_mode in enumerate(channel_modes):
-        n = 6 + chan_i
-        mod = config[n] & 0x78  # clear PDn and MUX[2:0]
+        config_idx = chan_i + 5
+
+        mod = config[config_idx] & 0x78  # clear PDn and MUX[2:0]
         if chan_mode == 'simple':
             # If channel is activated, we send the channel's output to the BIAS mechanism
-            bit_i = 1 << chan_i + 1
+            bit_i = 1 << chan_i
             config[13] = config[13] | bit_i
             config[14] = config[14] | bit_i
+        elif chan_mode == 'bias':
+            # Set the last 3 bits to 010 to use for BIAS measurement
+            mod = mod | 0x02
         elif chan_mode == 'disabled':
             mod = mod | 0x81  # PDn = 1 and input shorted (001)
         else:
             assert False, f"Wrong key: {chan_mode}."
-        config[n] = mod
+        config[config_idx] = mod
     # for n, c in enumerate(config):  # print ADS1299 configuration registers
     #     print(f"config[{n}]:\t{c:08b}\t({hex(c)})")
     return config

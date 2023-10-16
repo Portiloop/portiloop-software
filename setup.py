@@ -22,7 +22,7 @@ requirements_list = ['wheel',
 if is_coral():
     requirements_list += ['spidev',
                           'pylsl-coral',
-                          'pyalsaaudio']
+                          'pyalsaaudio==0.9.2']
 else:
     requirements_list += ['gradio',
                           'tensorflow',

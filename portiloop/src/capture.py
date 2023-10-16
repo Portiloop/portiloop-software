@@ -1,28 +1,33 @@
-
-
+from abc import ABC, abstractmethod
+import json
+from multiprocessing import Process, Queue, Value
+import os
 from time import sleep
 import time
 import numpy as np
 from copy import deepcopy
 from datetime import datetime
-import multiprocessing as mp
 import warnings
 from threading import Thread, Lock
 from portiloop.src import ADS
 
 if ADS:
     import alsaaudio
+    from alsaaudio import ALSAAudioError
     from portiloop.src.hardware.frontend import Frontend
-    from portiloop.src.hardware.leds import LEDs, Color
 
-from portiloop.src.stimulation import UpStateDelayer
+from portiloop.src.stimulation import TimingDelayer, UpStateDelayer
 
-
-from portiloop.src.processing import FilterPipeline, int_to_float
+from portiloop.src.processing import FilterPipeline
 from portiloop.src.config import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
-from portiloop.src.utils import FileReader, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH, RECORDING_PATH
+from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH, RECORDING_PATH, get_portiloop_version
 from IPython.display import clear_output, display
 import ipywidgets as widgets
+import socket
+from pathlib import Path
+
+
+PORTILOOP_ID = f"{socket.gethostname()}-portiloop"
 
 
 def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_msg_in, channel_states):
@@ -40,16 +45,10 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
     
     sample_time = 1 / frequency
 
-    frontend = Frontend()
-    leds = LEDs()
-    leds.led2(Color.PURPLE)
-    leds.aquisition(True)
+    version = get_portiloop_version()
+    frontend = Frontend(version)
     
     try:
-        data = frontend.read_regs(0x00, 1)
-        assert data == [0x3E], "The communication with the ADS failed, please try again."
-        leds.led2(Color.BLUE)
-        
         config = FRONTEND_CONFIG
         if python_clock:  # set ADS to 2 * frequency
             datarate = 2 * frequency
@@ -58,19 +57,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         config = mod_config(config, datarate, channel_states)
         
         frontend.write_regs(0x00, config)
-        data = frontend.read_regs(0x00, len(config))
-        assert data == config, f"Wrong config: {data} vs {config}"
-        frontend.start()
-        leds.led2(Color.PURPLE)
-        while not frontend.is_ready():
-            pass
-
-        # Set up of leds
-        leds.aquisition(True)
-        sleep(0.5)
-        leds.aquisition(False)
-        sleep(0.5)
-        leds.aquisition(True)
+        # data = frontend.read_regs(0x00, len(config))
 
         c = True
 
@@ -114,73 +101,254 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         p_msg_io.send(("PRT", f"Average frequency: {1 / tot} Hz for {it} samples"))
 
     finally:
-        leds.aquisition(False)
-        leds.close()
-        frontend.close()
         p_msg_io.send('STOP')
         p_msg_io.close()
         p_data_o.close()
     
+def start_capture(
+        detector_cls,
+        stimulator_cls,
+        capture_dictionary,
+        q_msg, 
+        pause_value
+): 
+#     print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
 
+    # Initialize data frontend
+    fake_filename = RECORDING_PATH / 'test_recording.csv'
+    capture_frontend = ADSFrontend(
+        duration=capture_dictionary['duration'],
+        frequency=capture_dictionary['frequency'],
+        python_clock=capture_dictionary['python_clock'],
+        channel_states=capture_dictionary['channel_states'],
+        process=capture_process,
+    ) if capture_dictionary['signal_input'] == "ADS" else FileFrontend(fake_filename, capture_dictionary['nb_channels'], capture_dictionary['channel_detection'])
+
+    # Initialize detector, LSL streamer and stimulatorif requested
+    detector = detector_cls(capture_dictionary['threshold'], channel=capture_dictionary['channel_detection']) if detector_cls is not None else None
+    streams = {
+            'filtered': filter,
+            'markers': detector is not None,
+        }
+#     print(f"DEBUG: Portiloop ID: {PORTILOOP_ID}")
+    lsl_streamer = LSLStreamer(streams, capture_dictionary['nb_channels'], capture_dictionary['frequency'], id=PORTILOOP_ID) if capture_dictionary['lsl'] else Dummy()
+    stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer) if stimulator_cls is not None else None
+
+    # Initialize filtering pipeline
+    if filter:
+        fp = FilterPipeline(nb_channels=capture_dictionary['nb_channels'],
+                            sampling_rate=capture_dictionary['frequency'],
+                            power_line_fq=capture_dictionary['filter_settings']['power_line'],
+                            use_custom_fir=capture_dictionary['filter_settings']['custom_fir'],
+                            custom_fir_order=capture_dictionary['filter_settings']['custom_fir_order'],
+                            custom_fir_cutoff=capture_dictionary['filter_settings']['custom_fir_cutoff'],
+                            alpha_avg=capture_dictionary['filter_settings']['polyak_mean'],
+                            alpha_std=capture_dictionary['filter_settings']['polyak_std'],
+                            epsilon=capture_dictionary['filter_settings']['epsilon'],
+                            filter_args=capture_dictionary['filter_settings']['filter_args'])
+    
+    # Launch the capture process
+    capture_frontend.init_capture()
+
+    # Initialize display if requested
+    live_disp = LiveDisplay(channel_names=capture_dictionary['signal_labels'], window_len=capture_dictionary['width_display']) if capture_dictionary['display'] else Dummy()
+
+    # Initialize recording if requested
+    recorder = EDFRecorder(capture_dictionary['signal_labels'], capture_dictionary['filename'], capture_dictionary['frequency']) if capture_dictionary['record'] else Dummy()
+    recorder.open_recording_file()
+
+    # Buffer used for the visualization and the recording
+    buffer = []
+
+    # Initialize stimulation delayer if requested
+    delay = not ((capture_dictionary['stim_delay'] == 0.0) and (capture_dictionary['inter_stim_delay'] == 0.0)) and (stimulator is not None)
+    delay_phase = (not delay) and (not capture_dictionary['spindle_detection_mode'] == 'Fast') and (stimulator is not None)
+    if delay:
+        stimulation_delayer = TimingDelayer(
+            stimulation_delay=capture_dictionary['stim_delay'],
+            inter_stim_delay=capture_dictionary['inter_stim_delay']
+        )
+    elif delay_phase:
+        stimulation_delayer = UpStateDelayer(
+            capture_dictionary['frequency'], 
+            capture_dictionary['spindle_detection_mode'] == 'Peak', 0.3)
+    else:
+        stimulation_delayer = Dummy()
+        
+    if stimulator is not None:
+        stimulator.add_delayer(stimulation_delayer)
+
+    # Get the metadata and save it to a file
+    metadata = capture_dictionary
+    # Split the original path into its components
+    dirname, basename = os.path.split(capture_dictionary['filename'])
+    # Split the file name into its name and extension components
+    name, _ = os.path.splitext(basename)
+    # Define the new file name
+    new_name = f"{name}_metadata.json"
+    # Join the components back together into the new file path
+    metadata_path = os.path.join(dirname, new_name)
+#     print(f"DEBUG: Saving metadata to {metadata_path}")
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f, indent=4)
+ 
+    # Initialize the variable to keep track of whether we are in a detection state or not for the markers
+    prev_pause = pause_value.value
+
+    if detector is not None:
+        marker_str = LSLStreamer.string_for_detection_activation(prev_pause)
+        lsl_streamer.push_marker(marker_str)
+
+    # Main capture loop
+    while True:
+        
+        # First, we send all outgoing messages to the capture process
+        try:
+            msg = q_msg.get_nowait()
+            capture_frontend.send_msg(msg)
+        except:
+            pass
+        
+        # Then, we check if we have received a message from the capture process
+        msg = capture_frontend.get_msg()
+        # Either we have received a stop message, or a print message.
+        if msg is None:
+            pass
+        elif msg == 'STOP':
+            break
+        elif msg[0] == 'PRT':
+            print(msg[1])
+
+        # Then, we retrieve the data from the capture process
+        raw_point = capture_frontend.get_data()
+        # If we have no data, we continue to the next iteration
+        if raw_point is None:
+            continue
+        
+        # Go through filtering pipeline
+        if filter:
+            filtered_point = fp.filter(deepcopy(raw_point))
+        else:
+            filtered_point = deepcopy(raw_point)
+
+        # Contains the filtered point (if filtering is off, contains a copy of the raw point)
+        filtered_point = filtered_point.tolist()
+        raw_point = raw_point.tolist()
+
+        # Send both raw and filtered points over LSL
+        lsl_streamer.push_raw(raw_point[-1])
+        if filter:
+            lsl_streamer.push_filtered(filtered_point[-1])
+        
+        # Check if detection is on or off
+        pause = pause_value.value
+
+        # If the state has changed since last iteration, we send a marker
+        if pause != prev_pause and detector is not None:
+            lsl_streamer.push_marker(LSLStreamer.string_for_detection_activation(pause))
+            prev_pause = pause
+
+        # If detection is on
+        if detector is not None and not pause:
+            # Detect using the latest point
+            detection_signal = detector.detect(filtered_point)
+
+            # Stimulate
+            if stimulator is not None:                    
+                stimulator.stimulate(detection_signal)
+
+            # Adds point to buffer for delayed stimulation
+            stimulation_delayer.step(filtered_point[0][capture_dictionary['channel_detection'] - 1])
+        
+        # Add point to the buffer to send to viz and recorder
+        buffer += filtered_point
+        if len(buffer) >= 50:
+            live_disp.add_datapoints(buffer)
+            recorder.add_recording_data(buffer)
+            buffer = []
+
+    # close the frontend
+    capture_frontend.close()
+    recorder.close_recording_file()
+
+    del lsl_streamer
+    del stimulation_delayer
+    del stimulator
+    del detector
 
 class Capture:
     def __init__(self, detector_cls=None, stimulator_cls=None):
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
         self.filename = EDF_PATH / 'recording.edf'
-        self._p_capture = None
-        self.__capture_on = False
+        
+        self.version = get_portiloop_version()
+
+        # Check which version of the ADS we are in.
+        if self.version != -1:
+            frontend = Frontend(self.version)
+            self.nb_channels = frontend.get_version()
+
+#         print(f"DEBUG: Current hardware: ADS1299 {self.nb_channels} channels | Portiloop Version: {self.version}")
+
+        # General default parameters
         self.frequency = 250
         self.duration = 28800
         self.power_line = 60
+
+        # Filtering parameters
         self.polyak_mean = 0.1
         self.polyak_std = 0.001
         self.epsilon = 0.000001
         self.custom_fir = False
         self.custom_fir_order = 20
         self.custom_fir_cutoff = 30
+
+        # Experiment options
         self.filter = True
         self.filter_args = [True, True, True]
         self.record = False
         self.detect = False
         self.stimulate = False
-        self.threshold = 0.82
         self.lsl = False
         self.display = False
+        self.threshold = 0.82
         self.signal_input = "ADS"
         self.python_clock = True
-        self.edf_writer = None
-        self.edf_buffer = []
-        self.signal_labels = ['Common Mode', 'ch2', 'ch3', 'ch4', 'ch5', 'ch6', 'ch7', 'ch8']
-        self._lock_msg_out = Lock()
-        self._msg_out = None
+
+        # Communication parameters for messages with capture 
         self._t_capture = None
-        self.channel_states = ['disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled', 'disabled']
+        self.q_msg = Queue()
+        self.pause_value = Value('b', True)
+
+        # Channel parameters
+        self.signal_labels = [f"ch{i+1}" for i in range(self.nb_channels)]
+        self.channel_states = ['bias'] + ['disabled' for _ in range(self.nb_channels - 1)]
         self.channel_detection = 2
+        self.detection_sound = "stimul_15ms.wav"
+
+        # Delayer parameters
         self.spindle_detection_mode = 'Fast'
         self.spindle_freq = 10
-        
+        self.stim_delay = 0.0
+        self.inter_stim_delay = 0.0
+
+        # Stimulator and detector classes
         self.detector_cls = detector_cls
         self.stimulator_cls = stimulator_cls
-        
-        self._test_stimulus_lock = Lock()
-        self._test_stimulus = False
-        
-        self._pause_detect_lock = Lock()
-        self._pause_detect = True
-        
+
         if ADS:
             try:
                 mixers = alsaaudio.mixers()
                 if len(mixers) <= 0:
                     warnings.warn(f"No ALSA mixer found.")
                     self.mixer = DummyAlsaMixer()
-                elif 'PCM' in mixers:
-                    self.mixer = alsaaudio.Mixer(control='PCM')
+#                 elif 'PCM' in mixers :
+#                     self.mixer = alsaaudio.Mixer(control='PCM')
                 else:
-                    warnings.warn(f"Could not find mixer PCM, using {mixers[0]} instead.")
-                    self.mixer = alsaaudio.Mixer(control=mixers[0])
+                    self.mixer = alsaaudio.Mixer(control='SoftMaster', device='dmixer')
             except ALSAAudioError as e:
-                warnings.warn(f"No ALSA mixer found.")
+                print(e)
+                warnings.warn(f"No ALSA mixer found. Volume control will not be available from notebook.\nAvailable mixers were:\n{mixers}")
                 self.mixer = DummyAlsaMixer()
             
             self.volume = self.mixer.getvolume()[0]  # we will set the same volume on all channels
@@ -191,95 +359,38 @@ class Capture:
         # widgets ===============================
         
         # CHANNELS ------------------------------
-        
-#         self.b_radio_ch1 = widgets.RadioButtons(
-#             options=['disabled', 'simple'],
-#             value='disabled',
-#             disabled=True
-#         )
-        
-        self.b_radio_ch2 = widgets.RadioButtons(
-            options=['disabled', 'simple'],
-            value='disabled',
-            disabled=False
-        )
-        
-        self.b_radio_ch3 = widgets.RadioButtons(
-            options=['disabled', 'simple'],
-            value='disabled',
-            disabled=False
-        )
-        
-        self.b_radio_ch4 = widgets.RadioButtons(
-            options=['disabled', 'simple'],
-            value='disabled',
-            disabled=False
-        )
-        
-        self.b_radio_ch5 = widgets.RadioButtons(
-            options=['disabled', 'simple'],
-            value='disabled',
-            disabled=False
-        )
-        
-        self.b_radio_ch6 = widgets.RadioButtons(
-            options=['disabled', 'simple'],
-            value='disabled',
-            disabled=False
-        )
-        
-        self.b_radio_ch7 = widgets.RadioButtons(
-            options=['disabled', 'simple'],
-            value='disabled',
-            disabled=False
-        )
-        
-        self.b_radio_ch8 = widgets.RadioButtons(
-            options=['disabled', 'simple'],
-            value='disabled',
-            disabled=False
-        )
+        self.chann_buttons = []
+        for i in range(self.nb_channels):
+            self.chann_buttons.append(widgets.RadioButtons(
+                disabled=False,
+                # button_style='info',  # 'success', 'info', 'warning', 'danger' or ''
+                tooltip=f'Enable channel {i+1}',
+                options=['disabled', 'simple', 'bias'],
+                value='bias' if i == 0 else 'disabled',
+            ))
         
         self.b_channel_detect = widgets.Dropdown(
-            options=[('2', 2), ('3', 3), ('4', 4), ('5', 5), ('6', 6), ('7', 7), ('8', 8)],
+            options=[(f'{i+1}', i+1) for i in range(self.nb_channels)],
             value=2,
             description='Detection Channel:',
             disabled=False,
             style={'description_width': 'initial'}
         )
         
-        self.b_spindle_mode = widgets.Dropdown(
-            options=['Fast', 'Peak', 'Through'],
-            value='Fast',
-            description='Spindle Stimulation Mode',
-            disabled=False,
-            style={'description_width': 'initial'}
-        )
-        
-        self.b_spindle_freq = widgets.IntText(
-            value=self.spindle_freq,
-            description='Spindle Freq (Hz):',
+        sound_dir = Path.home() / 'portiloop-software' / 'portiloop' / 'sounds'
+        options = [(sound[:-4], sound) for sound in os.listdir(sound_dir) if sound[-4:] == ".wav"]
+        self.b_sound_detect = widgets.Dropdown(
+            options=options,
+            value="stimul_15ms.wav",
+            description='Sound:',
             disabled=False,
             style={'description_width': 'initial'}
         )
         
         self.b_accordion_channels = widgets.Accordion(
             children=[
-                widgets.GridBox([
-                    widgets.Label('CH2'),
-                    widgets.Label('CH3'),
-                    widgets.Label('CH4'),
-                    widgets.Label('CH5'),
-                    widgets.Label('CH6'),
-                    widgets.Label('CH7'),
-                    widgets.Label('CH8'),
-                    self.b_radio_ch2,
-                    self.b_radio_ch3,
-                    self.b_radio_ch4,
-                    self.b_radio_ch5,
-                    self.b_radio_ch6,
-                    self.b_radio_ch7,
-                    self.b_radio_ch8], layout=widgets.Layout(grid_template_columns="repeat(7, 90px)")
+                widgets.GridBox([widgets.Label(f"CH{i+1}") for i in range(self.nb_channels)] + self.chann_buttons, 
+                                layout=widgets.Layout(grid_template_columns=f"repeat({self.nb_channels}, 90px)")
                 )
             ])
         self.b_accordion_channels.set_title(index = 0, title = 'Channels')
@@ -299,7 +410,7 @@ class Capture:
             description='Detection',
             disabled=True,
             button_style='', # 'success', 'info', 'warning', 'danger' or ''
-            tooltips=['Detector and stimulator active', 'Detector and stimulator paused'],
+            tooltips=['Detector and stimulator paused', 'Detector and stimulator active'],
         )
         
         self.b_clock = widgets.ToggleButtons(
@@ -307,8 +418,7 @@ class Capture:
             description='Clock:',
             disabled=False,
             button_style='', # 'success', 'info', 'warning', 'danger' or ''
-            tooltips=['Use Coral clock (very precise, not very timely)',
-                      'Use ADS clock (not very precise, very timely)'],
+            tooltips=['Use ADS clock (not very precise, very timely)', 'Use Coral clock (very precise, not very timely)'],
         )
         
         self.b_power_line = widgets.ToggleButtons(
@@ -423,6 +533,7 @@ class Capture:
                     ])
                 ])
             ])
+        
         self.b_accordion_filter.set_title(index = 0, title = 'Filtering')
         
         self.b_duration = widgets.IntText(
@@ -484,7 +595,7 @@ class Capture:
         
         self.b_test_stimulus = widgets.Button(
             description='Test stimulus',
-            disabled=True,
+            disabled=False,
             button_style='', # 'success', 'info', 'warning', 'danger' or ''
             tooltip='Send a test stimulus'
         )
@@ -495,9 +606,97 @@ class Capture:
             button_style='', # 'success', 'info', 'warning', 'danger' or ''
             tooltip='Check if electrodes are properly connected'
         )
+
+        self.b_stim_delay = widgets.FloatSlider(
+            value=self.stim_delay,
+            min=0.0,
+            max=10.0,
+            step=0.01,
+            description="Stim Delay",
+            tooltip="Time delay in seconds between detection and stimulation", 
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
+
+        self.b_inter_stim_delay = widgets.FloatSlider(
+            value=self.inter_stim_delay,
+            min=0.0,
+            max=10.0,
+            step=0.01,
+            description="Inter Stim Delay",
+            tooltip="Minimum time delay in seconds between stimulation and next detection", 
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
         
-        # CALLBACKS ----------------------
+        self.b_spindle_mode = widgets.Dropdown(
+            options=['Fast', 'Peak', 'Through'],
+            value='Fast',
+            description='Spindle Stimulation Mode',
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
         
+        self.b_spindle_freq = widgets.IntText(
+            value=self.spindle_freq,
+            description='Spindle Freq (Hz):',
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
+
+        self.b_accordion_delaying = widgets.Accordion(
+            children=[
+                widgets.VBox([
+                    self.b_stim_delay,
+                    self.b_inter_stim_delay,
+                    widgets.HBox([
+                        self.b_spindle_mode, 
+                        self.b_spindle_freq
+                    ])
+                ]),
+            ]
+        )
+        self.b_accordion_delaying.set_title(index = 0, title = 'Delaying')
+        
+        self.register_callbacks()
+
+        self.display_buttons()
+
+        # Get all the metadata from this recording: 
+
+    def get_metadata(self):
+        input_dict = vars(self)
+        basic_types = (int, float, bool, str, list, dict, tuple, set)
+        output_dict = {}
+        for key, value in input_dict.items():
+            # Remove all buttons and button lists from the metadata
+            if "button" in key or "_b" in key:
+                continue
+            if isinstance(value, basic_types):
+                output_dict[key] = value
+                
+        output_dict['filename'] = str(self.filename)
+
+        # Make sure we dont have the filter settings in duplicates 
+        for key, value in output_dict['filter_settings'].items():
+            if key in output_dict:
+                output_dict.pop(key)
+
+        return output_dict
+
+
+    def on_b_channel_state(self, value, i):
+        self.channel_states[i] = value['new']
+
+    def register_callbacks(self):
+
+        for i in range(self.nb_channels):
+            def callback_wrapper(channel_idx):
+                def callback(change):
+                    self.on_b_channel_state(change, channel_idx)
+                return callback
+            self.chann_buttons[i].observe(callback_wrapper(i), 'value')
+
         self.b_capture.observe(self.on_b_capture, 'value')
         self.b_clock.observe(self.on_b_clock, 'value')
         self.b_signal_input.observe(self.on_b_signal_input, 'value')
@@ -514,14 +713,8 @@ class Capture:
         self.b_lsl.observe(self.on_b_lsl, 'value')
         self.b_display.observe(self.on_b_display, 'value')
         self.b_filename.observe(self.on_b_filename, 'value')
-        self.b_radio_ch2.observe(self.on_b_radio_ch2, 'value')
-        self.b_radio_ch3.observe(self.on_b_radio_ch3, 'value')
-        self.b_radio_ch4.observe(self.on_b_radio_ch4, 'value')
-        self.b_radio_ch5.observe(self.on_b_radio_ch5, 'value')
-        self.b_radio_ch6.observe(self.on_b_radio_ch6, 'value')
-        self.b_radio_ch7.observe(self.on_b_radio_ch7, 'value')
-        self.b_radio_ch8.observe(self.on_b_radio_ch8, 'value')
         self.b_channel_detect.observe(self.on_b_channel_detect, 'value')
+        self.b_sound_detect.observe(self.on_b_sound_detect, 'value')
         self.b_spindle_mode.observe(self.on_b_spindle_mode, 'value')
         self.b_spindle_freq.observe(self.on_b_spindle_freq, 'value')
         self.b_power_line.observe(self.on_b_power_line, 'value')
@@ -536,8 +729,9 @@ class Capture:
         self.b_test_stimulus.on_click(self.on_b_test_stimulus)
         self.b_test_impedance.on_click(self.on_b_test_impedance)
         self.b_pause.observe(self.on_b_pause, 'value')
-
-        self.display_buttons()
+        self.b_stim_delay.observe(self.on_b_delay, 'value')
+        self.b_inter_stim_delay.observe(self.on_b_inter_delay, 'value')
+        
 
 
     def __del__(self):
@@ -546,6 +740,7 @@ class Capture:
     def display_buttons(self):
         display(widgets.VBox([self.b_accordion_channels,
                               self.b_channel_detect,
+                              self.b_sound_detect,
                               self.b_frequency,
                               self.b_duration,
                               self.b_filename,
@@ -555,8 +750,8 @@ class Capture:
                               widgets.HBox([self.b_filter, self.b_detect, self.b_stimulate, self.b_record, self.b_lsl, self.b_display]),
                               widgets.HBox([self.b_threshold, self.b_test_stimulus]),
                               self.b_volume,
-                              widgets.HBox([self.b_spindle_mode, self.b_spindle_freq]),
-                              self.b_test_impedance,
+                            #   self.b_test_impedance,
+                              self.b_accordion_delaying,
                               self.b_accordion_filter,
                               self.b_capture,
                               self.b_pause]))
@@ -571,13 +766,8 @@ class Capture:
         self.b_lsl.disabled = False
         self.b_display.disabled = False
         self.b_clock.disabled = False
-        self.b_radio_ch2.disabled = False
-        self.b_radio_ch3.disabled = False
-        self.b_radio_ch4.disabled = False
-        self.b_radio_ch5.disabled = False
-        self.b_radio_ch6.disabled = False
-        self.b_radio_ch7.disabled = False
-        self.b_radio_ch8.disabled = False
+        for i in range(self.nb_channels):
+            self.chann_buttons[i].disabled = False
         self.b_power_line.disabled = False
         self.b_signal_input.disabled = False
         self.b_channel_detect.disabled = False
@@ -595,8 +785,11 @@ class Capture:
         self.b_stimulate.disabled = not self.detect
         self.b_threshold.disabled = not self.detect
         self.b_pause.disabled = not self.detect
-        self.b_test_stimulus.disabled = True # only enabled when running
+        self.b_test_stimulus.disabled = False # only enabled when running
         self.b_test_impedance.disabled = False
+        self.b_stim_delay.disabled = False
+        self.b_inter_stim_delay.disabled = False
+        self.b_sound_detect.disabled = False
     
     def disable_buttons(self):
         self.b_frequency.disabled = True
@@ -610,13 +803,8 @@ class Capture:
         self.b_lsl.disabled = True
         self.b_display.disabled = True
         self.b_clock.disabled = True
-        self.b_radio_ch2.disabled = True
-        self.b_radio_ch3.disabled = True
-        self.b_radio_ch4.disabled = True
-        self.b_radio_ch5.disabled = True
-        self.b_radio_ch6.disabled = True
-        self.b_radio_ch7.disabled = True
-        self.b_radio_ch8.disabled = True
+        for i in range(self.nb_channels):
+            self.chann_buttons[i].disabled = True
         self.b_channel_detect.disabled = True
         self.b_spindle_freq.disabled = True
         self.b_spindle_mode.disabled = True
@@ -632,30 +820,15 @@ class Capture:
         self.b_custom_fir_order.disabled = True
         self.b_custom_fir_cutoff.disabled = True
         self.b_threshold.disabled = True
-        self.b_test_stimulus.disabled = not self.stimulate # only enabled when running
+        # self.b_test_stimulus.disabled = not self.stimulate # only enabled when running
         self.b_test_impedance.disabled = True
-    
-    def on_b_radio_ch2(self, value):
-        self.channel_states[0] = value['new']
-    
-    def on_b_radio_ch3(self, value):
-        self.channel_states[1] = value['new']
-    
-    def on_b_radio_ch4(self, value):
-        self.channel_states[2] = value['new']
-    
-    def on_b_radio_ch5(self, value):
-        self.channel_states[3] = value['new']
-    
-    def on_b_radio_ch6(self, value):
-        self.channel_states[4] = value['new']
-    
-    def on_b_radio_ch7(self, value):
-        self.channel_states[5] = value['new']
-    
-    def on_b_radio_ch8(self, value):
-        self.channel_states[6] = value['new']
-        
+        self.b_stim_delay.disabled = True
+        self.b_inter_stim_delay.disabled = True
+        self.b_sound_detect.disabled = True
+
+    def on_b_sound_detect(self, value):
+        self.detection_sound = value['new']
+
     def on_b_channel_detect(self, value):
         self.channel_detection = value['new']
         
@@ -678,30 +851,35 @@ class Capture:
                 self.frequency = to_ads_frequency(self.frequency)
                 self.b_frequency.value = self.frequency
             self.display_buttons()
-            with self._lock_msg_out:
-                self._msg_out = None
             if self._t_capture is not None:
                 warnings.warn("Capture already running, operation aborted.")
                 return
             detector_cls = self.detector_cls if self.detect else None
             stimulator_cls = self.stimulator_cls if self.stimulate else None
+
+            self.filter_settings = {
+                "power_line": self.power_line,
+                "custom_fir": self.custom_fir,
+                "custom_fir_order": self.custom_fir_order,
+                "custom_fir_cutoff": self.custom_fir_cutoff,
+                "polyak_mean": self.polyak_mean,
+                "polyak_std": self.polyak_std,
+                "epsilon": self.epsilon,
+                "filter_args": self.filter_args,
+            }
+
+            self.width_display = 5 * self.frequency # Display 5 seconds of signal
             
-            self._t_capture = Thread(target=self.start_capture,
-                                args=(self.filter,
-                                      self.filter_args,
-                                      detector_cls,
-                                      self.threshold,
-                                      self.channel_detection,
-                                      stimulator_cls,
-                                      self.record,
-                                      self.lsl,
-                                      self.display,
-                                      2500,
-                                      self.python_clock))
+            self._t_capture = Process(target=start_capture,
+                                     args=(detector_cls,
+                                           stimulator_cls,
+                                           self.get_metadata(),
+                                           self.q_msg,
+                                           self.pause_value,))
             self._t_capture.start()
+            print(f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
         elif val == 'Stop':
-            with self._lock_msg_out:
-                self._msg_out = 'STOP'
+            self.q_msg.put('STOP')
             assert self._t_capture is not None
             self._t_capture.join()
             self._t_capture = None
@@ -757,7 +935,6 @@ class Capture:
                 val += '.edf'
             self.filename = EDF_PATH / val
         else:
-            now = datetime.now()
             self.filename = EDF_PATH / 'recording.edf'
         
     def on_b_duration(self, value):
@@ -844,11 +1021,33 @@ class Capture:
             self.mixer.setvolume(self.volume)
     
     def on_b_test_stimulus(self, b):
-        with self._test_stimulus_lock:
-            self._test_stimulus = True
+        self.run_test_stimulus()
             
     def on_b_test_impedance(self, b):
-        frontend = Frontend()
+        self.run_impedance_test()
+    
+    def on_b_pause(self, value):
+        val = value['new']
+        if val == 'Active':
+            self.pause_value.value = False
+        elif val == 'Paused':
+            self.pause_value.value = True
+    
+    def on_b_delay(self, value):
+        val = value['new']
+        self.stim_delay = val
+
+    def on_b_inter_delay(self, value):
+        val = value['new']
+        self.inter_stim_delay = val
+
+    def run_test_stimulus(self):
+        stimulator_class = self.stimulator_cls(soundname=self.detection_sound)
+        stimulator_class.test_stimulus()
+        del stimulator_class
+
+    def run_impedance_test(self):
+        frontend = Frontend(portiloop_version=2)
         
         def is_set(x, n):
             return x & 1 << n != 0
@@ -879,217 +1078,6 @@ class Capture:
             
         finally: 
             frontend.close()
-    
-    def on_b_pause(self, value):
-        val = value['new']
-        if val == 'Active':
-            with self._pause_detect_lock:
-                self._pause_detect = False
-        elif val == 'Paused':
-            with self._pause_detect_lock:
-                self._pause_detect = True
-
-    def start_capture(self,
-                      filter,
-                      filter_args,
-                      detector_cls,
-                      threshold,
-                      channel,
-                      stimulator_cls,
-                      record,
-                      lsl,
-                      viz,
-                      width,
-                      python_clock):
-
-        if self.signal_input == "ADS":
-            if self.__capture_on:
-                warnings.warn("Capture is already ongoing, ignoring command.")
-                return
-            else:
-                self.__capture_on = True
-                p_msg_io, p_msg_io_2 = mp.Pipe()
-                p_data_i, p_data_o = mp.Pipe(duplex=False)
-        else:
-            p_msg_io, _ = mp.Pipe()
-
-        # Initialize filtering pipeline
-        if filter:
-            fp = FilterPipeline(nb_channels=8,
-                                sampling_rate=self.frequency,
-                                power_line_fq=self.power_line,
-                                use_custom_fir=self.custom_fir,
-                                custom_fir_order=self.custom_fir_order,
-                                custom_fir_cutoff=self.custom_fir_cutoff,
-                                alpha_avg=self.polyak_mean,
-                                alpha_std=self.polyak_std,
-                                epsilon=self.epsilon,
-                                filter_args=filter_args)
-        
-        # Initialize detector and stimulator
-        detector = detector_cls(threshold, channel=channel) if detector_cls is not None else None
-        stimulator = stimulator_cls() if stimulator_cls is not None else None
-
-        # Launch the capture process
-        if self.signal_input == "ADS":
-            self._p_capture = mp.Process(target=capture_process,
-                                        args=(p_data_o,
-                                            p_msg_io_2,
-                                            self.duration,
-                                            self.frequency,
-                                            python_clock,
-                                            1.0,
-                                            self.channel_states)
-                                        )
-            self._p_capture.start()
-            print(f"PID capture: {self._p_capture.pid}")
-        else:
-            filename = RECORDING_PATH / 'test_recording.csv'
-            file_reader = FileReader(filename)
-
-        # Initialize display if requested
-        if viz:
-            live_disp = LiveDisplay(channel_names = self.signal_labels, window_len=width)
-
-        # Initialize recording if requested
-        if record:
-            recorder = EDFRecorder(self.signal_labels, self.filename, self.frequency)
-            recorder.open_recording_file()
-        
-        # Initialize LSL to stream if requested
-        if lsl:
-            from pylsl import StreamInfo, StreamOutlet
-            lsl_info = StreamInfo(name='Portiloop Filtered',
-                                  type='Filtered EEG',
-                                  channel_count=8,
-                                  nominal_srate=self.frequency,
-                                  channel_format='float32',
-                                  source_id='portiloop1')  # TODO: replace this by unique device identifier
-            lsl_outlet = StreamOutlet(lsl_info)
-            lsl_info_raw = StreamInfo(name='Portiloop Raw Data',
-                                  type='Raw EEG signal',
-                                  channel_count=8,
-                                  nominal_srate=self.frequency,
-                                  channel_format='float32',
-                                  source_id='portiloop1')  # TODO: replace this by unique device identifier
-            lsl_outlet_raw = StreamOutlet(lsl_info_raw)
-
-        buffer = []
-
-        # Initialize stimulation delayer if requested
-        if not self.spindle_detection_mode == 'Fast' and stimulator is not None:
-            stimulation_delayer = UpStateDelayer(self.frequency, self.spindle_detection_mode == 'Peak', 0.3)
-            stimulator.add_delayer(stimulation_delayer)
-        else:
-            stimulation_delayer = None
-
-        # Main capture loop
-        while True:
-            if self.signal_input == "ADS":
-                # Send message in communication pipe if we have one
-                with self._lock_msg_out:
-                    if self._msg_out is not None:
-                        p_msg_io.send(self._msg_out)
-                        self._msg_out = None
-
-                # Check if we have received a message in communication pipe
-                if p_msg_io.poll():
-                    mess = p_msg_io.recv()
-                    if mess == 'STOP':
-                        break
-                    elif mess[0] == 'PRT':
-                        print(mess[1])
-
-                # Retrieve all data points from data pipe p_data
-                point = None
-                if p_data_i.poll(timeout=(1 / self.frequency)):
-                    point = p_data_i.recv()
-                else:
-                    continue
-
-                # Convert point from int to corresponding value in microvolts
-                n_array_raw = int_to_float(np.array([point]))
-            elif self.signal_input == "File":
-                # Check if the message to stop has been sent
-                with self._lock_msg_out:
-                    if self._msg_out == "STOP":
-                        break
-                
-                file_point = file_reader.get_point()
-                if file_point is None:
-                    break
-                index, raw_point, off_filtered_point, past_stimulation, lacourse_stimulation = file_point
-                n_array_raw = np.array([0, raw_point, 0, 0, 0, 0, 0, 0])
-                n_array_raw = np.reshape(n_array_raw, (1, 8))
-            
-            # Go through filtering pipeline
-            if filter:
-                n_array = fp.filter(deepcopy(n_array_raw))
-            else:
-                n_array = deepcopy(n_array_raw)
-
-            # Contains the filtered point (if filtering is off, contains a copy of the raw point)
-            filtered_point = n_array.tolist()
-            
-            # Send both raw and filtered points over LSL
-            if lsl:
-                raw_point = n_array_raw.tolist()
-                lsl_outlet_raw.push_sample(raw_point[-1])
-                lsl_outlet.push_sample(filtered_point[-1])
-            
-            # Adds point to buffer for delayed stimulation
-            if stimulation_delayer is not None:
-                stimulation_delayer.step_timesteps(filtered_point[0][channel-1])
-
-            # Check if detection is on or off
-            with self._pause_detect_lock:
-                pause = self._pause_detect
-
-            # If detection is on
-            if detector is not None and not pause:
-                # Detect using the latest point
-                detection_signal = detector.detect(filtered_point)
-
-                # Stimulate
-                if stimulator is not None:                    
-                    stimulator.stimulate(detection_signal)
-                    with self._test_stimulus_lock:
-                        test_stimulus = self._test_stimulus
-                        self._test_stimulus = False
-                    if test_stimulus:
-                        stimulator.test_stimulus()
-                
-                # Send the stimulation from the file reader
-                if stimulator is not None:
-                    if self.signal_input == "File" and lacourse_stimulation:
-                        stimulator.send_stimulation("GROUND_TRUTH_STIM", False)
-            
-            # Add point to the buffer to send to viz and recorder
-            buffer += filtered_point
-            if len(buffer) >= 50:
-                if viz:
-                    live_disp.add_datapoints(buffer)
-                if record:
-                    recorder.add_recording_data(buffer)
-                buffer = []
-
-        if self.signal_input == "ADS":
-            # Empty pipes 
-            while True:
-                if p_data_i.poll():
-                    _ = p_data_i.recv()
-                elif p_msg_io.poll():
-                    _ = p_msg_io.recv()
-                else:
-                    break
-
-            p_data_i.close()
-            p_msg_io.close()
-            self._p_capture.join()
-        self.__capture_on = False
-        
-        if record:
-            recorder.close_recording_file()
 
 
 if __name__ == "__main__":

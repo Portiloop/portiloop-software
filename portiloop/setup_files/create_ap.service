@@ -1,0 +1,12 @@
+[Unit]
+Description=Create The Access Point for the coral
+Before=hostapd.service dnsmasq.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/create_ap0.sh
+
+[Install]
+WantedBy=multi-user.target

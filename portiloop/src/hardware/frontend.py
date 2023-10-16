@@ -16,8 +16,7 @@ RREG = 0x20
 WREG = 0x40
 
 class Reading:
-    def __init__(self, values: [int]):
-#         print(values)
+    def __init__(self, values, nb_channels):
         assert values[0] & 0xF0 == 0xC0, "Invalid readback"
         self.loff_statp = (values[0] & 0x0F) << 4 | (values[1] & 0xF0) >> 4
         self.loff_statn = (values[1] & 0x0F) << 4 | (values[2] & 0xF0) >> 4
@@ -25,7 +24,7 @@ class Reading:
 
         self._channels = [
             (values[3 + i * 3] << 16) | (values[4 + i * 3] << 8) | values[5 + i * 3]
-            for i in range(8)
+            for i in range(nb_channels)
         ]
 
 #         print(self.loff_statp, self.loff_statn, self.gpios, self._channels)
@@ -46,34 +45,49 @@ class Reading:
         return (self.loff_statn >> idx) & 0x01 == 0x01
 
 class Frontend:
-    def __init__(self):
-        self.nrst = GPIO("/dev/gpiochip2", 9, "out")
-        self.pwdn = GPIO("/dev/gpiochip2", 12, "out")
-        self._start = GPIO("/dev/gpiochip3", 29, "out")
-        self.drdy = GPIO("/dev/gpiochip3", 28, "in")
+    def __init__(self, portiloop_version):
+
+        max_speed = 1000000
+
+        if portiloop_version == 1:
+            # self.nrst = GPIO("/dev/gpiochip2", 9, "out")
+            # self.pwdn = GPIO("/dev/gpiochip2", 12, "out")
+            self.drdy = GPIO("/dev/gpiochip3", 28, "in")
+        elif portiloop_version == 2:
+            self.drdy = GPIO("/dev/gpiochip0", 45, "in")
+
         self.drdy.edge = "falling"
         self.dev = SpiDev()
         self.dev.open(0, 0)
-        self.dev.max_speed_hz = 1000000
+        self.dev.max_speed_hz = max_speed
         self.dev.mode = 0b01
 
-        self._start.write(False)
-        self.powerup()
-        self.reset()
         self.stop_continuous()
 
-    def powerup(self):
-        self.pwdn.write(True)
-        sleep(0.1)
+    def get_version(self):
+        config_bits = self.read_regs(0x00, 1)
+        channel_bits = config_bits[0] & 0x03
+        if channel_bits == 0x00:
+            return 4
+        elif channel_bits == 0x01:
+            return 6
+        elif channel_bits == 0x02:
+            return 8
+        else:
+            return -1
 
-    def powerdown(self):
-        self.pwdn.write(False)
+    # def powerup(self):
+    #     self.pwdn.write(True)
+    #     sleep(0.1)
 
-    def reset(self):
-        self.nrst.write(False)
-        sleep(0.01)
-        self.nrst.write(True)
-        sleep(0.1)
+    # def powerdown(self):
+    #     self.pwdn.write(False)
+
+    # def reset(self):
+    #     self.nrst.write(False)
+    #     sleep(0.01)
+    #     self.nrst.write(True)
+    #     sleep(0.1)
 
     def read_regs(self, start, len):
         values = self.dev.xfer([RREG | (start & 0x1F), (len - 1) & 0x1F] + [0x00] * len)
@@ -84,7 +98,7 @@ class Frontend:
 
     def read(self):
         values = self.dev.xfer([RDATA] + [0x00] * 27)
-        return Reading(values[1:])
+        return Reading(values[1:], self.get_version())
 
     def start_continuous(self):
         self.dev.xfer([RDATAC])
@@ -94,15 +108,7 @@ class Frontend:
 
     def read_continuous(self):
         values = self.dev.xfer([0x00] * 27)
-        return Reading(values)
-
-    def start(self):
-        self._start.write(True)
-        self.dev.xfer([START])
-
-    def stop(self):
-        self._start.write(False)
-        self.dev.xfer([STOP])
+        return Reading(values, self.get_version())
 
     def is_ready(self):
         return not self.drdy.read()
