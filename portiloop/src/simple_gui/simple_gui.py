@@ -101,6 +101,7 @@ class ExperimentState:
         print(f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
         
     def stop(self):
+        print("Pressed Stop Button")
         self.q_msg.put('STOP')
         assert self._t_capture is not None
         self._t_capture.join()

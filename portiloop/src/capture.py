@@ -210,9 +210,10 @@ def start_capture(
         # First, we send all outgoing messages to the capture process
         try:
             msg = q_msg.get_nowait()
+            print(f"Got message {msg} to send to frontend")
             capture_frontend.send_msg(msg)
         except:
-            pass
+            print("HAAAAAAAAAAAA")
         
         # Then, we check if we have received a message from the capture process
         msg = capture_frontend.get_msg()
@@ -220,12 +221,14 @@ def start_capture(
         if msg is None:
             pass
         elif msg == 'STOP':
+            print("RECEIVED STOP MSG")
             break
         elif msg[0] == 'PRT':
             print(msg[1])
 
         # Then, we retrieve the data from the capture process
         raw_point = capture_frontend.get_data()
+        print("GOT A POINT YESSSSSSSSSSSSSSSSSSSSSIR")
         # If we have no data, we continue to the next iteration
         if raw_point is None:
             continue
@@ -236,6 +239,9 @@ def start_capture(
         else:
             filtered_point = deepcopy(raw_point)
 
+        print("GOT THROUG FILTER")
+
+
         # Contains the filtered point (if filtering is off, contains a copy of the raw point)
         filtered_point = filtered_point.tolist()
         raw_point = raw_point.tolist()
@@ -245,6 +251,9 @@ def start_capture(
         if filter:
             lsl_streamer.push_filtered(filtered_point[-1])
         
+        print("GOT THROUG LSL")
+
+        
         # Check if detection is on or off
         pause = pause_value.value
 
@@ -252,6 +261,9 @@ def start_capture(
         if pause != prev_pause and detector is not None:
             lsl_streamer.push_marker(LSLStreamer.string_for_detection_activation(pause))
             prev_pause = pause
+
+        print("GOT THROUG PAUSE SHIT")
+
 
         # If detection is on
         if detector is not None and not pause:
@@ -267,13 +279,19 @@ def start_capture(
         
         # Add point to the buffer to send to viz and recorder
         buffer += filtered_point
+        print("BEFORE RECORDING + DISPLAY")
+
         if len(buffer) >= 50:
             live_disp.add_datapoints(buffer)
             recorder.add_recording_data(buffer)
             buffer = []
+        print("AFTER RECORDING + DISPLAY")
+
+    print("EXITED MAIN LOOP")
 
     # close the frontend
     capture_frontend.close()
+    print("CLOSED THE FRONTEND")
     recorder.close_recording_file()
     leds.close()
 
