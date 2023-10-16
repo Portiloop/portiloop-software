@@ -10,6 +10,7 @@ from datetime import datetime
 import warnings
 from threading import Thread, Lock
 from portiloop.src import ADS
+from portiloop.src.hardware.leds import Color, LEDs
 
 if ADS:
     import alsaaudio
@@ -113,6 +114,10 @@ def start_capture(
         pause_value
 ): 
 #     print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
+
+    # Initialize the LED
+    leds = LEDs()
+    leds.led1(Color.BLUE)
 
     # Initialize data frontend
     fake_filename = RECORDING_PATH / 'test_recording.csv'
@@ -270,6 +275,7 @@ def start_capture(
     # close the frontend
     capture_frontend.close()
     recorder.close_recording_file()
+    leds.close()
 
     del lsl_streamer
     del stimulation_delayer
