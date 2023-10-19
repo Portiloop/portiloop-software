@@ -105,7 +105,6 @@ class EDFRecorder:
         self.file = open(self.csv_filename, 'w')
 
     def close_recording_file(self):
-        print("ENTERING CLOSING FILE")
         self.file.close()
         data = np.genfromtxt(self.csv_filename, delimiter=',')
         # Convert to float values
@@ -114,7 +113,6 @@ class EDFRecorder:
         assert data.shape[0] == len(
             self.signal_labels), f"{data.shape[0]}!={len(self.signal_labels)}"
         signal_headers = []
-        print("DATA ALL LOADED")
         for row_i in range(data.shape[0]):
             # If we only have zeros in that row, the channel was not activated so we must set the physical max and min manually
             if np.all(data[row_i] == 0):
@@ -139,10 +137,7 @@ class EDFRecorder:
 
         os.remove(self.csv_filename)
 
-        print("Done.")
-
     def add_recording_data(self, data):
-        print(f"SAVING DATA {data}")
         self.writing_buffer += data
         # write to file
         if len(self.writing_buffer) >= self.max_write:

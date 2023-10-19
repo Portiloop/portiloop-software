@@ -9,12 +9,25 @@ from portiloop.src.stimulation import SleepSpindleRealTimeStimulator
 from portiloop.src.hardware.leds import Color, LEDs
 import socket
 import os
+from portiloop.src.utils import get_portiloop_version
+from portiloop.src.hardware.frontend import Frontend
 
 WORKSPACE_DIR = "/home/mendel/workspace/edf_recording/"
 
+try:
+    version = get_portiloop_version()
+    frontend = Frontend(version)
+    nb_channels = frontend.get_version()
+finally:
+    frontend.close()
+    del frontend
+# version = 2
+# nb_channels = 6
+portiloop_ID = socket.gethostname()
+
 RUN_SETTINGS = {
-    "version": 2,
-    "nb_channels": 4,
+    "version": version,
+    "nb_channels": nb_channels,
     "frequency": 250,
     "duration": 36000,
     "filter": True,
@@ -26,18 +39,8 @@ RUN_SETTINGS = {
     "threshold": 0.82,
     "signal_input": "ADS",
     "python_clock": True,
-    "signal_labels": [
-        "ch1",
-        "ch2",
-        "ch3",
-        "ch4"
-    ],
-    "channel_states": [
-        "simple",
-        "simple",
-        "simple",
-        "simple"
-    ],
+    "signal_labels": [f"ch{i+1}" for i in range(nb_channels)],
+    "channel_states": ["simple"] * nb_channels,
     "channel_detection": 2,
     "detection_sound": "stimul_15ms.wav",
     "spindle_detection_mode": "Fast",
@@ -75,13 +78,17 @@ class ExperimentState:
         self.pause_value = Value('b', False)
         self._t_capture = None
         self.stim_on = False
+        self.exp_name = ""
 
     def start(self):
         # Set the variables for the experiment
         self.time_started = datetime.now()
         stim_str = "STIMON" if self.stim_on else "STIMOFF"
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
-        exp_name = f"{socket.gethostname()}_{time_str}_{stim_str}.edf"
+        self.exp_name = f"{portiloop_ID}_{time_str}_{stim_str}.edf"
+
+        print(f"Starting recording {self.exp_name.split('.')[0]}")
+
         if self.stim_on:
             self.run_dict['detect'] = True
             self.run_dict['stimulate'] = True
@@ -89,7 +96,7 @@ class ExperimentState:
             self.run_dict['detect'] = False
             self.run_dict['stimulate'] = False
 
-        self.run_dict['filename'] = os.path.join(WORKSPACE_DIR, exp_name)
+        self.run_dict['filename'] = os.path.join(WORKSPACE_DIR, self.exp_name)
 
         self._t_capture = Process(target=start_capture,
                                      args=(self.detector_cls,
@@ -101,16 +108,21 @@ class ExperimentState:
         print(f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
         
     def stop(self):
-        print("Pressed Stop Button")
+        print("Stopping recording...")
         self.q_msg.put('STOP')
         assert self._t_capture is not None
         self._t_capture.join()
         self._t_capture = None
+        print("Done.")
 
     def toggle_stim(self):
         self.stim_on = not self.stim_on
 
 exp_state = ExperimentState()
+
+# exp_state.start()
+# time.sleep(15)
+# exp_state.stop()
 
 def start():
     exp_state.start()
@@ -121,6 +133,7 @@ def stop():
     start_button.enabled = True
 
 ui.markdown('''## Portiloop Experiment''')
+ui.label(f"Running on Portiloop {portiloop_ID} (v{version}) with {nb_channels} channels.")
 ui.separator()
 
 stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off', on_change=lambda: exp_state.toggle_stim())
@@ -132,6 +145,10 @@ with ui.row():
     start_button.bind_enabled_to(stim_toggle)
 
 time_label = ui.label()
+save_file_label = ui.label().bind_text_from(
+    exp_state, 
+    "exp_name", 
+    backward=lambda x: f"Current experiment {x.split('.')[0]}")
 
 timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() - exp_state.time_started).split(".")[0]}'))
 start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
