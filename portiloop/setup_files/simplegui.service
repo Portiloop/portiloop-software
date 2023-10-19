@@ -1,0 +1,16 @@
+[Unit]
+Description=Simple GUI Experiment Server
+After=create_ap.service
+After=hostapd.service
+After=dnsmasq.service
+
+[Service]
+Type=exec
+ExecStart=/bin/bash -c "~/miniforge3/envs/portiloop/bin/python /home/mendel/portiloop-software/portiloop/src/simple_gui/simple_gui.py"
+User=mendel
+Group=mendel
+Restart=on-failure
+RestartSec=60s
+
+[Install]
+WantedBy=multi-user.target

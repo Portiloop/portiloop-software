@@ -269,7 +269,7 @@ def start_capture(
             stimulation_delayer.step(filtered_point[0][capture_dictionary['channel_detection'] - 1])
         
         # Add point to the buffer to send to viz and recorder
-        buffer += filtered_point
+        buffer += raw_point
 
         if len(buffer) >= 50:
             live_disp.add_datapoints(buffer)
