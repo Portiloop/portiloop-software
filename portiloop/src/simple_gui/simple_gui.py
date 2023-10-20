@@ -79,6 +79,7 @@ class ExperimentState:
         self._t_capture = None
         self.stim_on = False
         self.exp_name = ""
+        self.display_q = Queue()
 
     def start(self):
         # Set the variables for the experiment
@@ -103,6 +104,7 @@ class ExperimentState:
                                            self.stimulator_cls,
                                            self.run_dict,
                                            self.q_msg,
+                                           self.display_q,
                                            self.pause_value,))
         self._t_capture.start()
         print(f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
@@ -137,6 +139,17 @@ def test_sound():
     stimulator_class.test_stimulus()
     del stimulator_class
 
+def update_line_plot():
+    now = datetime.now()
+    x = now.timestamp()
+    channel = 2
+    try:
+        y = exp_state.display_q.get(block=False)
+    except Exception:
+        return
+
+    line_plot.push([x], [[y[0][channel]]])
+
 ui.markdown('''## Portiloop Experiment''')
 ui.label(f"Running on Portiloop {portiloop_ID} (v{version}) with {nb_channels} channels.")
 ui.separator()
@@ -145,11 +158,14 @@ test_sound_button = ui.button('Test Sound 🔊', on_click=test_sound)
 
 stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off', on_change=lambda: exp_state.toggle_stim())
 
+# line_timer = ui.timer(1/250, update_line_plot, active=False)
+
 with ui.row():
     start_button = ui.button('Start ▶', on_click=start, color='green')
     stop_button = ui.button('Stop', on_click=stop, color='orange')
     start_button.bind_enabled_to(stop_button, forward=lambda x: not x)
     start_button.bind_enabled_to(stim_toggle)
+    # start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
 
 time_label = ui.label()
 save_file_label = ui.label().bind_text_from(
@@ -159,6 +175,9 @@ save_file_label = ui.label().bind_text_from(
 
 timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() - exp_state.time_started).split(".")[0]}'))
 start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
+
+# line_plot = ui.line_plot(n=1, limit=250, figsize=(3, 2), update_every=5)
+# line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
 
 ui.run(
     host='192.168.4.1', 

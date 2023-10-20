@@ -111,6 +111,7 @@ def start_capture(
         stimulator_cls,
         capture_dictionary,
         q_msg, 
+        q_display,
         pause_value
 ): 
 #     print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
@@ -270,6 +271,7 @@ def start_capture(
         
         # Add point to the buffer to send to viz and recorder
         buffer += raw_point
+        # q_display.put(raw_point)
 
         if len(buffer) >= 50:
             live_disp.add_datapoints(buffer)
