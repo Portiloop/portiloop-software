@@ -132,15 +132,22 @@ def stop():
     exp_state.stop()
     start_button.enabled = True
 
+def test_sound():
+    stimulator_class = exp_state.stimulator_cls(soundname=RUN_SETTINGS['detection_sound'])
+    stimulator_class.test_stimulus()
+    del stimulator_class
+
 ui.markdown('''## Portiloop Experiment''')
 ui.label(f"Running on Portiloop {portiloop_ID} (v{version}) with {nb_channels} channels.")
 ui.separator()
 
+test_sound_button = ui.button('Test Sound 🔊', on_click=test_sound)
+
 stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off', on_change=lambda: exp_state.toggle_stim())
 
 with ui.row():
-    start_button = ui.button('Start', on_click=start)
-    stop_button = ui.button('Stop', on_click=stop)
+    start_button = ui.button('Start ▶', on_click=start, color='green')
+    stop_button = ui.button('Stop', on_click=stop, color='orange')
     start_button.bind_enabled_to(stop_button, forward=lambda x: not x)
     start_button.bind_enabled_to(stim_toggle)
 
