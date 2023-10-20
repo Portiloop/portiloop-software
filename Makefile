@@ -48,6 +48,7 @@ step5.temp: step4.temp
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp miniforge_jupyter.service /etc/systemd/system/jupyter.service
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp 99-auto-mount.rules /etc/udev/rules.d/99-auto-mount.rules
 	touch step5.temp
 
 step6.temp: step5.temp
@@ -81,6 +82,7 @@ step5_simple.temp: step4.temp
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp simplegui.service /etc/systemd/system/simplegui.service
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp 99-auto-mount.rules /etc/udev/rules.d/99-auto-mount.rules
 	touch step5_simple.temp
 
 step6_simple.temp: step5_simple.temp
@@ -157,6 +159,7 @@ vstep5.temp: vstep4.temp
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp jupyter.service /etc/systemd/system/jupyter.service
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp 99-auto-mount.rules /etc/udev/rules.d/99-auto-mount.rules
 	touch vstep5.temp
 
 vstep6.temp: vstep5.temp

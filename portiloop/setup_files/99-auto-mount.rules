@@ -1,0 +1,3 @@
+# Auto-Mount SD Card. 
+# Using systemd-mount also unmounts automatically so no need for extra rule. 
+ACTION=="add", KERNEL=="mmcblk2", SUBSYSTEMS=="mmc", RUN+="/usr/bin/systemd-mount --no-block --collect /dev/%k /media/sd_card"
