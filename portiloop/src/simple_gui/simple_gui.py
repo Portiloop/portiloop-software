@@ -11,6 +11,8 @@ import socket
 import os
 from portiloop.src.utils import get_portiloop_version
 from portiloop.src.hardware.frontend import Frontend
+import alsaaudio
+from alsaaudio import ALSAAudioError
 
 WORKSPACE_DIR = "/home/mendel/workspace/edf_recording/"
 
@@ -36,13 +38,13 @@ RUN_SETTINGS = {
     "stimulate": False,
     "lsl": False,
     "display": False,
-    "threshold": 0.82,
+    "threshold": 0.75,
     "signal_input": "ADS",
     "python_clock": True,
     "signal_labels": [f"ch{i+1}" for i in range(nb_channels)],
     "channel_states": ["simple"] * nb_channels,
     "channel_detection": 2,
-    "detection_sound": "stimul_15ms.wav",
+    "detection_sound": "sample1.wav",
     "spindle_detection_mode": "Fast",
     "spindle_freq": 10,
     "stim_delay": 0.0,
@@ -87,8 +89,23 @@ class ExperimentState:
         stim_str = "STIMON" if self.stim_on else "STIMOFF"
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
         self.exp_name = f"{portiloop_ID}_{time_str}_{stim_str}.edf"
-
         print(f"Starting recording {self.exp_name.split('.')[0]}")
+
+        try:
+            mixers = alsaaudio.mixers()
+            if len(mixers) <= 0:
+                print(f"No ALSA mixer found.")
+                mixer = DummyAlsaMixer()
+            else:
+                mixer = alsaaudio.Mixer(control='SoftMaster', device='dmixer')
+                # mixer = alsaaudio.Mixer()
+        except ALSAAudioError as e:
+            print(e)
+            print(f"No ALSA mixer found. Volume control will not be available from notebook.\nAvailable mixers were:\n{mixers}")
+            mixer = DummyAlsaMixer()
+            
+        volume = mixer.getvolume()[0]  # we will set the same volume on all channels
+        self.run_dict['volume'] = volume
 
         if self.stim_on:
             self.run_dict['detect'] = True
@@ -181,7 +198,7 @@ start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
 
 ui.run(
     host='192.168.4.1', 
-    port=8080,
+    port=8081,
     title='Portiloop Experiment',
     dark=True,
     favicon='🧠',
