@@ -14,7 +14,7 @@ from portiloop.src.hardware.frontend import Frontend
 import alsaaudio
 from alsaaudio import ALSAAudioError
 
-WORKSPACE_DIR = "/home/mendel/workspace/edf_recording/"
+WORKSPACE_DIR = "/media/sd_card/workspace/edf_recordings/"
 
 try:
     version = get_portiloop_version()
@@ -44,7 +44,7 @@ RUN_SETTINGS = {
     "signal_labels": [f"ch{i+1}" for i in range(nb_channels)],
     "channel_states": ["simple"] * nb_channels,
     "channel_detection": 2,
-    "detection_sound": "sample1.wav",
+    "detection_sound": "1sPN_48kHz_norm_stereo.wav",
     "spindle_detection_mode": "Fast",
     "spindle_freq": 10,
     "stim_delay": 0.0,
