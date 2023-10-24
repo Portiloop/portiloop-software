@@ -103,6 +103,8 @@ class EDFRecorder:
 
     def open_recording_file(self):
         self.file = open(self.csv_filename, 'w')
+        print(f"Saving file to {self.csv_filename}")
+
 
     def close_recording_file(self):
         self.file.close()

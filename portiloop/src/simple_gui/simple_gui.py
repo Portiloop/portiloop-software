@@ -14,7 +14,8 @@ from portiloop.src.hardware.frontend import Frontend
 import alsaaudio
 from alsaaudio import ALSAAudioError
 
-WORKSPACE_DIR = "/media/sd_card/workspace/edf_recordings/"
+WORKSPACE_DIR_SD = "/media/sd_card/workspace/edf_recordings/"
+WORKSPACE_DIR_IN = "/home/mendel/workspace/edf_recordings/"
 
 try:
     version = get_portiloop_version()
@@ -82,6 +83,7 @@ class ExperimentState:
         self.stim_on = False
         self.exp_name = ""
         self.display_q = Queue()
+        self.check_sd_card()
 
     def start(self):
         # Set the variables for the experiment
@@ -114,7 +116,12 @@ class ExperimentState:
             self.run_dict['detect'] = False
             self.run_dict['stimulate'] = False
 
-        self.run_dict['filename'] = os.path.join(WORKSPACE_DIR, self.exp_name)
+        if self.sd_card:
+            workspace_dir = WORKSPACE_DIR_SD
+        else:
+            workspace_dir = WORKSPACE_DIR_IN
+
+        self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name)
 
         self._t_capture = Process(target=start_capture,
                                      args=(self.detector_cls,
@@ -136,6 +143,10 @@ class ExperimentState:
 
     def toggle_stim(self):
         self.stim_on = not self.stim_on
+
+    def check_sd_card(self):
+        self.sd_card = os.path.exists("/media/sd_card/workspace/edf_recordings")
+
 
 exp_state = ExperimentState()
 
@@ -167,30 +178,44 @@ def update_line_plot():
 
     line_plot.push([x], [[y[0][channel]]])
 
-ui.markdown('''## Portiloop Experiment''')
+
+ui.markdown('''## Portiloop Control Center''')
 ui.label(f"Running on Portiloop {portiloop_ID} (v{version}) with {nb_channels} channels.")
 ui.separator()
 
-test_sound_button = ui.button('Test Sound 🔊', on_click=test_sound)
+with ui.column().classes('w-full items-center'):
+    sd_card_checker = ui.checkbox('SD Card').classes('w-full justify-center').bind_value_from(
+        exp_state,
+        'sd_card'
+    ).disable()
 
-stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off', on_change=lambda: exp_state.toggle_stim())
+    test_sound_button = ui.button('Test Sound 🔊', on_click=test_sound).classes('w-half justify-center')
+
+    stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off', on_change=lambda: exp_state.toggle_stim()).classes('w-full justify-center')
+
+with ui.expansion('Advanced Options', icon='settings').classes('w-full items-center'):
+    lsl_checker = ui.checkbox('Stream LSL')
+    save_checker = ui.checkbox('Save')
+
+ui.separator()
 
 # line_timer = ui.timer(1/250, update_line_plot, active=False)
 
-with ui.row():
-    start_button = ui.button('Start ▶', on_click=start, color='green')
-    stop_button = ui.button('Stop', on_click=stop, color='orange')
+with ui.row().classes('w-full justify-center'):
+    start_button = ui.button('Start ▶', on_click=start, color='green').classes('w-full justify-center')
+    stop_button = ui.button('Stop', on_click=stop, color='orange').classes('w-full justify-center')
     start_button.bind_enabled_to(stop_button, forward=lambda x: not x)
     start_button.bind_enabled_to(stim_toggle)
     # start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
 
 time_label = ui.label()
-save_file_label = ui.label().bind_text_from(
+save_file_label = ui.label().classes('w-full justify-center').bind_text_from(
     exp_state, 
     "exp_name", 
     backward=lambda x: f"Current experiment {x.split('.')[0]}")
 
 timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() - exp_state.time_started).split(".")[0]}'))
+sd_card_timer = ui.timer(0.5, exp_state.check_sd_card)
 start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
 
 # line_plot = ui.line_plot(n=1, limit=250, figsize=(3, 2), update_every=5)
