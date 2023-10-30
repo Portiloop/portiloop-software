@@ -276,7 +276,7 @@ def start_capture(
 
         if len(buffer) >= 50:
             live_disp.add_datapoints(buffer)
-            recorder.add_recording_data(buffer, detection_buffer)
+            recorder.add_recording_data(buffer, detection_buffer, stimulator is not None)
             buffer = []
             detection_buffer = []
 

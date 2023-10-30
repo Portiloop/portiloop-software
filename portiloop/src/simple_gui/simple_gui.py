@@ -35,7 +35,7 @@ RUN_SETTINGS = {
     "duration": 36000,
     "filter": True,
     "record": True,
-    "detect": False,
+    "detect": True,
     "stimulate": False,
     "lsl": False,
     "display": False,
@@ -66,7 +66,7 @@ RUN_SETTINGS = {
         ]
     },
     "width_display": 1250,
-    "filename": "/home/mendel/workspace/edf_recording/recording_test1.edf"
+    "filename": "/home/mendel/workspace/edf_recording/recording_test1.csv"
 }
 
 
@@ -110,10 +110,8 @@ class ExperimentState:
         self.run_dict['volume'] = volume
 
         if self.stim_on:
-            self.run_dict['detect'] = True
             self.run_dict['stimulate'] = True
         else:
-            self.run_dict['detect'] = False
             self.run_dict['stimulate'] = False
 
         if self.sd_card:

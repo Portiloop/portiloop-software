@@ -58,7 +58,11 @@ class EDFRecorder:
         print(f"Closing")
         self.file.close()
 
-    def add_recording_data(self, points, detection_info):
+    def add_recording_data(self, points, detection_info, stim_on):
+
+        stim_label = 2 if stim_on else 1
+        
+        detection_info = (np.array(detection_info).astype(int) * stim_label).tolist()
 
         # Add the stimulation info to the end of each point for recording
         if detection_info is not None:
@@ -71,7 +75,7 @@ class EDFRecorder:
         # write to file
         if len(self.writing_buffer) >= self.max_write:
             if self.out_format == 'csv':
-                np.savetxt(self.file, np.array(self.writing_buffer))
+                np.savetxt(self.file, np.array(self.writing_buffer), delimiter=',')
             elif self.out_format == 'npy':
                 np.save(self.file, np.array(self.writing_buffer))
             self.writing_buffer = []
