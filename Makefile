@@ -44,7 +44,7 @@ step5.temp: step4.temp
 	echo "Activating the widgets for the jupyter notebook..."
 	~/miniforge3/envs/portiloop/bin/jupyter nbextension enable --py widgetsnbextension
 	echo "Creating workspace directory..."
-	cd ~ && mkdir workspace && mkdir workspace/edf_recording
+	cd ~ && mkdir workspace && mkdir workspace/edf_recordings
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp miniforge_jupyter.service /etc/systemd/system/jupyter.service
@@ -78,7 +78,7 @@ step5_simple.temp: step4.temp
 	echo "Activating the widgets for the jupyter notebook..."
 	~/miniforge3/envs/portiloop/bin/jupyter nbextension enable --py widgetsnbextension
 	echo "Creating workspace directory..."
-	cd ~ && mkdir workspace && mkdir workspace/edf_recording
+	cd ~ && mkdir workspace && mkdir workspace/edf_recordings
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp simplegui.service /etc/systemd/system/simplegui.service
@@ -155,7 +155,7 @@ vstep5.temp: vstep4.temp
 	echo "Activating the widgets for the jupyter notebook..."
 	jupyter nbextension enable --py widgetsnbextension
 	echo "Creating workspace directory..."
-	cd ~ && mkdir workspace && mkdir workspace/edf_recording
+	cd ~ && mkdir workspace && mkdir workspace/edf_recordings
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp jupyter.service /etc/systemd/system/jupyter.service
