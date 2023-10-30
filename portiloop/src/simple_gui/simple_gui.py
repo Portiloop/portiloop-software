@@ -14,6 +14,9 @@ from portiloop.src.hardware.frontend import Frontend
 import alsaaudio
 from alsaaudio import ALSAAudioError
 
+# This line is to start something which seems to be necessary to make sure the sound works properly. Not sure why
+os.system('aplay portiloop-software/portiloop/sounds/sample1.wav')
+
 WORKSPACE_DIR_SD = "/media/sd_card/workspace/edf_recordings/"
 WORKSPACE_DIR_IN = "/home/mendel/workspace/edf_recordings/"
 
