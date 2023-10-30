@@ -90,7 +90,7 @@ class ExperimentState:
         self.time_started = datetime.now()
         stim_str = "STIMON" if self.stim_on else "STIMOFF"
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
-        self.exp_name = f"{portiloop_ID}_{time_str}_{stim_str}.edf"
+        self.exp_name = f"{portiloop_ID}_{time_str}_{stim_str}.csv"
         print(f"Starting recording {self.exp_name.split('.')[0]}")
 
         try:

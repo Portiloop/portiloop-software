@@ -10,7 +10,7 @@ import time
 import os
 import warnings
 import multiprocessing as mp
-
+import time
 from portiloop.src.processing import int_to_float
 
 
@@ -45,106 +45,35 @@ class DummyAlsaMixer:
     def setvolume(self, volume):
         self.volume = volume
 
-
-# class EDFRecorder:
-#     def __init__(self, signal_labels, filename, frequency):
-#         self.filename = filename
-#         self.nb_signals = len(signal_labels)
-#         self.samples_per_datarecord_array = frequency
-#         self.physical_max = 5000000
-#         self.physical_min = -5000000
-#         self.signal_labels = signal_labels
-#         self.edf_buffer = []
-
-#     def open_recording_file(self):
-#         nb_signals = self.nb_signals
-#         samples_per_datarecord_array = self.samples_per_datarecord_array
-#         physical_max = self.physical_max
-#         physical_min = self.physical_min
-#         signal_labels = self.signal_labels
-
-#         print(f"Will store edf recording in {self.filename}")
-
-#         self.edf_writer = EDFwriter(p_path=str(self.filename),
-#                                     f_file_type=EDFwriter.EDFLIB_FILETYPE_EDFPLUS,
-#                                     number_of_signals=nb_signals)
-
-#         for signal in range(nb_signals):
-#             assert self.edf_writer.setSampleFrequency(signal, samples_per_datarecord_array) == 0
-#             assert self.edf_writer.setPhysicalMaximum(signal, physical_max) == 0
-#             assert self.edf_writer.setPhysicalMinimum(signal, physical_min) == 0
-#             assert self.edf_writer.setDigitalMaximum(signal, 32767) == 0
-#             assert self.edf_writer.setDigitalMinimum(signal, -32768) == 0
-#             assert self.edf_writer.setSignalLabel(signal, signal_labels[signal]) == 0
-#             assert self.edf_writer.setPhysicalDimension(signal, 'uV') == 0
-
-#     def close_recording_file(self):
-#         assert self.edf_writer.close() == 0
-
-#     def add_recording_data(self, data):
-#         self.edf_buffer += data
-#         if len(self.edf_buffer) >= self.samples_per_datarecord_array:
-#             datarecord_array = self.edf_buffer[:self.samples_per_datarecord_array]
-#             self.edf_buffer = self.edf_buffer[self.samples_per_datarecord_array:]
-#             datarecord_array = np.array(datarecord_array).transpose()
-#             assert len(datarecord_array) == self.nb_signals, f"len(data)={len(data)}!={self.nb_signals}"
-#             for d in datarecord_array:
-#                 assert len(d) == self.samples_per_datarecord_array, f"{len(d)}!={self.samples_per_datarecord_array}"
-#                 assert self.edf_writer.writeSamples(d) == 0
-
 class EDFRecorder:
-    def __init__(self, signal_labels, filename, frequency):
+    def __init__(self, filename):
         self.writing_buffer = []
         self.max_write = 1000
         self.filename = filename
-        self.csv_filename = str(filename).split('.')[0] + '.csv'
-        self.signal_labels = signal_labels
-        self.frequency = frequency
+        self.file = open(self.filename, 'a')        
+        print(f"Saving file to {self.filename}")
+        self.out_format = 'csv' # 'npy'
 
-    def open_recording_file(self):
-        self.file = open(self.csv_filename, 'w')
-        print(f"Saving file to {self.csv_filename}")
-
-
-    def close_recording_file(self):
+    def __del__(self):
+        print(f"Closing")
         self.file.close()
-        data = np.genfromtxt(self.csv_filename, delimiter=',')
-        # Convert to float values
-        data = data.astype(np.float32)
-        data = data.transpose()
-        assert data.shape[0] == len(
-            self.signal_labels), f"{data.shape[0]}!={len(self.signal_labels)}"
-        signal_headers = []
-        for row_i in range(data.shape[0]):
-            # If we only have zeros in that row, the channel was not activated so we must set the physical max and min manually
-            if np.all(data[row_i] == 0):
-                phys_max = 200
-                phys_min = -200
-            else:
-                phys_max = np.amax(data[row_i])
-                phys_min = np.amin(data[row_i])
 
-            # Create the signal header
-            signal_headers.append(highlevel.make_signal_header(
-                self.signal_labels[row_i],
-                sample_frequency=self.frequency,
-                physical_max=phys_max,
-                physical_min=phys_min,))
-        self.filename = str(self.filename)
-        print(f"Saving to {self.filename} ...")
+    def add_recording_data(self, points, detection_info):
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            highlevel.write_edf(str(self.filename), data, signal_headers)
+        # Add the stimulation info to the end of each point for recording
+        if detection_info is not None:
+            assert len(points) == len(detection_info)
+            for idx, point in enumerate(points):
+                point.append(detection_info[idx])
 
-        os.remove(self.csv_filename)
-
-    def add_recording_data(self, data):
+        data = points
         self.writing_buffer += data
         # write to file
         if len(self.writing_buffer) >= self.max_write:
-            for point in self.writing_buffer:
-                self.file.write(','.join([str(elt) for elt in point]) + '\n')
+            if self.out_format == 'csv':
+                np.savetxt(self.file, np.array(self.writing_buffer))
+            elif self.out_format == 'npy':
+                np.save(self.file, np.array(self.writing_buffer))
             self.writing_buffer = []
 
 

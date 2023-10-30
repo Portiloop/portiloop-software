@@ -163,11 +163,11 @@ def start_capture(
     live_disp = LiveDisplay(channel_names=capture_dictionary['signal_labels'], window_len=capture_dictionary['width_display']) if capture_dictionary['display'] else Dummy()
 
     # Initialize recording if requested
-    recorder = EDFRecorder(capture_dictionary['signal_labels'], capture_dictionary['filename'], capture_dictionary['frequency']) if capture_dictionary['record'] else Dummy()
-    recorder.open_recording_file()
+    recorder = EDFRecorder(capture_dictionary['filename']) if capture_dictionary['record'] else Dummy()
 
     # Buffer used for the visualization and the recording
     buffer = []
+    detection_buffer = [] if detector_cls is not None else None
 
     # Initialize stimulation delayer if requested
     delay = not ((capture_dictionary['stim_delay'] == 0.0) and (capture_dictionary['inter_stim_delay'] == 0.0)) and (stimulator is not None)
@@ -261,6 +261,7 @@ def start_capture(
         if detector is not None and not pause:
             # Detect using the latest point
             detection_signal = detector.detect(filtered_point)
+            detection_buffer += detection_signal
 
             # Stimulate
             if stimulator is not None:                    
@@ -275,15 +276,16 @@ def start_capture(
 
         if len(buffer) >= 50:
             live_disp.add_datapoints(buffer)
-            recorder.add_recording_data(buffer)
+            recorder.add_recording_data(buffer, detection_buffer)
             buffer = []
+            detection_buffer = []
 
     # close the frontend
     leds.led1(Color.YELLOW)
     capture_frontend.close()
-    recorder.close_recording_file()
     leds.close()
 
+    del recorder 
     del lsl_streamer
     del stimulation_delayer
     del stimulator

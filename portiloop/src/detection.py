@@ -97,6 +97,9 @@ class SleepSpindleRealTimeDetector(Detector):
             result = self.add_datapoint(inp)
             if result is not None:
                 res.append(result >= self.threshold)
+        # If we don't have a detection, it means false for us.
+        if len(res) == 0:
+            res = [False]
         return res
 
     def add_datapoint(self, input_float):
