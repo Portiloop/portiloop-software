@@ -118,7 +118,7 @@ def start_capture(
 
     # Initialize the LED
     leds = LEDs()
-    if capture_dictionary['detect']:
+    if capture_dictionary['stimulate']:
         leds.led1(Color.CYAN)
     else:
         leds.led1(Color.PURPLE)

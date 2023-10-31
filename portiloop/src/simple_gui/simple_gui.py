@@ -15,7 +15,7 @@ import alsaaudio
 from alsaaudio import ALSAAudioError
 
 # This line is to start something which seems to be necessary to make sure the sound works properly. Not sure why
-os.system('aplay portiloop-software/portiloop/sounds/sample1.wav')
+os.system('aplay /home/mendel/portiloop-software/portiloop/sounds/sample1.wav')
 
 WORKSPACE_DIR_SD = "/media/sd_card/workspace/edf_recordings/"
 WORKSPACE_DIR_IN = "/home/mendel/workspace/edf_recordings/"
@@ -46,7 +46,13 @@ RUN_SETTINGS = {
     "signal_input": "ADS",
     "python_clock": True,
     "signal_labels": [f"ch{i+1}" for i in range(nb_channels)],
-    "channel_states": ["simple"] * nb_channels,
+    "channel_states": [
+        "simple",
+        "simple",
+        "simple",
+        "simple",
+        "disabled",
+        "disabled"],
     "channel_detection": 2,
     "detection_sound": "15msPN_48kHz_norm_stereo.wav",
     "spindle_detection_mode": "Fast",
@@ -89,6 +95,7 @@ class ExperimentState:
         self.check_sd_card()
 
     def start(self):
+        print(self.stim_on)
         # Set the variables for the experiment
         self.time_started = datetime.now()
         stim_str = "STIMON" if self.stim_on else "STIMOFF"
@@ -114,8 +121,10 @@ class ExperimentState:
 
         if self.stim_on:
             self.run_dict['stimulate'] = True
+            self.stimulator_cls = SleepSpindleRealTimeStimulator
         else:
             self.run_dict['stimulate'] = False
+            self.stimulator_cls = None
 
         if self.sd_card:
             workspace_dir = WORKSPACE_DIR_SD
