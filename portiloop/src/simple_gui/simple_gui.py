@@ -95,7 +95,6 @@ class ExperimentState:
         self.check_sd_card()
 
     def start(self):
-        print(self.stim_on)
         # Set the variables for the experiment
         self.time_started = datetime.now()
         stim_str = "STIMON" if self.stim_on else "STIMOFF"
