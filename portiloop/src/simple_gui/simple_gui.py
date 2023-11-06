@@ -93,6 +93,8 @@ class ExperimentState:
         self.exp_name = ""
         self.display_q = Queue()
         self.check_sd_card()
+        self.lsl = False
+        self.save_local = True
 
     def start(self):
         print(self.stim_on)
@@ -125,6 +127,16 @@ class ExperimentState:
         else:
             self.run_dict['stimulate'] = False
             self.stimulator_cls = None
+
+        if self.lsl:
+            self.run_dict['lsl'] = True
+        else:
+            self.run_dict['lsl'] = False
+
+        if self.save_local:
+            self.run_dict['record'] = True
+        else:
+            self.run_dict['record'] = False
 
         if self.sd_card:
             workspace_dir = WORKSPACE_DIR_SD
@@ -204,8 +216,8 @@ with ui.column().classes('w-full items-center'):
     stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off', on_change=lambda: exp_state.toggle_stim()).classes('w-full justify-center')
 
 with ui.expansion('Advanced Options', icon='settings').classes('w-full items-center'):
-    lsl_checker = ui.checkbox('Stream LSL')
-    save_checker = ui.checkbox('Save')
+    lsl_checker = ui.checkbox('Stream LSL').bind_value_to(exp_state, 'lsl')
+    save_checker = ui.checkbox('Save Local', value=True).bind_value_to(exp_state, 'save_local')
 
 ui.separator()
 
