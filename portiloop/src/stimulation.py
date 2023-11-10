@@ -44,7 +44,7 @@ class Stimulator(ABC):
 # Example implementation for sleep spindles
 
 class SleepSpindleRealTimeStimulator(Stimulator):
-    def __init__(self, soundname=None, lsl_streamer=Dummy(), stimulation_delay=0.0, inter_stim_delay=0.0):
+    def __init__(self, soundname=None, lsl_streamer=Dummy()):
         """
         params: 
             stimulation_delay (float): simple delay between a detection and a stimulation
@@ -423,6 +423,132 @@ class UpStateDelayer(Delayer):
             print("Average distance between peaks is smaller than the time to last peak, decrease buffer size")
             return (len(self.buffer) - peaks[-1]) * (1.0 / self.sample_freq)
         return (avg_dist - (len(self.buffer) - peaks[-1])) * (1.0 / self.sample_freq)
+
+
+##############################################
+########    Alternating Stimulator   #########
+##############################################
+
+class AlternatingStimulator(Stimulator):
+    def __init__(self, soundname=None, lsl_streamer=Dummy(), stim_interval=0.250):
+        """
+        params: 
+            stimulation_delay (float): simple delay between a detection and a stimulation
+            inter_stim_delay (float): time to wait between a stimulation and the next detection 
+        """
+        if soundname is None:
+            self.soundname = '15msPN_48kHz_norm_stereo.wav' # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
+        else:
+            self.soundname = soundname
+        self._sound = Path(__file__).parent.parent / 'sounds' / self.soundname
+
+        self._thread = None
+        self._lock = Lock()
+        self.lsl_streamer = lsl_streamer
+
+        # Stimulation parameters
+        self.stim_interval = stim_interval
+        self.stim_polarity = True
+        self.last_stim = 0.0
+
+        # Initialize Alsa stuff
+        # Open WAV file and set PCM device
+        with wave.open(str(self._sound), 'rb') as f: 
+            device = 'softvol'
+            
+            self.duration = f.getnframes() / float(f.getframerate())
+            
+            format = None
+
+            # 8bit is unsigned in wav files
+            if f.getsampwidth() == 1:
+                format = alsaaudio.PCM_FORMAT_U8
+            # Otherwise we assume signed data, little endian
+            elif f.getsampwidth() == 2:
+                format = alsaaudio.PCM_FORMAT_S16_LE
+            elif f.getsampwidth() == 3:
+                format = alsaaudio.PCM_FORMAT_S24_3LE
+            elif f.getsampwidth() == 4:
+                format = alsaaudio.PCM_FORMAT_S32_LE
+            else:
+                raise ValueError('Unsupported format')
+
+            self.periodsize = f.getframerate() // 8
+
+            try:
+                self.pcm = alsaaudio.PCM(channels=f.getnchannels(), rate=f.getframerate(), format=format, periodsize=self.periodsize, device=device)
+            except alsaaudio.ALSAAudioError as e:
+                self.pcm = Dummy()
+                raise e
+                
+            # Store data in list to avoid reopening the file
+            self.wav_list = []
+            while True:
+                data = f.readframes(self.periodsize)  
+                if data:
+                    self.wav_list.append(data)
+                else: 
+                    break
+            # self.inverted_sound = [np.frombuffer(chunk, dtype=np.int16) * -1 for chunk in self.wav_list]
+            self.inverted_sound = self.wav_list
+        # print(f"DEBUG: Stimulator will play sound {self.soundname}, duration: {self.duration:.3f} seconds")
+
+
+    def play_sound(self):
+        '''
+        Open the wav file and play a sound
+        '''
+        played_sound = self.wav_list if self.stim_polarity else self.inverted_sound
+        for data in played_sound:
+            self.pcm.write(data) 
+
+            
+        # Added this to make sure the thread does not stop before the sound is done playing
+        time.sleep(self.duration)
+    
+    def stimulate(self, detection_signal):
+        # We ignore the input signal and simply make sure we stimulate at the given interval 
+        current_time = time.time()
+        if current_time - self.last_stim >= self.stim_interval:
+            # Check if we are in the inverted phase:
+            if self.stim_polarity:
+                stim_text = 'STIM_POS'
+            else: 
+                stim_text = 'STIM_NEG'
+            self.send_stimulation(stim_text, True)
+            self.last_stim = current_time
+            self.stim_polarity = not self.stim_polarity
+
+    def send_stimulation(self, lsl_text, sound):
+        # Send lsl stimulation
+        print(f"Stimulating at time: {time.time()} with text: {lsl_text}")
+        self.lsl_streamer.push_marker(lsl_text)
+        # Send sound to patient
+        if sound:
+            with self._lock:
+                if self._thread is None: 
+                    self._thread = Thread(target=self._t_sound, daemon=True)
+                    self._thread.start()
+
+                
+    def _t_sound(self):
+        self.play_sound()
+        with self._lock:
+            self._thread = None
+    
+    def test_stimulus(self):
+        start = time.time()
+        with self._lock:
+            if self._thread is None:
+                self._thread = Thread(target=self._t_sound, daemon=True)
+                self._thread.start()
+        
+    def __del__(self):
+        del self.pcm
+
+    def add_delayer(self, delayer):
+        self.delayer = delayer
+        self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", False)
 
 
 if __name__ == "__main__":

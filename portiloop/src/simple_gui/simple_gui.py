@@ -5,7 +5,7 @@ from nicegui.events import ValueChangeEventArguments
 from datetime import datetime
 from portiloop.src.capture import start_capture
 from portiloop.src.detection import SleepSpindleRealTimeDetector
-from portiloop.src.stimulation import SleepSpindleRealTimeStimulator
+from portiloop.src.stimulation import SleepSpindleRealTimeStimulator, AlternatingStimulator
 from portiloop.src.hardware.leds import Color, LEDs
 import socket
 import os
@@ -95,6 +95,9 @@ class ExperimentState:
         self.check_sd_card()
         self.lsl = False
         self.save_local = True
+        self.stimulator_type = 'Spindle'
+        self.display_rate = 0
+        self.last_time_display = 0.0
 
     def start(self):
         # Set the variables for the experiment
@@ -122,7 +125,11 @@ class ExperimentState:
 
         if self.stim_on:
             self.run_dict['stimulate'] = True
-            self.stimulator_cls = SleepSpindleRealTimeStimulator
+            if self.stimulator_type == 'Spindle':
+                self.stimulator_cls = SleepSpindleRealTimeStimulator
+            elif self.stimulator_type == 'Interval':
+                self.stimulator_cls = AlternatingStimulator
+                self.run_dict['detect'] = False
         else:
             self.run_dict['stimulate'] = False
             self.stimulator_cls = None
@@ -191,14 +198,30 @@ def test_sound():
 def update_line_plot():
     now = datetime.now()
     x = now.timestamp()
-    channel = 2
     try:
-        y = exp_state.display_q.get(block=False)
+        # empty the queue
+        x = []
+        y = [[]] * nb_channels
+        while not exp_state.display_q.empty():
+            point = exp_state.display_q.get(block=False)
+            time, point = point
+            x.append(time)
+            for channel in range(nb_channels):
+                y[channel].append(point[0][channel])
     except Exception:
-        return
-
-    line_plot.push([x], [[y[0][channel]]])
-
+        print("AAAAAAAAAAAAAAAAAAH")
+    
+    # exp_state.display_rate += len(y)
+    # current_time = time.time()
+    # if current_time - exp_state.last_time_display >= 1:
+    #     # print(f"Display rate: {exp_state.display_rate}")
+    #     exp_state.last_time_display = current_time
+    #     exp_state.display_rate = 0
+    print(len(y))
+    print(len(y[0]))
+    print(y)
+    if len(x) > 0 and len(y[0]) > 0:
+        line_plot.push(x, y)
 
 ui.markdown('''## Portiloop Control Center''')
 ui.label(f"Running on Portiloop {portiloop_ID} (v{version}) with {nb_channels} channels.")
@@ -214,20 +237,32 @@ with ui.column().classes('w-full items-center'):
 
     stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off', on_change=lambda: exp_state.toggle_stim()).classes('w-full justify-center')
 
+def disable_stim_toggle_callback(caller):
+    if caller.value == 'Interval':
+        stim_toggle.disable()
+        stim_toggle.value = 'Stim On'
+    else:
+        stim_toggle.enable()
+
 with ui.expansion('Advanced Options', icon='settings').classes('w-full items-center'):
+    ui.label("If you are a subject in an experiment, do not change any of these options!")
     lsl_checker = ui.checkbox('Stream LSL').bind_value_to(exp_state, 'lsl')
     save_checker = ui.checkbox('Save Local', value=True).bind_value_to(exp_state, 'save_local')
+    select_stimulator = ui.select(['Spindle', 'Interval'], value='Spindle', on_change=disable_stim_toggle_callback).bind_value_to(exp_state, 'stimulator_type')
 
 ui.separator()
 
-# line_timer = ui.timer(1/250, update_line_plot, active=False)
+line_timer = ui.timer(1/25, update_line_plot, active=False)
 
 with ui.row().classes('w-full justify-center'):
     start_button = ui.button('Start ▶', on_click=start, color='green').classes('w-full justify-center')
     stop_button = ui.button('Stop', on_click=stop, color='orange').classes('w-full justify-center')
     start_button.bind_enabled_to(stop_button, forward=lambda x: not x)
     start_button.bind_enabled_to(stim_toggle)
-    # start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
+    start_button.bind_enabled_to(lsl_checker)
+    start_button.bind_enabled_to(save_checker)
+    start_button.bind_enabled_to(select_stimulator)
+    start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
 
 time_label = ui.label()
 save_file_label = ui.label().classes('w-full justify-center').bind_text_from(
@@ -239,8 +274,8 @@ timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() -
 sd_card_timer = ui.timer(0.5, exp_state.check_sd_card)
 start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
 
-# line_plot = ui.line_plot(n=1, limit=250, figsize=(3, 2), update_every=5)
-# line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
+line_plot = ui.line_plot(n=nb_channels, limit=250 * 5, figsize=(3, 2), update_every=5)
+line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
 
 ui.run(
     host='192.168.4.1', 

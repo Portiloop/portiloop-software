@@ -134,15 +134,14 @@ def start_capture(
     ) if capture_dictionary['signal_input'] == "ADS" else FileFrontend(fake_filename, capture_dictionary['nb_channels'], capture_dictionary['channel_detection'])
 
     # Initialize detector, LSL streamer and stimulatorif requested
-    detector = detector_cls(capture_dictionary['threshold'], channel=capture_dictionary['channel_detection']) if detector_cls is not None else None
+    detector = detector_cls(capture_dictionary['threshold'], channel=capture_dictionary['channel_detection']) if capture_dictionary['detect'] else Dummy()
     streams = {
             'filtered': filter,
             'markers': detector is not None,
         }
 #     print(f"DEBUG: Portiloop ID: {PORTILOOP_ID}")
     lsl_streamer = LSLStreamer(streams, capture_dictionary['nb_channels'], capture_dictionary['frequency'], id=PORTILOOP_ID) if capture_dictionary['lsl'] else Dummy()
-    stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer) if stimulator_cls is not None else None
-
+    stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer) if capture_dictionary['stimulate'] else Dummy()
     # Initialize filtering pipeline
     if filter:
         fp = FilterPipeline(nb_channels=capture_dictionary['nb_channels'],
@@ -208,6 +207,8 @@ def start_capture(
         marker_str = LSLStreamer.string_for_detection_activation(prev_pause)
         lsl_streamer.push_marker(marker_str)
 
+    start_time = time.time()
+
     # Main capture loop
     while True:
         
@@ -258,25 +259,28 @@ def start_capture(
             prev_pause = pause
 
         # If detection is on
-        if detector is not None and not pause:
+        if not pause:
             # Detect using the latest point
             detection_signal = detector.detect(filtered_point)
-            detection_buffer += detection_signal
+            if capture_dictionary['detect']:
+                detection_buffer += detection_signal
 
-            # Stimulate
-            if stimulator is not None:                    
-                stimulator.stimulate(detection_signal)
+            # Stimulate 
+            stimulator.stimulate(detection_signal)
 
             # Adds point to buffer for delayed stimulation
             stimulation_delayer.step(filtered_point[0][capture_dictionary['channel_detection'] - 1])
         
         # Add point to the buffer to send to viz and recorder
         buffer += raw_point
-        # q_display.put(raw_point)
+
+        # Adding the raw point an it's timestamp for display
+        timestamp = time.time() - start_time
+        q_display.put((timestamp, raw_point))
 
         if len(buffer) >= 50:
             live_disp.add_datapoints(buffer)
-            recorder.add_recording_data(buffer, detection_buffer, stimulator is not None)
+            recorder.add_recording_data(buffer, detection_buffer, capture_dictionary['detect'])
             buffer = []
             detection_buffer = []
 

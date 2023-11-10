@@ -65,7 +65,7 @@ class EDFRecorder:
         detection_info = (np.array(detection_info).astype(int) * stim_label).tolist()
 
         # Add the stimulation info to the end of each point for recording
-        if detection_info is not None:
+        if detection_info is not None and len(detection_info) > 0:
             assert len(points) == len(detection_info)
             for idx, point in enumerate(points):
                 point.append(detection_info[idx])
