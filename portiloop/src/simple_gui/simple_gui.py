@@ -98,6 +98,8 @@ class ExperimentState:
         self.stimulator_type = 'Spindle'
         self.display_rate = 0
         self.last_time_display = 0.0
+        self.selected_channel = 'Channel 2'
+        self.display_data = 'Raw'
 
     def start(self):
         # Set the variables for the experiment
@@ -106,6 +108,8 @@ class ExperimentState:
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
         self.exp_name = f"{portiloop_ID}_{time_str}_{stim_str}.csv"
         print(f"Starting recording {self.exp_name.split('.')[0]}")
+
+        print(f"STIMON = {self.stim_on}, STIMTYPE = {self.stimulator_type}")
 
         try:
             mixers = alsaaudio.mixers()
@@ -130,6 +134,7 @@ class ExperimentState:
             elif self.stimulator_type == 'Interval':
                 self.stimulator_cls = AlternatingStimulator
                 self.run_dict['detect'] = False
+                print("HERRREEEEEEE")
         else:
             self.run_dict['stimulate'] = False
             self.stimulator_cls = None
@@ -178,10 +183,6 @@ class ExperimentState:
 
 exp_state = ExperimentState()
 
-# exp_state.start()
-# time.sleep(15)
-# exp_state.stop()
-
 def start():
     exp_state.start()
     start_button.enabled = False
@@ -201,81 +202,104 @@ def update_line_plot():
     try:
         # empty the queue
         x = []
-        y = [[]] * nb_channels
+        y = []
         while not exp_state.display_q.empty():
+            channel = int(exp_state.selected_channel[-1]) - 1
             point = exp_state.display_q.get(block=False)
-            time, point = point
+            time, raw_point, filtered_point = point
             x.append(time)
-            for channel in range(nb_channels):
-                y[channel].append(point[0][channel])
+            if exp_state.display_data == 'Raw':
+                point = raw_point[0][channel] 
+            elif exp_state.display_data == 'Filter': 
+                point = filtered_point[0][channel]
+            else:
+                point = 0.0
+            y.append(point)
     except Exception:
         print("AAAAAAAAAAAAAAAAAAH")
-    
-    # exp_state.display_rate += len(y)
-    # current_time = time.time()
-    # if current_time - exp_state.last_time_display >= 1:
-    #     # print(f"Display rate: {exp_state.display_rate}")
-    #     exp_state.last_time_display = current_time
-    #     exp_state.display_rate = 0
-    print(len(y))
-    print(len(y[0]))
-    print(y)
-    if len(x) > 0 and len(y[0]) > 0:
-        line_plot.push(x, y)
 
-ui.markdown('''## Portiloop Control Center''')
-ui.label(f"Running on Portiloop {portiloop_ID} (v{version}) with {nb_channels} channels.")
-ui.separator()
-
-with ui.column().classes('w-full items-center'):
-    sd_card_checker = ui.checkbox('SD Card').classes('w-full justify-center').bind_value_from(
-        exp_state,
-        'sd_card'
-    ).disable()
-
-    test_sound_button = ui.button('Test Sound 🔊', on_click=test_sound).classes('w-half justify-center')
-
-    stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off', on_change=lambda: exp_state.toggle_stim()).classes('w-full justify-center')
+    if len(x) > 0 and len(y) > 0:
+        line_plot.push(x, [y])
 
 def disable_stim_toggle_callback(caller):
     if caller.value == 'Interval':
         stim_toggle.disable()
         stim_toggle.value = 'Stim On'
+        exp_state.stim_on = True
     else:
         stim_toggle.enable()
 
-with ui.expansion('Advanced Options', icon='settings').classes('w-full items-center'):
-    ui.label("If you are a subject in an experiment, do not change any of these options!")
-    lsl_checker = ui.checkbox('Stream LSL').bind_value_to(exp_state, 'lsl')
-    save_checker = ui.checkbox('Save Local', value=True).bind_value_to(exp_state, 'save_local')
-    select_stimulator = ui.select(['Spindle', 'Interval'], value='Spindle', on_change=disable_stim_toggle_callback).bind_value_to(exp_state, 'stimulator_type')
+def clear_line_plot():
+    line_plot.clear()
 
+ui.markdown('''## Portiloop Control Center''')
+ui.label(f"Running on Portiloop {portiloop_ID} (v{version}) with {nb_channels} channels.")
 ui.separator()
 
-line_timer = ui.timer(1/25, update_line_plot, active=False)
+with ui.tabs().classes('w-full') as tabs:
+    control_tab = ui.tab('Control')
+    output_tab = ui.tab('Output')
 
-with ui.row().classes('w-full justify-center'):
-    start_button = ui.button('Start ▶', on_click=start, color='green').classes('w-full justify-center')
-    stop_button = ui.button('Stop', on_click=stop, color='orange').classes('w-full justify-center')
-    start_button.bind_enabled_to(stop_button, forward=lambda x: not x)
-    start_button.bind_enabled_to(stim_toggle)
-    start_button.bind_enabled_to(lsl_checker)
-    start_button.bind_enabled_to(save_checker)
-    start_button.bind_enabled_to(select_stimulator)
-    start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
+with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
+    ############### First Tab ##################
+    with ui.tab_panel(control_tab):
+        ################ Simple Options ################
+        with ui.column().classes('w-full items-center'):
+            sd_card_checker = ui.checkbox('SD Card').classes('w-full justify-center').bind_value_from(
+                exp_state,
+                'sd_card'
+            ).disable()
 
-time_label = ui.label()
-save_file_label = ui.label().classes('w-full justify-center').bind_text_from(
-    exp_state, 
-    "exp_name", 
-    backward=lambda x: f"Current experiment {x.split('.')[0]}")
+            test_sound_button = ui.button('Test Sound 🔊', on_click=test_sound).classes('w-half justify-center')
 
-timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() - exp_state.time_started).split(".")[0]}'))
-sd_card_timer = ui.timer(0.5, exp_state.check_sd_card)
-start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
+            stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off', on_change=lambda: exp_state.toggle_stim()).classes('w-half justify-center')
+        ui.separator()
 
-line_plot = ui.line_plot(n=nb_channels, limit=250 * 5, figsize=(3, 2), update_every=5)
-line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
+        ################ Advanced Options ###################
+        with ui.expansion('Advanced Options', icon='settings').classes('w-half items-center'):
+            ui.label("If you are a subject in an experiment, do not change any of these options!")
+            lsl_checker = ui.checkbox('Stream LSL').bind_value_to(exp_state, 'lsl')
+            save_checker = ui.checkbox('Save Local', value=True).bind_value_to(exp_state, 'save_local')
+            select_stimulator = ui.select(['Spindle', 'Interval'], value='Spindle', on_change=disable_stim_toggle_callback).bind_value_to(exp_state, 'stimulator_type')
+        ui.separator()
+
+        ################ Recording Controls ##################
+        with ui.row().classes('w-half justify-center'):
+            start_button = ui.button('Start ▶', on_click=start, color='green').classes('w-half items-center')
+            stop_button = ui.button('Stop', on_click=stop, color='orange').classes('w-half items-center')
+            start_button.bind_enabled_to(stop_button, forward=lambda x: not x)
+            start_button.bind_enabled_to(stim_toggle)
+            start_button.bind_enabled_to(lsl_checker)
+            start_button.bind_enabled_to(save_checker)
+            start_button.bind_enabled_to(select_stimulator)
+
+        ################# Control Display ##################
+        time_label = ui.label()
+        save_file_label = ui.label().classes('w-full justify-center').bind_text_from(
+            exp_state, 
+            "exp_name", 
+            backward=lambda x: f"Current experiment {x.split('.')[0]}")
+        timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() - exp_state.time_started).split(".")[0]}'))
+        sd_card_timer = ui.timer(0.5, exp_state.check_sd_card)
+        start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
+
+    ############### Output Tab ####################
+    with ui.tab_panel(output_tab):
+        ############# Line Plot stuff ################
+        line_timer = ui.timer(1/25, update_line_plot, active=False)
+        start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
+        line_plot = ui.line_plot(n=1, limit=250 * 5, figsize=(20, 5), update_every=5)
+
+        ui.separator()
+        ############# Display Control ###############
+        available_channels = [f"Channel {i+1}" for i in range(nb_channels)]
+        select_channel_display = ui.select(available_channels, value=available_channels[1], on_change=clear_line_plot)
+        select_channel_display.bind_value_to(exp_state, 'selected_channel')
+
+        filtered_toggle = ui.toggle(['Raw', 'Filter'], value='Raw', on_change=clear_line_plot).classes('w-full justify-center')
+        filtered_toggle.bind_value_to(exp_state, 'display_data')
+
+# line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
 
 ui.run(
     host='192.168.4.1', 

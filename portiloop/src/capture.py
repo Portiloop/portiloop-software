@@ -266,6 +266,7 @@ def start_capture(
                 detection_buffer += detection_signal
 
             # Stimulate 
+            # print("Stimulating")
             stimulator.stimulate(detection_signal)
 
             # Adds point to buffer for delayed stimulation
@@ -276,7 +277,7 @@ def start_capture(
 
         # Adding the raw point an it's timestamp for display
         timestamp = time.time() - start_time
-        q_display.put((timestamp, raw_point))
+        q_display.put([timestamp, raw_point, filtered_point])
 
         if len(buffer) >= 50:
             live_disp.add_datapoints(buffer)

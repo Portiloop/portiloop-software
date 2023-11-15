@@ -521,7 +521,7 @@ class AlternatingStimulator(Stimulator):
 
     def send_stimulation(self, lsl_text, sound):
         # Send lsl stimulation
-        print(f"Stimulating at time: {time.time()} with text: {lsl_text}")
+        # print(f"Stimulating at time: {time.time()} with text: {lsl_text}")
         self.lsl_streamer.push_marker(lsl_text)
         # Send sound to patient
         if sound:
