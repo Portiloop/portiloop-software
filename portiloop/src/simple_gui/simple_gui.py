@@ -103,9 +103,13 @@ class ExperimentState:
         self.display_data = 'Raw'
         self.disk_str = f"Disk Usage:"
         self.stim_delay = 0
+        self.sleep_timeout = 20
+        self.select_freq = 250
 
     def start(self):
+        print(f"Frequency: {self.select_freq}, Sleep_timeout: {self.sleep_timeout}")
         # Set the variables for the experiment
+        return
         self.time_started = datetime.now()
         stim_str = "STIMON" if self.stim_on else "STIMOFF"
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
@@ -113,6 +117,13 @@ class ExperimentState:
         print(f"Starting recording {self.exp_name.split('.')[0]}")
 
         print(f"STIMON = {self.stim_on}, STIMTYPE = {self.stimulator_type}")
+
+        self.run_dict['frequency'] = self.select_freq
+
+        # Calculating how much time to pause in seconds
+        if self.sleep_timeout > 0:
+            self.time_unpause = self.time_started + self.sleep_timeout * 60 
+            self.pause_value.value = True
 
         try:
             mixers = alsaaudio.mixers()
@@ -172,6 +183,7 @@ class ExperimentState:
         
     def stop(self):
         print("Stopping recording...")
+        return
         self.q_msg.put('STOP')
         assert self._t_capture is not None
         self._t_capture.join()
@@ -188,6 +200,12 @@ class ExperimentState:
         else:
             self.disk_str = f"Disk Usage: {psutil.disk_usage(os.getcwd()).percent}%"
         
+    def check_sleep_timeout(self):
+        if self.pause_value.value:
+            current_time = time.time()
+            if current_time > self.time_unpause:
+                self.pause_value.value = False
+
 exp_state = ExperimentState()
 
 def start():
@@ -285,7 +303,7 @@ with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
         ############# Line Plot stuff ################
         line_timer = ui.timer(1/25, update_line_plot, active=False)
         start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
-        line_plot = ui.line_plot(n=1, limit=250 * 5, update_every=5, figsize=(3, 2))
+        line_plot = ui.line_plot(n=1, limit=250 * 5, update_every=25, figsize=(3, 2))
 
         ui.separator()
         ############# Display Control ###############
@@ -307,6 +325,16 @@ with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
                 exp_state, 
                 'disk_str'
             ).classes('text-2xl')
+            possible_freqs = [50, 100, 250, 500, 1000]
+            select_freq = ui.select(
+                possible_freqs, 
+                value=250, 
+                label="Sample Frequency (Hz)").bind_value_to(exp_state, 'sample_freq').classes('w-3/4')
+            ui.separator().classes('w-2/3')
+            sleep_timeout = ui.slider(min=0, max=40, value=20).bind_value_to(exp_state, 'sleep_timeout').classes('w-3/4') #.props('label-always')
+            ui.label().bind_text_from(sleep_timeout, 'value', backward=lambda x: f"Sleep Timeout: {x} minutes")
+            sleep_timeout_timer = ui.timer(10, exp_state.check_sleep_timeout)
+            ui.separator().classes('w-2/3')
             lsl_checker = ui.checkbox('Stream LSL').bind_value_to(exp_state, 'lsl')
             save_checker = ui.checkbox('Save Recording Locally', value=True).bind_value_to(exp_state, 'save_local')
             stim_delay = ui.number(value=0, label='Stimulation Delay (in ms)').bind_value_to(exp_state, 'stim_delay')
@@ -316,6 +344,8 @@ with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
             start_button.bind_enabled_to(save_checker)
             start_button.bind_enabled_to(select_stimulator)
             start_button.bind_enabled_to(stim_delay)
+            start_button.bind_enabled_to(select_freq)
+            start_button.bind_enabled_to(sleep_timeout)
 
 # line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
 
