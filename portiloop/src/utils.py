@@ -58,27 +58,41 @@ class EDFRecorder:
         print(f"Closing")
         self.file.close()
 
-    def add_recording_data(self, points, detection_info, stim_on):
-
+    def add_recording_data(self, points, detection_info, detection_on, stim_on):
         stim_label = 2 if stim_on else 1
         
         detection_info = (np.array(detection_info).astype(int) * stim_label).tolist()
 
-        # Add the stimulation info to the end of each point for recording
-        if detection_info is not None and len(detection_info) > 0:
+        # If detection is on but we do not have any points, we add 0s
+        if detection_on and len(detection_info) == 0:
+            for point in points:
+                point.append(0)
+        # If detection is not on we simply pass
+        elif not detection_on:
+            pass
+        # If detection_info has points
+        elif len(detection_info) > 0:
+            # This takes care of the case when detection is turned on by unpausing between two saves
+            diff_points = len(points) - len(detection_info)
+
+            if diff_points != 0:
+                detection_info = [0.0] * diff_points + detection_info
+
             assert len(points) == len(detection_info)
             for idx, point in enumerate(points):
                 point.append(detection_info[idx])
-
+            
         data = points
         self.writing_buffer += data
         # write to file
+
         if len(self.writing_buffer) >= self.max_write:
             if self.out_format == 'csv':
                 np.savetxt(self.file, np.array(self.writing_buffer), delimiter=',')
             elif self.out_format == 'npy':
                 np.save(self.file, np.array(self.writing_buffer))
             self.writing_buffer = []
+
 
 
 class LiveDisplay():

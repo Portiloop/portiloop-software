@@ -135,6 +135,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                 self.last_detected_ts = ts
 
     def send_stimulation(self, lsl_text, sound):
+        print(f'Sending stimulation...')
         # Send lsl stimulation
         self.lsl_streamer.push_marker(lsl_text)
         # Send sound to patient

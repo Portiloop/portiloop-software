@@ -109,7 +109,6 @@ class ExperimentState:
     def start(self):
         print(f"Frequency: {self.select_freq}, Sleep_timeout: {self.sleep_timeout}")
         # Set the variables for the experiment
-        return
         self.time_started = datetime.now()
         stim_str = "STIMON" if self.stim_on else "STIMOFF"
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
@@ -122,8 +121,9 @@ class ExperimentState:
 
         # Calculating how much time to pause in seconds
         if self.sleep_timeout > 0:
-            self.time_unpause = self.time_started + self.sleep_timeout * 60 
+            self.time_unpause = self.time_started.timestamp() + self.sleep_timeout * 60 
             self.pause_value.value = True
+            print(f"Currently: {self.time_started.timestamp()}, Pausing until: {self.time_unpause}")
 
         try:
             mixers = alsaaudio.mixers()
@@ -183,7 +183,6 @@ class ExperimentState:
         
     def stop(self):
         print("Stopping recording...")
-        return
         self.q_msg.put('STOP')
         assert self._t_capture is not None
         self._t_capture.join()
@@ -346,6 +345,7 @@ with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
             start_button.bind_enabled_to(stim_delay)
             start_button.bind_enabled_to(select_freq)
             start_button.bind_enabled_to(sleep_timeout)
+            start_button.bind_enabled_to(sleep_timeout_timer, 'active', forward=lambda x: not x)
 
 # line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
 

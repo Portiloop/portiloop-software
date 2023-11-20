@@ -208,6 +208,7 @@ def start_capture(
         lsl_streamer.push_marker(marker_str)
 
     start_time = time.time()
+    last_time = 0
 
     # Main capture loop
     while True:
@@ -264,14 +265,18 @@ def start_capture(
             detection_signal = detector.detect(filtered_point)
             if capture_dictionary['detect']:
                 detection_buffer += detection_signal
-
             # Stimulate 
-            # print("Stimulating")
             stimulator.stimulate(detection_signal)
+
+            # Send a stimulation every second (uncomment for testing)
+            # current_time = time.time()
+            # if current_time - last_time >= 1.0:
+            #     stimulator.send_stimulation("Testing", True)
+            #     last_time = current_time
 
             # Adds point to buffer for delayed stimulation
             stimulation_delayer.step(filtered_point[0][capture_dictionary['channel_detection'] - 1])
-        
+
         # Add point to the buffer to send to viz and recorder
         buffer += raw_point
 
@@ -281,7 +286,7 @@ def start_capture(
 
         if len(buffer) >= 50:
             live_disp.add_datapoints(buffer)
-            recorder.add_recording_data(buffer, detection_buffer, capture_dictionary['detect'])
+            recorder.add_recording_data(buffer, detection_buffer, capture_dictionary['detect'], capture_dictionary['stimulate'])
             buffer = []
             detection_buffer = []
 
