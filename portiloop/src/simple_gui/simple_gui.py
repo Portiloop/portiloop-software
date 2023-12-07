@@ -16,7 +16,7 @@ from alsaaudio import ALSAAudioError
 import psutil
 
 # This line is to start something which seems to be necessary to make sure the sound works properly. Not sure why
-# os.system('aplay /home/mendel/portiloop-software/portiloop/sounds/sample1.wav')
+os.system('aplay /home/mendel/portiloop-software/portiloop/sounds/sample1.wav')
 
 WORKSPACE_DIR_SD = "/media/sd_card/workspace/edf_recordings/"
 WORKSPACE_DIR_IN = "/home/mendel/workspace/edf_recordings/"
@@ -103,7 +103,7 @@ class ExperimentState:
         self.display_data = 'Raw'
         self.disk_str = f"Disk Usage:"
         self.stim_delay = 0
-        self.sleep_timeout = 20
+        self.sleep_timeout = 0
         self.select_freq = 250
 
     def start(self):
@@ -328,9 +328,9 @@ with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
             select_freq = ui.select(
                 possible_freqs, 
                 value=250, 
-                label="Sample Frequency (Hz)").bind_value_to(exp_state, 'sample_freq').classes('w-3/4')
+                label="Sample Frequency (Hz)").bind_value_to(exp_state, 'select_freq').classes('w-3/4')
             ui.separator().classes('w-2/3')
-            sleep_timeout = ui.slider(min=0, max=40, value=20).bind_value_to(exp_state, 'sleep_timeout').classes('w-3/4') #.props('label-always')
+            sleep_timeout = ui.slider(min=0, max=40, value=0).bind_value_to(exp_state, 'sleep_timeout').classes('w-3/4') #.props('label-always')
             ui.label().bind_text_from(sleep_timeout, 'value', backward=lambda x: f"Sleep Timeout: {x} minutes")
             sleep_timeout_timer = ui.timer(10, exp_state.check_sleep_timeout)
             ui.separator().classes('w-2/3')
@@ -347,7 +347,7 @@ with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
             start_button.bind_enabled_to(sleep_timeout)
             start_button.bind_enabled_to(sleep_timeout_timer, 'active', forward=lambda x: not x)
 
-# line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
+line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
 
 ui.run(
     host='192.168.4.1', 

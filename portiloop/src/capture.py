@@ -271,7 +271,7 @@ def start_capture(
             # Send a stimulation every second (uncomment for testing)
             # current_time = time.time()
             # if current_time - last_time >= 1.0:
-            #     stimulator.send_stimulation("Testing", True)
+            #     stimulator.stimulate([True])
             #     last_time = current_time
 
             # Adds point to buffer for delayed stimulation
