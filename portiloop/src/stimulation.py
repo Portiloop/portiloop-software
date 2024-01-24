@@ -5,6 +5,7 @@ from threading import Thread, Lock
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
+import copy
 
 from portiloop.src import ADS
 from portiloop.src.utils import Dummy
@@ -436,11 +437,11 @@ class AlternatingStimulator(Stimulator):
             stimulation_delay (float): simple delay between a detection and a stimulation
             inter_stim_delay (float): time to wait between a stimulation and the next detection 
         """
-        if soundname is None:
-            self.soundname = '15msPN_48kHz_norm_stereo.wav' # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
-        else:
-            self.soundname = soundname
-        self._sound = Path(__file__).parent.parent / 'sounds' / self.soundname
+        self.pos_soundname = 'syllPos120.wav' # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
+        self.neg_soundname = 'syllNeg120.wav'
+
+        self.pos_sound = Path(__file__).parent.parent / 'sounds' / self.pos_soundname
+        self.neg_sound = Path(__file__).parent.parent / 'sounds' / self.neg_soundname
 
         self._thread = None
         self._lock = Lock()
@@ -453,7 +454,7 @@ class AlternatingStimulator(Stimulator):
 
         # Initialize Alsa stuff
         # Open WAV file and set PCM device
-        with wave.open(str(self._sound), 'rb') as f: 
+        with wave.open(str(self.pos_sound), 'rb') as f: 
             device = 'softvol'
             
             self.duration = f.getnframes() / float(f.getframerate())
@@ -482,27 +483,62 @@ class AlternatingStimulator(Stimulator):
                 raise e
                 
             # Store data in list to avoid reopening the file
-            self.wav_list = []
+            self.pos_wav_list = []
             while True:
                 data = f.readframes(self.periodsize)  
                 if data:
-                    self.wav_list.append(data)
+                    self.pos_wav_list.append(data)
                 else: 
                     break
-            # self.inverted_sound = [np.frombuffer(chunk, dtype=np.int16) * -1 for chunk in self.wav_list]
-            self.inverted_sound = self.wav_list
+
+        with wave.open(str(self.neg_sound), 'rb') as f: 
+            device = 'softvol'
+            
+            self.duration = f.getnframes() / float(f.getframerate())
+            
+            format = None
+
+            # 8bit is unsigned in wav files
+            if f.getsampwidth() == 1:
+                format = alsaaudio.PCM_FORMAT_U8
+            # Otherwise we assume signed data, little endian
+            elif f.getsampwidth() == 2:
+                format = alsaaudio.PCM_FORMAT_S16_LE
+            elif f.getsampwidth() == 3:
+                format = alsaaudio.PCM_FORMAT_S24_3LE
+            elif f.getsampwidth() == 4:
+                format = alsaaudio.PCM_FORMAT_S32_LE
+            else:
+                raise ValueError('Unsupported format')
+
+            self.periodsize = f.getframerate() // 8
+
+            try:
+                self.pcm = alsaaudio.PCM(channels=f.getnchannels(), rate=f.getframerate(), format=format, periodsize=self.periodsize, device=device)
+            except alsaaudio.ALSAAudioError as e:
+                self.pcm = Dummy()
+                raise e
+                
+            # Store data in list to avoid reopening the file
+            self.neg_wav_list = []
+            while True:
+                data = f.readframes(self.periodsize)  
+                if data:
+                    self.neg_wav_list.append(data)
+                else: 
+                    break
         # print(f"DEBUG: Stimulator will play sound {self.soundname}, duration: {self.duration:.3f} seconds")
 
 
-    def play_sound(self):
+    def play_sound(self, polarity):
         '''
         Open the wav file and play a sound
         '''
-        played_sound = self.wav_list if self.stim_polarity else self.inverted_sound
+        print(polarity)
+        played_sound = self.pos_wav_list if polarity else self.neg_wav_list
         for data in played_sound:
             self.pcm.write(data) 
 
-            
         # Added this to make sure the thread does not stop before the sound is done playing
         time.sleep(self.duration)
     
@@ -523,16 +559,17 @@ class AlternatingStimulator(Stimulator):
         # Send lsl stimulation
         # print(f"Stimulating at time: {time.time()} with text: {lsl_text}")
         self.lsl_streamer.push_marker(lsl_text)
+        polarity_copy = copy.deepcopy(self.stim_polarity)
         # Send sound to patient
         if sound:
             with self._lock:
                 if self._thread is None: 
-                    self._thread = Thread(target=self._t_sound, daemon=True)
+                    self._thread = Thread(target=self._t_sound, args=(polarity_copy, ), daemon=True)
                     self._thread.start()
 
                 
-    def _t_sound(self):
-        self.play_sound()
+    def _t_sound(self, polarity):
+        self.play_sound(polarity)
         with self._lock:
             self._thread = None
     
