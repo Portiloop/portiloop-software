@@ -164,6 +164,40 @@ class CaptureFrontend(ABC):
         pass
 
 
+class FieldTripFrontend(CaptureFrontend):
+    def __init__(self, IP, port):
+        """
+        IP to connect to
+        """
+        self.ftc = FieldTrip.Client()
+
+    def init_capture(self):
+        self.ftc.connect(IP, port)
+
+    def send_msg(self, msg):
+        """
+        Does nothing
+        """
+        if msg == "STOP":
+            self.stop_msg = True
+
+    def get_msg(self):
+        """
+        If we have reached the end of the file, this tells the main loop to stop
+        """
+        if self.stop_msg:
+            return "STOP"
+
+    def get_data(self):
+        if H.nSamples > 0:
+            # Not sure what the format is and how it works in the background so would need to test to check this is right
+            data = self.ftc.getData()
+            return data
+
+    def close(self):
+        self.ftc.disconnect()
+
+
 class ADSFrontend(CaptureFrontend):
     def __init__(self, duration, frequency, python_clock, channel_states, process):
         """
