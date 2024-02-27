@@ -12,6 +12,7 @@ import warnings
 import multiprocessing as mp
 import time
 from portiloop.src.processing import int_to_float
+from portiloop.src.fieldtrip.FieldTrip import Client
 
 
 EDF_PATH = Path.home() / 'workspace' / 'edf_recording'
@@ -169,10 +170,13 @@ class FieldTripFrontend(CaptureFrontend):
         """
         IP to connect to
         """
-        self.ftc = FieldTrip.Client()
+        self.ftc = Client()
+        self.stop_msg = False
+        self.IP = IP
+        self.port = port
 
     def init_capture(self):
-        self.ftc.connect(IP, port)
+        self.ftc.connect(self.IP, self.port)
 
     def send_msg(self, msg):
         """
@@ -183,23 +187,26 @@ class FieldTripFrontend(CaptureFrontend):
 
     def get_msg(self):
         """
-        If we have reached the end of the file, this tells the main loop to stop
+        Tells the main loop to stop
         """
         if self.stop_msg:
             return "STOP"
 
     def get_data(self):
         if H.nSamples > 0:
-            # Not sure what the format is and how it works in the background so would need to test to check this is right
+            # Not sure what the format is
             data = self.ftc.getData()
             return data
+        else:
+            print('FieldTrip Frontend was told to stop, Stopping!')
+            self.stop_msg = True
 
     def close(self):
         self.ftc.disconnect()
 
 
 class ADSFrontend(CaptureFrontend):
-    def __init__(self, duration, frequency, python_clock, channel_states, process):
+    def __init__(self, duration, frequency, python_clock, channel_states, enable_bias, process):
         """
         duration (float): duration of the capture in seconds
         frequency (float): sampling frequency in Hz
@@ -211,6 +218,7 @@ class ADSFrontend(CaptureFrontend):
         self.frequency = frequency
         self.python_clock = python_clock
         self.channel_states = channel_states
+        self.enable_bias = enable_bias
 
         # Initialize The data pipes to talk to the data process
         self.capture_started = False
@@ -229,7 +237,8 @@ class ADSFrontend(CaptureFrontend):
                                            self.frequency,
                                            self.python_clock,
                                            1.0,
-                                           self.channel_states)
+                                           self.channel_states,
+                                           self.enable_bias)
                                      )
         self._p_capture.start()
         self.capture_started = True

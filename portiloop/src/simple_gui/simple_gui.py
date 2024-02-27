@@ -45,6 +45,8 @@ RUN_SETTINGS = {
     "display": False,
     "threshold": 0.75,
     "signal_input": "ADS",
+    "FieldTripIP": '192.168.0.1',
+    "FieldTripPort": 8888,
     "python_clock": True,
     "signal_labels": [f"ch{i+1}" for i in range(nb_channels)],
     "channel_states": [
@@ -105,6 +107,10 @@ class ExperimentState:
         self.stim_delay = 0
         self.sleep_timeout = 0
         self.select_freq = 250
+        self.signal_input = "ADS"
+        self.FieldTripIP = "192.168.0.1"
+        self.FieldTripPort = 8888
+        self.enable_bias = True
 
     def start(self):
         print(f"Frequency: {self.select_freq}, Sleep_timeout: {self.sleep_timeout}")
@@ -114,8 +120,6 @@ class ExperimentState:
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
         self.exp_name = f"{portiloop_ID}_{time_str}_{stim_str}.csv"
         print(f"Starting recording {self.exp_name.split('.')[0]}")
-
-        print(f"STIMON = {self.stim_on}, STIMTYPE = {self.stimulator_type}")
 
         self.run_dict['frequency'] = self.select_freq
 
@@ -163,6 +167,11 @@ class ExperimentState:
             self.run_dict['record'] = True
         else:
             self.run_dict['record'] = False
+
+        self.run_dict['signal_input'] = self.signal_input
+        self.run_dict['FieldTripIP'] = self.FieldTripIP
+        self.run_dict['FieldTripPort'] = self.FieldTripPort
+        self.run_dict['enable_bias'] = self.enable_bias
 
         if self.sd_card:
             workspace_dir = WORKSPACE_DIR_SD
@@ -253,6 +262,14 @@ def disable_stim_toggle_callback(caller):
     else:
         stim_toggle.enable()
 
+def disable_siginp_callback(caller):
+    if caller.value == "FieldTrip":
+        ip_text.enable()
+        port_text.enable()
+    else:
+        ip_text.disable()
+        port_text.disable()
+
 ui.label('Portiloop 🧠').classes('text-4xl font-mono')
 ui.label('Control Center').classes('text-2xl font-mono')
 
@@ -339,13 +356,32 @@ with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
             stim_delay = ui.number(value=0, label='Stimulation Delay (in ms)').bind_value_to(exp_state, 'stim_delay')
             select_stimulator = ui.select(['Spindle', 'Interval'], value='Spindle', on_change=disable_stim_toggle_callback, label="Stimulator").bind_value_to(exp_state, 'stimulator_type')
             select_stimulator.classes('w-1/2')
+            select_signal_input = ui.select(['ADS', 'FieldTrip', 'File'], value='ADS', on_change=disable_siginp_callback, label='Signal Input').bind_value_to(exp_state, 'signal_input')
+            select_signal_input.classes('w-1/2')
+            # IP selector
+            ip_text = ui.input(label='FieldTrip IP', value=exp_state.FieldTripIP).bind_value_to(exp_state, 'FieldTripIP')
+            ip_text.classes('w-1/2')
+            port_text = ui.number(label='FieldTrip Port', value=exp_state.FieldTripPort, min=0, max=65535, step=1).bind_value_to(exp_state, 'FieldTripPort')
+            port_text.classes('w-1/2')
+
+            bias_switch = ui.switch('BIAS OUT', value=exp_state.enable_bias).bind_value_to(exp_state, 'enable_bias')
+            bias_switch.classes('w-1/2')
+
             start_button.bind_enabled_to(lsl_checker)
             start_button.bind_enabled_to(save_checker)
             start_button.bind_enabled_to(select_stimulator)
+            start_button.bind_enabled_to(select_signal_input)
+            start_button.bind_enabled_to(ip_text)
+            start_button.bind_enabled_to(port_text)
+            start_button.bind_enabled_to(bias_switch)
             start_button.bind_enabled_to(stim_delay)
             start_button.bind_enabled_to(select_freq)
             start_button.bind_enabled_to(sleep_timeout)
             start_button.bind_enabled_to(sleep_timeout_timer, 'active', forward=lambda x: not x)
+
+            # Calling it once to disable what is needed on startup
+            disable_siginp_callback(select_signal_input)
+            
 
 line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
 

@@ -21,7 +21,7 @@ from portiloop.src.stimulation import TimingDelayer, UpStateDelayer
 
 from portiloop.src.processing import FilterPipeline
 from portiloop.src.config import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
-from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH, RECORDING_PATH, get_portiloop_version
+from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, FieldTripFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH, RECORDING_PATH, get_portiloop_version
 from IPython.display import clear_output, display
 import ipywidgets as widgets
 import socket
@@ -31,7 +31,7 @@ from pathlib import Path
 PORTILOOP_ID = f"{socket.gethostname()}-portiloop"
 
 
-def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_msg_in, channel_states):
+def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_msg_in, channel_states, enable_bias):
     """
     Args:
         p_data_o: multiprocessing.Pipe: captured datapoints are put here
@@ -55,7 +55,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
             datarate = 2 * frequency
         else:  # set ADS to frequency
             datarate = frequency
-        config = mod_config(config, datarate, channel_states)
+        config = mod_config(config, datarate, channel_states, enable_bias)
         
         frontend.write_regs(0x00, config)
         # data = frontend.read_regs(0x00, len(config))
@@ -125,13 +125,29 @@ def start_capture(
 
     # Initialize data frontend
     fake_filename = RECORDING_PATH / 'test_recording.csv'
-    capture_frontend = ADSFrontend(
-        duration=capture_dictionary['duration'],
-        frequency=capture_dictionary['frequency'],
-        python_clock=capture_dictionary['python_clock'],
-        channel_states=capture_dictionary['channel_states'],
-        process=capture_process,
-    ) if capture_dictionary['signal_input'] == "ADS" else FileFrontend(fake_filename, capture_dictionary['nb_channels'], capture_dictionary['channel_detection'])
+
+    if capture_dictionary['signal_input'] == 'ADS':
+        capture_frontend = ADSFrontend(
+            duration=capture_dictionary['duration'],
+            frequency=capture_dictionary['frequency'],
+            python_clock=capture_dictionary['python_clock'],
+            channel_states=capture_dictionary['channel_states'],
+            enable_bias=capture_dictionary['enable_bias'],
+            process=capture_process,
+        ) 
+    elif capture_dictionary['signal_input'] == "File": 
+        capture_frontend = FileFrontend(
+            fake_filename, 
+            capture_dictionary['nb_channels'], 
+            capture_dictionary['channel_detection']
+        )
+    elif capture_dictionary['signal_input'] == 'FieldTrip':
+        capture_frontend = FieldTripFrontend(
+            capture_dictionary['FieldTripIP'],
+            capture_dictionary['FieldTripPort'],
+        )
+    else:
+        raise ValueError(f"Invalid Signal Input: {capture_dictionary['signal_input']}")
 
     # Initialize detector, LSL streamer and stimulatorif requested
     detector = detector_cls(capture_dictionary['threshold'], channel=capture_dictionary['channel_detection']) if capture_dictionary['detect'] else Dummy()

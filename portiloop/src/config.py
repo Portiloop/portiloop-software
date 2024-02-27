@@ -93,7 +93,13 @@ def to_ads_frequency(frequency):
             break
     return dr
     
-def mod_config(config, datarate, channel_modes):
+def mod_config(config, datarate, channel_modes, enable_bias):
+
+    # Enable or disable bias
+    if enable_bias:
+        config[3] = 0xFC
+    else:
+        config[3] = 0xBC
     
     # datarate:
     possible_datarates = [(250, 0x06),
