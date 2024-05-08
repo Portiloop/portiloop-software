@@ -117,6 +117,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
         time.sleep(self.duration)
     
     def stimulate(self, detection_signal):
+        stim = []
         for sig in detection_signal:
             # We detect a stimulation
             if sig:
@@ -125,6 +126,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                 
                 # Check if time since last stimulation is long enough
                 if ts - self.last_detected_ts > self.wait_t:
+                    stim.append(True)
                     if not isinstance(self.delayer, Dummy):
                         # If we have a delayer, notify it
                         self.delayer.detected()
@@ -134,6 +136,9 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                         self.send_stimulation("STIM", True)
 
                 self.last_detected_ts = ts
+            else:
+                stim.append(False)
+        return stim
 
     def send_stimulation(self, lsl_text, sound):
         # Send lsl stimulation

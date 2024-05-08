@@ -61,7 +61,9 @@ class EDFRecorder:
     def add_recording_data(self, points, detection_info, detection_on, stim_on):
         stim_label = 2 if stim_on else 1
         
-        detection_info = (np.array(detection_info).astype(int) * stim_label).tolist()
+        #detection_info = (np.array(detection_info).astype(int) * stim_label).tolist()
+        # No need to bother np arrays
+        detection_info = [stim_label*x for x in detection_info]
 
         # If detection is on but we do not have any points, we add 0s
         if detection_on and len(detection_info) == 0:

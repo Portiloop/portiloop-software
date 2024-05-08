@@ -263,10 +263,10 @@ def start_capture(
         if not pause:
             # Detect using the latest point
             detection_signal = detector.detect(filtered_point)
-            if capture_dictionary['detect']:
-                detection_buffer += detection_signal
             # Stimulate 
-            stimulator.stimulate(detection_signal)
+            stim = stimulator.stimulate(detection_signal)
+            if capture_dictionary['detect']:
+                detection_buffer += stim
 
             # Send a stimulation every second (uncomment for testing)
             # current_time = time.time()
