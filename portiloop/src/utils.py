@@ -34,7 +34,6 @@ def get_portiloop_version():
         version = -1
     return version
 
-
 class DummyAlsaMixer:
     def __init__(self):
         self.volume = 50
@@ -48,15 +47,16 @@ class DummyAlsaMixer:
 class EDFRecorder:
     def __init__(self, filename):
         self.writing_buffer = []
-        self.max_write = 1000
+        self.max_write = 1
         self.filename = filename
-        self.file = open(self.filename, 'a')        
+        self.file = open(self.filename, 'a')
+        self.writer = csv.writer(self.file)
         print(f"Saving file to {self.filename}")
         self.out_format = 'csv' # 'npy'
 
     def __del__(self):
         print(f"Closing")
-        self.file.close()
+        # self.file.close()
 
     def add_recording_data(self, points, detection_info, detection_on, stim_on):
         stim_label = 2 if stim_on else 1
@@ -90,7 +90,8 @@ class EDFRecorder:
 
         if len(self.writing_buffer) >= self.max_write:
             if self.out_format == 'csv':
-                np.savetxt(self.file, np.array(self.writing_buffer), delimiter=',')
+                self.writer.writerows(self.writing_buffer)
+                #np.savetxt(self.file, np.array(self.writing_buffer), delimiter=',')
             elif self.out_format == 'npy':
                 np.save(self.file, np.array(self.writing_buffer))
             self.writing_buffer = []
