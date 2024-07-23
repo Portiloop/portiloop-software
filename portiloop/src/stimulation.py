@@ -45,7 +45,7 @@ class Stimulator(ABC):
 # Example implementation for sleep spindles
 
 class SleepSpindleRealTimeStimulator(Stimulator):
-    def __init__(self, soundname=None, lsl_streamer=Dummy()):
+    def __init__(self, soundname=None, lsl_streamer=Dummy(),sham=False):
         """
         params: 
             stimulation_delay (float): simple delay between a detection and a stimulation
@@ -62,6 +62,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
         self.wait_t = 0.4  # 400 ms
         self.delayer = None
         self.lsl_streamer = lsl_streamer
+        self.sham = sham
 
         # Initialize Alsa stuff
         # Open WAV file and set PCM device
@@ -133,7 +134,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                         # Send the LSL marer for the fast stimulation 
                         self.send_stimulation("FAST_STIM", False)
                     else:
-                        self.send_stimulation("STIM", True)
+                        self.send_stimulation("STIM", not self.sham)
 
                 self.last_detected_ts = ts
             else:

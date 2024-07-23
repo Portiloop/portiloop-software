@@ -141,7 +141,7 @@ def start_capture(
         }
 #     print(f"DEBUG: Portiloop ID: {PORTILOOP_ID}")
     lsl_streamer = LSLStreamer(streams, capture_dictionary['nb_channels'], capture_dictionary['frequency'], id=PORTILOOP_ID) if capture_dictionary['lsl'] else Dummy()
-    stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer) if capture_dictionary['stimulate'] else Dummy()
+    stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer,sham=not capture_dictionary['stimulate'])
     # Initialize filtering pipeline
     if filter:
         fp = FilterPipeline(nb_channels=capture_dictionary['nb_channels'],
@@ -265,6 +265,8 @@ def start_capture(
             detection_signal = detector.detect(filtered_point)
             # Stimulate 
             stim = stimulator.stimulate(detection_signal)
+            if stim is None:
+                stim = detection_signal
             if capture_dictionary['detect']:
                 detection_buffer += stim
 

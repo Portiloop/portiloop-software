@@ -143,16 +143,16 @@ class ExperimentState:
 
         if self.stim_on:
             self.run_dict['stimulate'] = True
-            if self.stimulator_type == 'Spindle':
-                self.stimulator_cls = SleepSpindleRealTimeStimulator
-                if self.stim_delay != 0:
-                    self.run_dict['stim_delay'] = int(self.stim_delay) / 1000
-            elif self.stimulator_type == 'Interval':
-                self.stimulator_cls = AlternatingStimulator
-                self.run_dict['detect'] = False
         else:
             self.run_dict['stimulate'] = False
-            self.stimulator_cls = None
+
+        if self.stimulator_type == 'Spindle':
+            self.stimulator_cls = SleepSpindleRealTimeStimulator
+            if self.stim_delay != 0:
+                self.run_dict['stim_delay'] = int(self.stim_delay) / 1000
+        elif self.stimulator_type == 'Interval':
+            self.stimulator_cls = AlternatingStimulator
+            self.run_dict['detect'] = False
 
         if self.lsl:
             self.run_dict['lsl'] = True
