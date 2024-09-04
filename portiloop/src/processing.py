@@ -1,6 +1,6 @@
+from abc import ABC, abstractmethod
 import numpy as np
 from scipy import signal
-
 
 def filter_24(value):
     return (value * 4.5) / (2**23 - 1) / 24.0 * 1e6  # 23 because 1 bit is lost for sign
@@ -48,7 +48,24 @@ class FIR:
         return filtered
 
 
-class FilterPipeline:
+class BaseFilter(ABC):
+    _registry = {}
+        
+    def __init_subclass__(cls,  register_name=None, **kwargs):
+        super().__init_subclass__(**kwargs)
+        name = register_name or cls.__name__
+        cls._registry[name] = cls
+
+    @classmethod
+    def get_filter(cls, name:str):
+        return cls._registry.get(name)
+    
+    @abstractmethod
+    def filter(self, value):
+        raise NotImplementedError
+
+
+class SpindleFilter(BaseFilter, register_name="Spindle"):
     def __init__(
         self,
         nb_channels,
@@ -61,6 +78,7 @@ class FilterPipeline:
         alpha_std=0.001,
         epsilon=0.000001,
         filter_args=[],
+        verbose=False,
     ):
         if len(filter_args) > 0:
             use_fir, use_notch, use_std = filter_args
@@ -126,11 +144,14 @@ class FilterPipeline:
             ]
         self.fir = FIR(self.nb_channels, self.fir_coef)
 
+        self.verbose = verbose
+
     def filter(self, value):
         """
         value: a numpy array of shape (data series, channels)
         """
-        print(f"SS Filtering shape {value.shape}")
+        if self.verbose:
+            print(f"Spindle Filtering shape {value.shape}")
 
         for i, x in enumerate(value):  # loop over the data series
             # FIR:
@@ -162,12 +183,13 @@ class FilterPipeline:
         return value
 
 
-class SOOnlineFiltering:
-    def __init__(self, nb_channels, sampling_rate, **kwargs):
+class SlowWaveFilter(BaseFilter, register_name="SlowWave"):
+    def __init__(self, nb_channels, sampling_rate, verbose=False, **kwargs):
         print('SOOnlineFiltering initialized')
         self.fs = sampling_rate
         self.nb_channels = nb_channels
 
+        self.verbose = verbose
         # DC offset removal filter (high-pass filter)
         self.dc_b, self.dc_a = signal.butter(1, 0.5/(self.fs/2), 'high')
         # 60 Hz notch filter
@@ -179,7 +201,7 @@ class SOOnlineFiltering:
         low = 0.5 / (self.fs/2)
         high = 30.0 / (self.fs/2)
         self.bp_b, self.bp_a = signal.butter(4, [low, high], btype='band')
-
+                     
         # Initialize filter states for each channel
         self.dc_states = [signal.lfilter_zi(self.dc_b, self.dc_a) for _ in range(self.nb_channels)]
         self.notch_states = [signal.lfilter_zi(self.notch_b, self.notch_a) for _ in range(self.nb_channels)]
@@ -189,21 +211,22 @@ class SOOnlineFiltering:
         """
         value: a numpy array of shape (data series, channels)
         """
-        print(f"SO Filtering shape {value.shape}")
+        if self.verbose:
+            print(f"SO Filtering shape {value.shape}")
         
         filtered_value = np.zeros_like(value)
 
         for i in range(self.nb_channels):
             channel_data = value[:, i]
 
-            # Remove DC offset
-            dc_removed, self.dc_states[i] = signal.lfilter(self.dc_b, self.dc_a, channel_data, zi=self.dc_states[i])
-            
             # Apply notch filter
-            notched, self.notch_states[i] = signal.lfilter(self.notch_b, self.notch_a, dc_removed, zi=self.notch_states[i])
+            notched, self.notch_states[i] = signal.lfilter(self.notch_b, self.notch_a, channel_data, zi=self.notch_states[i])
             
             # Apply bandpass filter
-            filtered, self.bp_states[i] = signal.lfilter(self.bp_b, self.bp_a, notched, zi=self.bp_states[i])
+            bandpassed, self.bp_states[i] = signal.lfilter(self.bp_b, self.bp_a, notched, zi=self.bp_states[i])
+            
+            # Remove DC offset
+            filtered, self.dc_states[i] = signal.lfilter(self.dc_b, self.dc_a, bandpassed, zi=self.dc_states[i])
             
             filtered_value[:, i] = filtered
 

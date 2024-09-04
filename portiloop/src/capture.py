@@ -11,7 +11,7 @@ import warnings
 from threading import Thread, Lock
 from portiloop.src import ADS
 from portiloop.src.hardware.leds import Color, LEDs
-from portiloop.src.detection import SlowOscillationDetector, SleepSpindleRealTimeDetector
+from portiloop.src.detection import Detector
 if ADS:
     import alsaaudio
     from alsaaudio import ALSAAudioError
@@ -19,10 +19,7 @@ if ADS:
 
 from portiloop.src.stimulation import TimingDelayer, UpStateDelayer
 
-from portiloop.src.processing import (
-    FilterPipeline,
-    SOOnlineFiltering,
-)
+from portiloop.src.processing import BaseFilter
 from portiloop.src.config import (
     mod_config,
     LEADOFF_CONFIG,
@@ -129,10 +126,10 @@ def capture_process(
 
 
 def start_capture(
-    detector_cls, stimulator_cls, capture_dictionary, q_msg, q_display, pause_value
+    detector_type, stimulator_cls, capture_dictionary, q_msg, q_display, pause_value, 
 ):
     #     print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
-
+    detector_cls = Detector.get_detector(detector_type)
     # Initialize the LED
     leds = LEDs()
     if capture_dictionary["stimulate"]:
@@ -190,7 +187,7 @@ def start_capture(
     )
     # Initialize filtering pipeline
     if filter:
-        fp = FilterPipeline(
+        fp = BaseFilter.get_filter(detector_type)(
             nb_channels=capture_dictionary["nb_channels"],
             sampling_rate=capture_dictionary["frequency"],
             power_line_fq=capture_dictionary["filter_settings"]["power_line"],
@@ -204,11 +201,7 @@ def start_capture(
             epsilon=capture_dictionary["filter_settings"]["epsilon"],
             filter_args=capture_dictionary["filter_settings"]["filter_args"],
         )
-        if isinstance(detector, SlowOscillationDetector):
-            fp = SOOnlineFiltering(
-                nb_channels=capture_dictionary["nb_channels"],
-                sampling_rate=capture_dictionary["frequency"],
-            )
+
     # Launch the capture process
     capture_frontend.init_capture()
 

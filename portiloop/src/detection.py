@@ -14,6 +14,7 @@ from scipy import signal
 
 
 class Detector(ABC):
+    _registry = {}
 
     def __init__(self, threshold=None, channel=None):
         """
@@ -21,7 +22,16 @@ class Detector(ABC):
         """
         self.threshold = threshold
         self.channel = channel
+        
+    def __init_subclass__(cls, register_name=None, **kwargs):
+        super().__init_subclass__(**kwargs)
+        name = register_name or cls.__name__
+        cls._registry[name] = cls
 
+    @classmethod
+    def get_detector(cls, name:str):
+        return cls._registry.get(name)
+    
     @abstractmethod
     def detect(self, datapoints):
         """
@@ -48,7 +58,7 @@ DEFAULT_MODEL_PATH = str(
 # print(DEFAULT_MODEL_PATH)
 
 
-class SleepSpindleRealTimeDetector(Detector):
+class SleepSpindleRealTimeDetector(Detector, register_name="Spindle"):
     def __init__(
         self,
         threshold=0.5,
@@ -185,7 +195,7 @@ class SleepSpindleRealTimeDetector(Detector):
 
         return output_data_y, output_data_h
 
-class SlowOscillationDetector:
+class SlowOscillationDetector(Detector, register_name="SlowWave"):
     def __init__(
         self,
         fs=250,
@@ -197,7 +207,7 @@ class SlowOscillationDetector:
         max_tNe=1500,
         max_tPo=1000,
         fmin_max=[0.16, 4],
-        verbose=True,
+        verbose=False,
         channel=2,
         threshold=0.5,
     ):
@@ -224,7 +234,7 @@ class SlowOscillationDetector:
         self.numtaps = numtaps
         if self.verbose:
             print(self.wn, self.numtaps)
-        self.ssw_filter = signal.firwin(5, self.wn, pass_zero=False)
+        self.ssw_filter = signal.firwin(501, self.wn, pass_zero=False)
 
         # Initialize filter state
         self.zi = signal.lfilter_zi(self.ssw_filter, 1)

@@ -4,10 +4,7 @@ from nicegui import ui
 from nicegui.events import ValueChangeEventArguments
 from datetime import datetime
 from portiloop.src.capture import start_capture
-from portiloop.src.detection import (
-    SleepSpindleRealTimeDetector,
-    SlowOscillationDetector,
-)
+from portiloop.src.detection import Detector
 from portiloop.src.stimulation import (
     SleepSpindleRealTimeStimulator,
     AlternatingStimulator,
@@ -82,8 +79,7 @@ class ExperimentState:
         self.started = False
         self.time_started = datetime.now()
         self.q_msg = Queue()
-        self.detector_cls = SleepSpindleRealTimeDetector
-        self.detector_cls = SlowOscillationDetector
+        # self.detector_cls = Detector.get_detector('Spindle')
         self.stimulator_cls = SleepSpindleRealTimeStimulator
         self.run_dict = RUN_SETTINGS
         self.pause_value = Value("b", False)
@@ -157,12 +153,12 @@ class ExperimentState:
             self.stimulator_cls = AlternatingStimulator
             self.run_dict["detect"] = False
         
-        self.detector_cls = (
-            SleepSpindleRealTimeDetector 
-            if self.detector_type == 'Spindle' 
-            else SlowOscillationDetector
-        )
-        print(self.detector_cls)
+        # self.detector_cls = (
+        #     SleepSpindleRealTimeDetector 
+        #     if self.detector_type == 'Spindle' 
+        #     else SlowOscillationDetector
+        # )
+        # print(self.detector_cls)
 
         if self.lsl:
             self.run_dict["lsl"] = True
@@ -184,12 +180,13 @@ class ExperimentState:
         self._t_capture = Process(
             target=start_capture,
             args=(
-                self.detector_cls,
+                self.detector_type,
                 self.stimulator_cls,
                 self.run_dict,
                 self.q_msg,
                 self.display_q,
                 self.pause_value,
+                # self.detector_type,
             ),
         )
         self._t_capture.start()
@@ -308,7 +305,6 @@ with ui.tab_panels(tabs, value=control_tab).classes("w-full"):
                 on_change=lambda: exp_state.toggle_stim(),
             )
 
-            ui.button('restart this', on_click=lambda x: os.utime('simple_gui.py'))
             ui.separator()
 
             ################ Recording Controls ##################
@@ -343,7 +339,7 @@ with ui.tab_panels(tabs, value=control_tab).classes("w-full"):
         ############# Line Plot stuff ################
         line_timer = ui.timer(1 / 25, update_line_plot, active=False)
         start_button.bind_enabled_to(line_timer, "active", forward=lambda x: not x)
-        line_plot = ui.line_plot(n=1, limit=250 * 5, update_every=25, figsize=(3, 2))
+        line_plot = ui.line_plot(n=1, limit=250 * 5, update_every=25, figsize=(6, 2))
 
         ui.separator()
         ############# Display Control ###############
@@ -404,11 +400,11 @@ with ui.tab_panels(tabs, value=control_tab).classes("w-full"):
             ).bind_value_to(exp_state, "stimulator_type")
 
             select_detector = ui.select(
-                ['Spindle', 'Slow wave'],
+                list(Detector._registry.keys()),
                 value = 'Spindle',
                 label = 'Detector'
             ).bind_value_to(exp_state, 'detector_type')
-            
+
             select_stimulator.classes("w-1/2")
             start_button.bind_enabled_to(lsl_checker)
             start_button.bind_enabled_to(save_checker)
