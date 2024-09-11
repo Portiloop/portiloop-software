@@ -5,10 +5,7 @@ from nicegui.events import ValueChangeEventArguments
 from datetime import datetime
 from portiloop.src.capture import start_capture
 from portiloop.src.detection import Detector
-from portiloop.src.stimulation import (
-    SleepSpindleRealTimeStimulator,
-    AlternatingStimulator,
-)
+from portiloop.src.stimulation import Stimulator
 from portiloop.src.hardware.leds import Color, LEDs
 import socket
 import os
@@ -80,7 +77,7 @@ class ExperimentState:
         self.time_started = datetime.now()
         self.q_msg = Queue()
         # self.detector_cls = Detector.get_detector('Spindle')
-        self.stimulator_cls = SleepSpindleRealTimeStimulator
+        # self.stimulator_cls = None
         self.run_dict = RUN_SETTINGS
         self.pause_value = Value("b", False)
         self._t_capture = None
@@ -146,11 +143,11 @@ class ExperimentState:
             self.run_dict["stimulate"] = False
 
         if self.stimulator_type == "Spindle":
-            self.stimulator_cls = SleepSpindleRealTimeStimulator
+            # self.stimulator_cls = SleepSpindleRealTimeStimulator
             if self.stim_delay != 0:
                 self.run_dict["stim_delay"] = int(self.stim_delay) / 1000
         elif self.stimulator_type == "Interval":
-            self.stimulator_cls = AlternatingStimulator
+            # self.stimulator_cls = AlternatingStimulator
             self.run_dict["detect"] = False
         
         # self.detector_cls = (
@@ -181,7 +178,7 @@ class ExperimentState:
             target=start_capture,
             args=(
                 self.detector_type,
-                self.stimulator_cls,
+                self.stimulator_type,
                 self.run_dict,
                 self.q_msg,
                 self.display_q,
@@ -233,7 +230,7 @@ def stop():
 
 
 def test_sound():
-    stimulator_class = exp_state.stimulator_cls(
+    stimulator_class = Stimulator.get_stimulator(exp_state.stimulator_type)(
         soundname=RUN_SETTINGS["detection_sound"]
     )
     stimulator_class.test_stimulus()
@@ -393,7 +390,7 @@ with ui.tab_panels(tabs, value=control_tab).classes("w-full"):
                 value=0, label="Stimulation Delay (in ms)"
             ).bind_value_to(exp_state, "stim_delay")
             select_stimulator = ui.select(
-                ["Spindle", "Interval"],
+                list(Stimulator._registry.keys()),
                 value="Spindle",
                 on_change=disable_stim_toggle_callback,
                 label="Stimulator",
