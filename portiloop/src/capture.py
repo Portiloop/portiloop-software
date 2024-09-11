@@ -12,12 +12,13 @@ from threading import Thread, Lock
 from portiloop.src import ADS
 from portiloop.src.hardware.leds import Color, LEDs
 from portiloop.src.detection import Detector
+from portiloop.src.stimulation import Stimulator
 if ADS:
     import alsaaudio
     from alsaaudio import ALSAAudioError
     from portiloop.src.hardware.frontend import Frontend
-
-from portiloop.src.stimulation import TimingDelayer, UpStateDelayer
+print('ADS')
+from portiloop.src.delayers import TimingDelayer, UpStateDelayer
 
 from portiloop.src.processing import BaseFilter
 from portiloop.src.config import (
@@ -126,10 +127,12 @@ def capture_process(
 
 
 def start_capture(
-    detector_type, stimulator_cls, capture_dictionary, q_msg, q_display, pause_value, 
+    detector_type, stimulator_type, capture_dictionary, q_msg, q_display, pause_value, 
 ):
     #     print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
     detector_cls = Detector.get_detector(detector_type)
+    stimulator_cls = Stimulator.get_stimulator(stimulator_type)
+
     # Initialize the LED
     leds = LEDs()
     if capture_dictionary["stimulate"]:
@@ -158,7 +161,7 @@ def start_capture(
 
     # Initialize detector, LSL streamer and stimulatorif requested
     detector = (
-        detector_cls(
+        Detector.get_detector(detector_type)(
             threshold=capture_dictionary["threshold"],
             channel=capture_dictionary["channel_detection"],
         )
