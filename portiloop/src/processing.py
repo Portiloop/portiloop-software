@@ -64,7 +64,6 @@ class BaseFilter(ABC):
     def filter(self, value):
         raise NotImplementedError
 
-
 class SpindleFilter(BaseFilter, register_name="Spindle"):
     def __init__(
         self,
@@ -188,24 +187,25 @@ class SlowWaveFilter(BaseFilter, register_name="SlowWave"):
         print('SOOnlineFiltering initialized')
         self.fs = sampling_rate
         self.nb_channels = nb_channels
-
         self.verbose = verbose
+
         # DC offset removal filter (high-pass filter)
         self.dc_b, self.dc_a = signal.butter(1, 0.5/(self.fs/2), 'high')
+        
         # 60 Hz notch filter
         f0 = 60.0  # Notch frequency
-        Q = 30.0  # Quality factor
-        w0 = f0 / (self.fs/2)
-        self.notch_b, self.notch_a = signal.iirnotch(w0, Q)
-        # Bandpass filter (0.5 - 30 Hz)
-        low = 0.5 / (self.fs/2)
-        high = 30.0 / (self.fs/2)
-        self.bp_b, self.bp_a = signal.butter(4, [low, high], btype='band')
-                     
+        Q = 100.0  # Quality factor
+        self.notch_b, self.notch_a = signal.iirnotch(f0, Q, self.fs)
+        
+        # FIR Bandpass filter (0.5 - 30 Hz)
+        low = 0.5
+        high = 30.0
+        # TODO Change to use FIR class
+        self.bp_b = signal.firwin(20, [low, high], pass_zero=False, window='hamming', fs = self.fs)
         # Initialize filter states for each channel
         self.dc_states = [signal.lfilter_zi(self.dc_b, self.dc_a) for _ in range(self.nb_channels)]
         self.notch_states = [signal.lfilter_zi(self.notch_b, self.notch_a) for _ in range(self.nb_channels)]
-        self.bp_states = [signal.lfilter_zi(self.bp_b, self.bp_a) for _ in range(self.nb_channels)]
+        self.bp_states = [np.zeros(len(self.bp_b) - 1) for _ in range(self.nb_channels)]
 
     def filter(self, value):
         """
@@ -222,8 +222,8 @@ class SlowWaveFilter(BaseFilter, register_name="SlowWave"):
             # Apply notch filter
             notched, self.notch_states[i] = signal.lfilter(self.notch_b, self.notch_a, channel_data, zi=self.notch_states[i])
             
-            # Apply bandpass filter
-            bandpassed, self.bp_states[i] = signal.lfilter(self.bp_b, self.bp_a, notched, zi=self.bp_states[i])
+            # Apply FIR bandpass filter
+            bandpassed, self.bp_states[i] = signal.lfilter(self.bp_b, 1, notched, zi=self.bp_states[i])
             
             # Remove DC offset
             filtered, self.dc_states[i] = signal.lfilter(self.dc_b, self.dc_a, bandpassed, zi=self.dc_states[i])
