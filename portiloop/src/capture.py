@@ -13,14 +13,15 @@ from portiloop.src import ADS
 from portiloop.src.hardware.leds import Color, LEDs
 from portiloop.src.detection import Detector
 from portiloop.src.stimulation import Stimulator
+from portiloop.src.delayers import TimingDelayer, UpStateDelayer
+from portiloop.src.processing import BaseFilter
+
 if ADS:
     import alsaaudio
     from alsaaudio import ALSAAudioError
     from portiloop.src.hardware.frontend import Frontend
-print('ADS')
-from portiloop.src.delayers import TimingDelayer, UpStateDelayer
+print("ADS")
 
-from portiloop.src.processing import BaseFilter
 from portiloop.src.config import (
     mod_config,
     LEADOFF_CONFIG,
@@ -39,8 +40,6 @@ from portiloop.src.utils import (
     RECORDING_PATH,
     get_portiloop_version,
 )
-from IPython.display import clear_output, display
-import ipywidgets as widgets
 import socket
 from pathlib import Path
 
@@ -127,7 +126,12 @@ def capture_process(
 
 
 def start_capture(
-    detector_type, stimulator_type, capture_dictionary, q_msg, q_display, pause_value, 
+    detector_type,
+    stimulator_type,
+    capture_dictionary,
+    q_msg,
+    q_display,
+    pause_value,
 ):
     #     print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
     detector_cls = Detector.get_detector(detector_type)
@@ -139,7 +143,7 @@ def start_capture(
         leds.led1(Color.CYAN)
     else:
         leds.led1(Color.PURPLE)
-    
+
     print(capture_dictionary)
     # Initialize data frontend
     fake_filename = RECORDING_PATH / "test_recording.csv"
@@ -279,7 +283,7 @@ def start_capture(
 
     start_time = time.time()
     last_time = 0
-    print('eveb befire naub kiio;')
+    print("eveb befire naub kiio;")
     # Main capture loop
     while True:
         # First, we send all outgoing messages to the capture process
@@ -332,7 +336,7 @@ def start_capture(
         if not pause:
             # Detect using the latest point
             detection_signal = detector.detect(filtered_point)
-           
+
             # Stimulate
             stim = stimulator.stimulate(detection_signal)
             if stim is None:
@@ -379,4 +383,3 @@ def start_capture(
     del stimulation_delayer
     del stimulator
     del detector
-

@@ -88,7 +88,7 @@ class ExperimentState:
         self.lsl = False
         self.save_local = True
         self.stimulator_type = "Spindle"
-        self.detector_type = 'Spindle'
+        self.detector_type = "Spindle"
         self.display_rate = 0
         self.last_time_display = 0.0
         self.selected_channel = "Channel 2"
@@ -108,7 +108,7 @@ class ExperimentState:
         print(f"Starting recording {self.exp_name.split('.')[0]}")
 
         print(f"STIMON = {self.stim_on}, STIMTYPE = {self.stimulator_type}")
-        print(f'Detector = {self.detector_type}')
+        print(f"Detector = {self.detector_type}")
         self.run_dict["frequency"] = self.select_freq
 
         # Calculating how much time to pause in seconds
@@ -149,10 +149,10 @@ class ExperimentState:
         elif self.stimulator_type == "Interval":
             # self.stimulator_cls = AlternatingStimulator
             self.run_dict["detect"] = False
-        
+
         # self.detector_cls = (
-        #     SleepSpindleRealTimeDetector 
-        #     if self.detector_type == 'Spindle' 
+        #     SleepSpindleRealTimeDetector
+        #     if self.detector_type == 'Spindle'
         #     else SlowOscillationDetector
         # )
         # print(self.detector_cls)
@@ -397,10 +397,8 @@ with ui.tab_panels(tabs, value=control_tab).classes("w-full"):
             ).bind_value_to(exp_state, "stimulator_type")
 
             select_detector = ui.select(
-                list(Detector._registry.keys()),
-                value = 'Spindle',
-                label = 'Detector'
-            ).bind_value_to(exp_state, 'detector_type')
+                list(Detector._registry.keys()), value="Spindle", label="Detector"
+            ).bind_value_to(exp_state, "detector_type")
 
             select_stimulator.classes("w-1/2")
             start_button.bind_enabled_to(lsl_checker)

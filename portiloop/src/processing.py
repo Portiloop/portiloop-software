@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from scipy import signal
 
+
 def filter_24(value):
     return (value * 4.5) / (2**23 - 1) / 24.0 * 1e6  # 23 because 1 bit is lost for sign
 
@@ -50,19 +51,20 @@ class FIR:
 
 class BaseFilter(ABC):
     _registry = {}
-        
-    def __init_subclass__(cls,  register_name=None, **kwargs):
+
+    def __init_subclass__(cls, register_name=None, **kwargs):
         super().__init_subclass__(**kwargs)
         name = register_name or cls.__name__
         cls._registry[name] = cls
 
     @classmethod
-    def get_filter(cls, name:str):
+    def get_filter(cls, name: str):
         return cls._registry.get(name)
-    
+
     @abstractmethod
     def filter(self, value):
         raise NotImplementedError
+
 
 class SpindleFilter(BaseFilter, register_name="Spindle"):
     def __init__(
@@ -184,27 +186,34 @@ class SpindleFilter(BaseFilter, register_name="Spindle"):
 
 class SlowWaveFilter(BaseFilter, register_name="SlowWave"):
     def __init__(self, nb_channels, sampling_rate, verbose=False, **kwargs):
-        print('SOOnlineFiltering initialized')
+        print("SOOnlineFiltering initialized")
         self.fs = sampling_rate
         self.nb_channels = nb_channels
         self.verbose = verbose
 
         # DC offset removal filter (high-pass filter)
-        self.dc_b, self.dc_a = signal.butter(1, 0.5/(self.fs/2), 'high')
-        
+        self.dc_b, self.dc_a = signal.butter(1, 0.5 / (self.fs / 2), "high")
+
         # 60 Hz notch filter
         f0 = 60.0  # Notch frequency
         Q = 100.0  # Quality factor
         self.notch_b, self.notch_a = signal.iirnotch(f0, Q, self.fs)
-        
+
         # FIR Bandpass filter (0.5 - 30 Hz)
         low = 0.5
         high = 30.0
         # TODO Change to use FIR class
-        self.bp_b = signal.firwin(20, [low, high], pass_zero=False, window='hamming', fs = self.fs)
+        self.bp_b = signal.firwin(
+            20, [low, high], pass_zero=False, window="hamming", fs=self.fs
+        )
         # Initialize filter states for each channel
-        self.dc_states = [signal.lfilter_zi(self.dc_b, self.dc_a) for _ in range(self.nb_channels)]
-        self.notch_states = [signal.lfilter_zi(self.notch_b, self.notch_a) for _ in range(self.nb_channels)]
+        self.dc_states = [
+            signal.lfilter_zi(self.dc_b, self.dc_a) for _ in range(self.nb_channels)
+        ]
+        self.notch_states = [
+            signal.lfilter_zi(self.notch_b, self.notch_a)
+            for _ in range(self.nb_channels)
+        ]
         self.bp_states = [np.zeros(len(self.bp_b) - 1) for _ in range(self.nb_channels)]
 
     def filter(self, value):
@@ -213,21 +222,27 @@ class SlowWaveFilter(BaseFilter, register_name="SlowWave"):
         """
         if self.verbose:
             print(f"SO Filtering shape {value.shape}")
-        
+
         filtered_value = np.zeros_like(value)
 
         for i in range(self.nb_channels):
             channel_data = value[:, i]
 
             # Apply notch filter
-            notched, self.notch_states[i] = signal.lfilter(self.notch_b, self.notch_a, channel_data, zi=self.notch_states[i])
-            
+            notched, self.notch_states[i] = signal.lfilter(
+                self.notch_b, self.notch_a, channel_data, zi=self.notch_states[i]
+            )
+
             # Apply FIR bandpass filter
-            bandpassed, self.bp_states[i] = signal.lfilter(self.bp_b, 1, notched, zi=self.bp_states[i])
-            
+            bandpassed, self.bp_states[i] = signal.lfilter(
+                self.bp_b, 1, notched, zi=self.bp_states[i]
+            )
+
             # Remove DC offset
-            filtered, self.dc_states[i] = signal.lfilter(self.dc_b, self.dc_a, bandpassed, zi=self.dc_states[i])
-            
+            filtered, self.dc_states[i] = signal.lfilter(
+                self.dc_b, self.dc_a, bandpassed, zi=self.dc_states[i]
+            )
+
             filtered_value[:, i] = filtered
 
         return filtered_value

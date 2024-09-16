@@ -11,6 +11,7 @@ class Delayer(ABC):
     """
     Interface that defines Delayers for stimulation
     """
+
     @abstractmethod
     def step(self, point):
         pass
@@ -23,15 +24,17 @@ class Delayer(ABC):
     def detected(self):
         pass
 
+
 class TimingStates(Enum):
     READY = 0
     DELAYING = 1
-    WAITING = 2 
+    WAITING = 2
+
 
 class TimingDelayer(Delayer):
     def __init__(self, stimulation_delay=0.0, inter_stim_delay=0.0, sample_freq=250):
         """
-        Delays based on the timing 
+        Delays based on the timing
         params:
             stimulation_delay (float): How much time to wait after a detection before stimulation
             inter_stim_delay (float): How much time to wait after a stimulation before going back to a detection state
@@ -52,7 +55,7 @@ class TimingDelayer(Delayer):
             if time.time() - self.delaying_start > self.stimulation_delay:
                 # Actually stimulate the patient after the delay
                 if self.stimulate is not None:
-                    self.stimulate() 
+                    self.stimulate()
                 self.state = TimingStates.WAITING
                 self.waiting_start = time.time()
                 return True
@@ -83,7 +86,7 @@ class TimingDelayer(Delayer):
             if self.waiting_counter > self.inter_stim_delay * self.sample_freq:
                 self.state = TimingStates.READY
             return False
-        
+
     def detected(self):
         """
         Defines what happens when a detection comes depending on what state you are in
@@ -94,36 +97,35 @@ class TimingDelayer(Delayer):
             self.delaying_counter = 0
 
 
-
 class UpStateStates(Enum):
     NO_SPINDLE = 0
     BUFFERING = 1
-    DELAYING = 2 
+    DELAYING = 2
 
 
 # Class that delays stimulation to always stimulate peak or through
 class UpStateDelayer(Delayer):
 
-    def __init__(self, sample_freq, peak, time_to_buffer, stimulate=None): 
-        '''
+    def __init__(self, sample_freq, peak, time_to_buffer, stimulate=None):
+        """
         args:
             sample_freq: int -> Sampling frequency of signal in Hz
             time_to_wait: float -> Time to wait to build buffer in seconds
-        '''
+        """
         # Get number of timesteps for a whole spindle
         self.sample_freq = sample_freq
         self.peak = peak
         self.buffer = []
         self.time_to_buffer = time_to_buffer
         self.stimulate = stimulate
-        
+
         self.state = UpStateStates.NO_SPINDLE
 
     def step(self, point):
-        '''
+        """
         Step the delayer, ads a point to buffer if necessary.
         Returns True if stimulation is actually done
-        '''
+        """
         if self.state == UpStateStates.NO_SPINDLE:
             return False
         elif self.state == UpStateStates.BUFFERING:
@@ -149,10 +151,10 @@ class UpStateDelayer(Delayer):
             return False
 
     def step_timesteps(self, point):
-        '''
+        """
         Step the delayer, ads a point to buffer if necessary.
         Returns True if stimulation is actually done
-        '''
+        """
         if self.state == UpStateStates.NO_SPINDLE:
             return False
         elif self.state == UpStateStates.BUFFERING:
@@ -187,7 +189,7 @@ class UpStateDelayer(Delayer):
         Computes the time we want to wait in total based on the spindle frequency and the buffer
         """
         # If we want to look at the valleys, we search for peaks on the inversed signal
-        if not self.peak: 
+        if not self.peak:
             self.buffer = -self.buffer
 
         # Returns the index of the last peak in the buffer
@@ -210,8 +212,9 @@ class UpStateDelayer(Delayer):
         avg_dist = np.mean(np.diff(peaks))
 
         # Compute the time until next peak and return it
-        if (avg_dist < len(self.buffer) - peaks[-1]):
-            print("Average distance between peaks is smaller than the time to last peak, decrease buffer size")
+        if avg_dist < len(self.buffer) - peaks[-1]:
+            print(
+                "Average distance between peaks is smaller than the time to last peak, decrease buffer size"
+            )
             return (len(self.buffer) - peaks[-1]) * (1.0 / self.sample_freq)
         return (avg_dist - (len(self.buffer) - peaks[-1])) * (1.0 / self.sample_freq)
-
