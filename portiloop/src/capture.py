@@ -691,7 +691,7 @@ class Capture:
 
         # Get all the metadata from this recording: 
 
-    def get_metadata(self):
+    def get_capture_dictionary(self):
         input_dict = vars(self)
         basic_types = (int, float, bool, str, list, dict, tuple, set)
         output_dict = {}
@@ -901,7 +901,7 @@ class Capture:
             self._t_capture = Process(target=start_capture,
                                      args=(detector_cls,
                                            stimulator_cls,
-                                           self.get_metadata(),
+                                           self.get_capture_dictionary(),
                                            self.q_msg,
                                            dummy_q_display,
                                            self.pause_value,))
