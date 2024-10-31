@@ -351,7 +351,7 @@ class Capture:
         self.signal_labels = [f"ch{i+1}" for i in range(self.nb_channels)]
         self.channel_states = ['bias'] + ['disabled' for _ in range(self.nb_channels - 1)]
         self.channel_detection = 2
-        self.detection_sound = "stimul_15ms.wav"
+        self.detection_sound = "stimul_100ms.wav"
 
         # Delayer parameters
         self.spindle_detection_mode = 'Fast'
@@ -408,7 +408,7 @@ class Capture:
         options = [(sound[:-4], sound) for sound in os.listdir(sound_dir) if sound[-4:] == ".wav"]
         self.b_sound_detect = widgets.Dropdown(
             options=options,
-            value="stimul_15ms.wav",
+            value="stimul_100ms.wav",
             description='Sound:',
             disabled=False,
             style={'description_width': 'initial'}
