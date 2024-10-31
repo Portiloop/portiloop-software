@@ -896,13 +896,23 @@ class Capture:
             }
 
             self.width_display = 5 * self.frequency # Display 5 seconds of signal
-            
+
+            dummy_q_display = Queue(maxsize=1)
             self._t_capture = Process(target=start_capture,
                                      args=(detector_cls,
                                            stimulator_cls,
                                            self.get_metadata(),
                                            self.q_msg,
+                                           dummy_q_display,
                                            self.pause_value,))
+            """
+            detector_cls,
+            stimulator_cls,
+            capture_dictionary,
+            q_msg,
+            q_display,
+            pause_value
+            """
             self._t_capture.start()
             print(f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
         elif val == 'Stop':
