@@ -56,5 +56,5 @@ RUN_SETTINGS = {
         ]
     },
     "width_display": 1250,
-    "filename": "/home/mendel/workspace/edf_recording/recording_test1.csv"
+    "filename": "/home/mendel/workspace/edf_recordings/recording_test1.csv"
 }
