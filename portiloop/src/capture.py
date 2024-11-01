@@ -227,6 +227,7 @@ def start_capture(
     while True:
         
         # First, we send all outgoing messages to the capture process
+        print(f"DEBUG: checking msg")
         try:
             msg = q_msg.get_nowait()
             print(f"DEBUG: received msg {msg}")
@@ -892,6 +893,7 @@ class Capture:
     def on_b_capture(self, value):
         val = value['new']
         if val == 'Start':
+            print("DEBUG: capture start")
             clear_output()
             self.disable_buttons()
             if not self.python_clock:  # ADS clock: force the frequency to an ADS-compatible frequency
@@ -936,9 +938,12 @@ class Capture:
             self._t_capture.start()
             print(f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
         elif val == 'Stop':
+            print("DEBUG: capture stop")
             self.q_msg.put('STOP')
             assert self._t_capture is not None
+            print("DEBUG: waiting for capture process")
             self._t_capture.join()
+            print("DEBUG: joined")
             self._t_capture = None
             self.enable_buttons()
             
