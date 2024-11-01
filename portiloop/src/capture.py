@@ -136,14 +136,14 @@ def start_capture(
     ) if capture_dictionary['signal_input'] == "ADS" else FileFrontend(fake_filename, capture_dictionary['nb_channels'], capture_dictionary['channel_detection'])
 
     # Initialize detector, LSL streamer and stimulatorif requested
-    detector = detector_cls(capture_dictionary['threshold'], channel=capture_dictionary['channel_detection']) if capture_dictionary['detect'] else Dummy()
+    detector = detector_cls(capture_dictionary['threshold'], channel=capture_dictionary['channel_detection']) if capture_dictionary['detect'] else None
     streams = {
             'filtered': filter,
             'markers': detector is not None,
         }
 #     print(f"DEBUG: Portiloop ID: {PORTILOOP_ID}")
     lsl_streamer = LSLStreamer(streams, capture_dictionary['nb_channels'], capture_dictionary['frequency'], id=PORTILOOP_ID) if capture_dictionary['lsl'] else Dummy()
-    stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer,sham=not capture_dictionary['stimulate'])
+    stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer,sham=not capture_dictionary['stimulate']) if stimulator_cls is not None else None
     # Initialize filtering pipeline
     if filter:
         fp = FilterPipeline(nb_channels=capture_dictionary['nb_channels'],
@@ -262,24 +262,25 @@ def start_capture(
             prev_pause = pause
 
         # If detection is on
-        if not pause:
+        if detector is not None and not pause:
             # Detect using the latest point
             detection_signal = detector.detect(filtered_point)
-            # Stimulate 
-            stim = stimulator.stimulate(detection_signal)
-            if stim is None:
-                stim = detection_signal
-            if capture_dictionary['detect']:
-                detection_buffer += stim
+            # Stimulate
+            if stimulator is not None:
+                stim = stimulator.stimulate(detection_signal)
+                if stim is None:
+                    stim = detection_signal
+                if capture_dictionary['detect']:
+                    detection_buffer += stim
 
-            # Send a stimulation every second (uncomment for testing)
-            # current_time = time.time()
-            # if current_time - last_time >= 1.0:
-            #     stimulator.stimulate([True])
-            #     last_time = current_time
+                # Send a stimulation every second (uncomment for testing)
+                # current_time = time.time()
+                # if current_time - last_time >= 1.0:
+                #     stimulator.stimulate([True])
+                #     last_time = current_time
 
-            # Adds point to buffer for delayed stimulation
-            stimulation_delayer.step(filtered_point[0][capture_dictionary['channel_detection'] - 1])
+                # Adds point to buffer for delayed stimulation
+                stimulation_delayer.step(filtered_point[0][capture_dictionary['channel_detection'] - 1])
 
         # Add point to the buffer to send to viz and recorder
         buffer += raw_point
