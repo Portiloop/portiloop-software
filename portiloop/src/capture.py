@@ -116,7 +116,7 @@ def start_capture(
         q_display,
         pause_value
 ): 
-#     print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
+    print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
 
     # Initialize the LED
     leds = LEDs()
@@ -158,12 +158,15 @@ def start_capture(
                             filter_args=capture_dictionary['filter_settings']['filter_args'])
     
     # Launch the capture process
+    print(f"DEBUG: initializing capture")
     capture_frontend.init_capture()
 
     # Initialize display if requested
+    print(f"DEBUG: initializing live display")
     live_disp = LiveDisplay(channel_names=capture_dictionary['signal_labels'], window_len=capture_dictionary['width_display']) if capture_dictionary['display'] else Dummy()
 
     # Initialize recording if requested
+    print(f"DEBUG: initializing recorder")
     recorder = EDFRecorder(capture_dictionary['filename']) if capture_dictionary['record'] else Dummy()
 
     # Buffer used for the visualization and the recording
@@ -171,6 +174,7 @@ def start_capture(
     detection_buffer = [] if detector_cls is not None else None
 
     # Initialize stimulation delayer if requested
+    print(f"DEBUG: initializing delayer")
     delay = not ((capture_dictionary['stim_delay'] == 0.0) and (capture_dictionary['inter_stim_delay'] == 0.0)) and (stimulator is not None)
     delay_phase = (not delay) and (not capture_dictionary['spindle_detection_mode'] == 'Fast') and (stimulator is not None)
     if delay:
@@ -211,6 +215,8 @@ def start_capture(
 
     start_time = time.time()
     last_time = 0
+
+    print(f"DEBUG: Starting capture loop")
 
     # Main capture loop
     while True:
