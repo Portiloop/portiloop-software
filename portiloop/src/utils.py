@@ -14,7 +14,7 @@ import time
 from portiloop.src.processing import int_to_float
 
 
-EDF_PATH = Path.home() / 'workspace' / 'edf_recording'
+EDF_PATH = Path.home() / 'workspace' / 'edf_recordings'
 # Path to the recordings
 RECORDING_PATH = Path.home() / 'portiloop-software' / 'portiloop' / 'recordings'
 
@@ -144,7 +144,7 @@ class Dummy:
 
 class CaptureFrontend(ABC):
     """
-    Interface that defines how we talk to a capture frontend:
+    Interface that defines how we talk to a capture frontend
     """
     @abstractmethod
     def init_capture(self):
