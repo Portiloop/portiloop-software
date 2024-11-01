@@ -190,6 +190,7 @@ def start_capture(
         stimulation_delayer = Dummy()
         
     if stimulator is not None:
+        print(f"DEBUG: adding delayer")
         stimulator.add_delayer(stimulation_delayer)
 
     # Get the metadata and save it to a file
@@ -202,7 +203,7 @@ def start_capture(
     new_name = f"{name}_metadata.json"
     # Join the components back together into the new file path
     metadata_path = os.path.join(dirname, new_name)
-#     print(f"DEBUG: Saving metadata to {metadata_path}")
+    print(f"DEBUG: Saving metadata to {metadata_path}")
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=4)
  
@@ -210,6 +211,7 @@ def start_capture(
     prev_pause = pause_value.value
 
     if detector is not None:
+        print(f"DEBUG: initializing LSL streamer")
         marker_str = LSLStreamer.string_for_detection_activation(prev_pause)
         lsl_streamer.push_marker(marker_str)
 
