@@ -21,11 +21,28 @@ It enables controlling the `Portiloop` from a simple Graphical User Interface (G
 
 ## Usage:
 
-The `Portiloop` GUI is a web-based interface running as a `jupyter` server.
+First, connect to the WiFi access point of the `Portiloop` that you want to use.
+
+The `Portiloop` has two web-based Graphical User Interfaces:
+- A user-friendly `Simple UI`.
+- An advanced UI in the form of a `jupyter` notebook.
+
+### Simple UI
+To access the `Simple UI`, open your favourite browser and enter the following address: `192.168.4.1:8081`.
+
+This UI is pretty self-explanatory.
+It has several options including:
+- Detecting patterns of interest in real-time (e.g., Sleep Spindles)
+- Performing closed-loop stimulation based on this detection
+- Recording raw EEG along with the above detections in a CSV file
+
+### Jupyter UI
+
+The `Portiloop` advanced UI is a web-based interface running as a `jupyter` server.
 
 - Connect to the `Portiloop` WiFi network.
 - Open your favorite web browser
-- Enter the following address: `192.168.0.1:9000`
+- Enter the following address:  `192.168.4.1:8080`.
 
 You should now be connected to the `jupyter` server.
 
@@ -53,8 +70,7 @@ The GUI now looks like this:
 The `Channels` pannel enables you to configure each electrode:
 - `disabled`: the electrode is not used
 - `simple`: the electrode is simply used to measure signal (not recommended)
-- `with bias`: the electrode is used to measure signal and to compute a bias ("ground") signal
-- `bias out`: the electrode is used to output the bias ("ground") signal
+- `bias`: the electrode is used to output the bias ("ground") signal
 
 ### General controls:
 
@@ -85,9 +101,9 @@ The `Capture` switch lets you start and stop the experiment at any point in time
 
 _Note: once the experiment is started, all widgets are deactivated until you stop the experiment._
 
-## Installation (Portiloop V2):
+## Installation (Portiloop V3):
 
-You've just got your hands on the hardware for the Portiloop V2 (A Google Coral Mini and a PiEEG board). Here are the steps you need to follow to get started using the EEG capture, the Spindle detection software, and the TPU processing.
+You've just got your hands on the hardware for the Portiloop V3 (A Google Coral Mini and a Portiloop board). Here are the steps you need to follow to get started using the EEG capture, the Spindle detection software, and the TPU processing.
 
 ### Flashing the Google Coral
 Find the instructions to update your Coral Dev Board Mini to the last OS version [here](https://coral.ai/docs/dev-board-mini/reflash/).
@@ -122,4 +138,5 @@ Next time you turn the Coral board on, you should be able to ssh into it, using 
   - Don't forget to reboot the device afterward
 - Note that `make` may fail at several points during installation. Whenever it does, just call `make` again.
 
-That's it! Your Jupyter server should now be up and running, listening on IP address 192.168.4.1 and port 8080, and automatically starting whenever the system boots up. You can now access it by typing 192.168.4.1:8080 in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arise, try with a different web browser.
+That's it! Your Jupyter server should now be up and running, listening on IP address `192.168.4.1` and port `8080`, and automatically starting whenever the system boots up. You can now access it by typing `192.168.4.1:8080` in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arise, try with a different web browser.
+Similarly, the `Simple UI` can be accessed by typing `192.168.4.1:8081` in your browser. 
