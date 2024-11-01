@@ -292,9 +292,6 @@ def start_capture(
         timestamp = time.time() - start_time
         if q_display is not None:
             q_display.put([timestamp, raw_point, filtered_point])
-        
-        if live_disp_activated:
-            pass
 
         if len(buffer) >= 50:
             live_disp.add_datapoints(buffer)

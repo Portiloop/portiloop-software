@@ -7,7 +7,7 @@ from portiloop.src.capture import start_capture
 from portiloop.src.detection import SleepSpindleRealTimeDetector
 from portiloop.src.stimulation import SleepSpindleRealTimeStimulator, AlternatingStimulator
 from portiloop.src.hardware.leds import Color, LEDs
-from portiloop.src.constants import RUN_SETTINGS
+from portiloop.src.config.constants import RUN_SETTINGS
 import os
 import socket
 import alsaaudio
