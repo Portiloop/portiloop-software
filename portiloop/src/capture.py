@@ -204,6 +204,7 @@ def start_capture(
     # Join the components back together into the new file path
     metadata_path = os.path.join(dirname, new_name)
     print(f"DEBUG: Saving metadata to {metadata_path}")
+    print(f"DEBUG: metadata:\n{metadata}")
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=4)
     print(f"DEBUG: saved metadata")
