@@ -696,7 +696,7 @@ class Capture:
     def get_capture_dictionary(self):
         input_dict = RUN_SETTINGS
         # input_dict = vars(self)
-        for k, v in enumerate(vars(self)):
+        for k, v in vars(self).items():
             input_dict[k] = v
         basic_types = (int, float, bool, str, list, dict, tuple, set)
         output_dict = {}
