@@ -229,8 +229,9 @@ def start_capture(
         # First, we send all outgoing messages to the capture process
         try:
             msg = q_msg.get_nowait()
+            print(f"DEBUG: received msg {msg}")
             capture_frontend.send_msg(msg)
-        except:
+        except Queue.empty:
             pass
         
         # Then, we check if we have received a message from the capture process
