@@ -206,6 +206,7 @@ def start_capture(
     print(f"DEBUG: Saving metadata to {metadata_path}")
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=4)
+    print(f"DEBUG: saved metadata")
  
     # Initialize the variable to keep track of whether we are in a detection state or not for the markers
     prev_pause = pause_value.value
