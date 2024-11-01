@@ -236,6 +236,7 @@ def start_capture(
             pass
         
         # Then, we check if we have received a message from the capture process
+        print(f"DEBUG: getting msg")
         msg = capture_frontend.get_msg()
         # Either we have received a stop message, or a print message.
         if msg is None:
@@ -246,12 +247,14 @@ def start_capture(
             print(msg[1])
 
         # Then, we retrieve the data from the capture process
+        print(f"DEBUG: checking data")
         raw_point = capture_frontend.get_data()
         # If we have no data, we continue to the next iteration
         if raw_point is None:
             continue
         
         # Go through filtering pipeline
+        print(f"DEBUG: filtering")
         if filter:
             filtered_point = fp.filter(deepcopy(raw_point))
         else:
@@ -262,6 +265,7 @@ def start_capture(
         raw_point = raw_point.tolist()
 
         # Send both raw and filtered points over LSL
+        print(f"DEBUG: push to LSL")
         lsl_streamer.push_raw(raw_point[-1])
         if filter:
             lsl_streamer.push_filtered(filtered_point[-1])
@@ -270,11 +274,13 @@ def start_capture(
         pause = pause_value.value
 
         # If the state has changed since last iteration, we send a marker
+        print(f"DEBUG: ck0")
         if pause != prev_pause and detector is not None:
             lsl_streamer.push_marker(LSLStreamer.string_for_detection_activation(pause))
             prev_pause = pause
 
         # If detection is on
+        print(f"DEBUG: ck1")
         if detector is not None and not pause:
             # Detect using the latest point
             detection_signal = detector.detect(filtered_point)
@@ -300,6 +306,7 @@ def start_capture(
 
         # Adding the raw point an it's timestamp for display
         timestamp = time.time() - start_time
+        print(f"DEBUG: ck2")
         q_display.put([timestamp, raw_point, filtered_point])
 
         if len(buffer) >= 50:
@@ -307,6 +314,8 @@ def start_capture(
             recorder.add_recording_data(buffer, detection_buffer, capture_dictionary['detect'], capture_dictionary['stimulate'])
             buffer = []
             detection_buffer = []
+        
+        print(f"DEBUG: ck3")
 
     # close the frontend
     leds.led1(Color.YELLOW)
