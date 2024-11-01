@@ -7,12 +7,15 @@ from portiloop.src.capture import start_capture
 from portiloop.src.detection import SleepSpindleRealTimeDetector
 from portiloop.src.stimulation import SleepSpindleRealTimeStimulator, AlternatingStimulator
 from portiloop.src.hardware.leds import Color, LEDs
+from portiloop.src.constants import RUN_SETTINGS
 import os
 import socket
-from portiloop.src.hardware.frontend import Frontend
 import alsaaudio
 from alsaaudio import ALSAAudioError
 import psutil
+
+WORKSPACE_DIR_SD = "/media/sd_card/workspace/edf_recordings/"
+WORKSPACE_DIR_IN = "/home/mendel/workspace/edf_recordings/"
 
 portiloop_ID = socket.gethostname()
 

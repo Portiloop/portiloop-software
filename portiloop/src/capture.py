@@ -20,8 +20,10 @@ if ADS:
 from portiloop.src.stimulation import TimingDelayer, UpStateDelayer
 
 from portiloop.src.processing import FilterPipeline
-from portiloop.src.config import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
+from portiloop.src.config.config_hardware import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
 from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH, RECORDING_PATH, get_portiloop_version
+from portiloop.src.config.constants import RUN_SETTINGS
+
 from IPython.display import clear_output, display
 import ipywidgets as widgets
 import socket
@@ -692,7 +694,10 @@ class Capture:
         # Get all the metadata from this recording: 
 
     def get_capture_dictionary(self):
-        input_dict = vars(self)
+        input_dict = RUN_SETTINGS
+        # input_dict = vars(self)
+        for k, v in enumerate(vars(self)):
+            input_dict[k] = v
         basic_types = (int, float, bool, str, list, dict, tuple, set)
         output_dict = {}
         for key, value in input_dict.items():
@@ -708,6 +713,8 @@ class Capture:
         for key, value in output_dict['filter_settings'].items():
             if key in output_dict:
                 output_dict.pop(key)
+        
+        print(f"DEBUG: output_dict: {output_dict}")
 
         return output_dict
 
