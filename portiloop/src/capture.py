@@ -233,7 +233,7 @@ def start_capture(
             msg = q_msg.get_nowait()
             print(f"DEBUG: received msg {msg}")
             capture_frontend.send_msg(msg)
-        except queue.empty as e:
+        except queue.Empty as e:
             pass
         except queue.ShutDown as e:
             print(f"DEBUG: something went wrong, the queue is Shutdown")
