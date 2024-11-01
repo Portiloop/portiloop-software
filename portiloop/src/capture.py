@@ -117,7 +117,7 @@ def start_capture(
         q_display,
         pause_value
 ): 
-    print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
+    # print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
 
     # Initialize the LED
     leds = LEDs()
@@ -142,7 +142,7 @@ def start_capture(
             'filtered': filter,
             'markers': detector is not None,
         }
-#     print(f"DEBUG: Portiloop ID: {PORTILOOP_ID}")
+
     lsl_streamer = LSLStreamer(streams, capture_dictionary['nb_channels'], capture_dictionary['frequency'], id=PORTILOOP_ID) if capture_dictionary['lsl'] else Dummy()
     stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer,sham=not capture_dictionary['stimulate']) if stimulator_cls is not None else None
     # Initialize filtering pipeline
@@ -159,15 +159,13 @@ def start_capture(
                             filter_args=capture_dictionary['filter_settings']['filter_args'])
     
     # Launch the capture process
-    print(f"DEBUG: initializing capture")
     capture_frontend.init_capture()
 
     # Initialize display if requested
-    print(f"DEBUG: initializing live display")
-    live_disp = LiveDisplay(channel_names=capture_dictionary['signal_labels'], window_len=capture_dictionary['width_display']) if capture_dictionary['display'] else Dummy()
+    live_disp_activated = capture_dictionary['display']
+    live_disp = LiveDisplay(channel_names=capture_dictionary['signal_labels'], window_len=capture_dictionary['width_display']) if live_disp_activated else Dummy()
 
     # Initialize recording if requested
-    print(f"DEBUG: initializing recorder")
     recorder = EDFRecorder(capture_dictionary['filename']) if capture_dictionary['record'] else Dummy()
 
     # Buffer used for the visualization and the recording
@@ -175,7 +173,6 @@ def start_capture(
     detection_buffer = [] if detector_cls is not None else None
 
     # Initialize stimulation delayer if requested
-    print(f"DEBUG: initializing delayer")
     delay = not ((capture_dictionary['stim_delay'] == 0.0) and (capture_dictionary['inter_stim_delay'] == 0.0)) and (stimulator is not None)
     delay_phase = (not delay) and (not capture_dictionary['spindle_detection_mode'] == 'Fast') and (stimulator is not None)
     if delay:
@@ -191,7 +188,6 @@ def start_capture(
         stimulation_delayer = Dummy()
         
     if stimulator is not None:
-        print(f"DEBUG: adding delayer")
         stimulator.add_delayer(stimulation_delayer)
 
     # Get the metadata and save it to a file
@@ -204,43 +200,32 @@ def start_capture(
     new_name = f"{name}_metadata.json"
     # Join the components back together into the new file path
     metadata_path = os.path.join(dirname, new_name)
-    print(f"DEBUG: Saving metadata to {metadata_path}")
-    print(f"DEBUG: metadata:\n{metadata}")
     with open(metadata_path, "w") as f:
-        print(f"DEBUG: dumping metadata")
         json.dump(metadata, f, indent=4)
-    print(f"DEBUG: saved metadata")
  
     # Initialize the variable to keep track of whether we are in a detection state or not for the markers
     prev_pause = pause_value.value
 
     if detector is not None:
-        print(f"DEBUG: initializing LSL streamer")
         marker_str = LSLStreamer.string_for_detection_activation(prev_pause)
         lsl_streamer.push_marker(marker_str)
 
     start_time = time.time()
     last_time = 0
 
-    print(f"DEBUG: Starting capture loop")
-
     # Main capture loop
     while True:
         
         # First, we send all outgoing messages to the capture process
-        print(f"DEBUG: checking msg")
         try:
             msg = q_msg.get_nowait()
-            print(f"DEBUG: received msg {msg}")
             capture_frontend.send_msg(msg)
         except queue.Empty as e:
             pass
         except queue.ShutDown as e:
-            print(f"DEBUG: something went wrong, the queue is Shutdown")
             raise e
         
         # Then, we check if we have received a message from the capture process
-        print(f"DEBUG: getting msg")
         msg = capture_frontend.get_msg()
         # Either we have received a stop message, or a print message.
         if msg is None:
@@ -251,14 +236,12 @@ def start_capture(
             print(msg[1])
 
         # Then, we retrieve the data from the capture process
-        print(f"DEBUG: checking data")
         raw_point = capture_frontend.get_data()
         # If we have no data, we continue to the next iteration
         if raw_point is None:
             continue
         
         # Go through filtering pipeline
-        print(f"DEBUG: filtering")
         if filter:
             filtered_point = fp.filter(deepcopy(raw_point))
         else:
@@ -269,7 +252,6 @@ def start_capture(
         raw_point = raw_point.tolist()
 
         # Send both raw and filtered points over LSL
-        print(f"DEBUG: push to LSL")
         lsl_streamer.push_raw(raw_point[-1])
         if filter:
             lsl_streamer.push_filtered(filtered_point[-1])
@@ -278,13 +260,11 @@ def start_capture(
         pause = pause_value.value
 
         # If the state has changed since last iteration, we send a marker
-        print(f"DEBUG: ck0")
         if pause != prev_pause and detector is not None:
             lsl_streamer.push_marker(LSLStreamer.string_for_detection_activation(pause))
             prev_pause = pause
 
         # If detection is on
-        print(f"DEBUG: ck1")
         if detector is not None and not pause:
             # Detect using the latest point
             detection_signal = detector.detect(filtered_point)
@@ -310,16 +290,17 @@ def start_capture(
 
         # Adding the raw point an it's timestamp for display
         timestamp = time.time() - start_time
-        print(f"DEBUG: ck2")
-        q_display.put([timestamp, raw_point, filtered_point])
+        if q_display is not None:
+            q_display.put([timestamp, raw_point, filtered_point])
+        
+        if live_disp_activated:
+            pass
 
         if len(buffer) >= 50:
             live_disp.add_datapoints(buffer)
             recorder.add_recording_data(buffer, detection_buffer, capture_dictionary['detect'], capture_dictionary['stimulate'])
             buffer = []
             detection_buffer = []
-        
-        print(f"DEBUG: ck3")
 
     # close the frontend
     leds.led1(Color.YELLOW)
@@ -344,7 +325,7 @@ class Capture:
             frontend = Frontend(self.version)
             self.nb_channels = frontend.get_version()
 
-#         print(f"DEBUG: Current hardware: ADS1299 {self.nb_channels} channels | Portiloop Version: {self.version}")
+        # print(f"DEBUG: Current hardware: ADS1299 {self.nb_channels} channels | Portiloop Version: {self.version}")
 
         # General default parameters
         self.frequency = 250
@@ -740,8 +721,6 @@ class Capture:
         for key, value in output_dict['filter_settings'].items():
             if key in output_dict:
                 output_dict.pop(key)
-        
-        print(f"DEBUG: output_dict: {output_dict}")
 
         return output_dict
 
@@ -906,7 +885,6 @@ class Capture:
     def on_b_capture(self, value):
         val = value['new']
         if val == 'Start':
-            print("DEBUG: capture start")
             clear_output()
             self.disable_buttons()
             if not self.python_clock:  # ADS clock: force the frequency to an ADS-compatible frequency
@@ -932,13 +910,12 @@ class Capture:
 
             self.width_display = 5 * self.frequency # Display 5 seconds of signal
 
-            dummy_q_display = Queue(maxsize=1)
             self._t_capture = Process(target=start_capture,
                                      args=(detector_cls,
                                            stimulator_cls,
                                            self.get_capture_dictionary(),
                                            self.q_msg,
-                                           dummy_q_display,
+                                           None,  # no q_display, use a LiveDisplay instead
                                            self.pause_value,))
             """
             detector_cls,
@@ -951,12 +928,9 @@ class Capture:
             self._t_capture.start()
             print(f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
         elif val == 'Stop':
-            print("DEBUG: capture stop")
             self.q_msg.put('STOP')
             assert self._t_capture is not None
-            print("DEBUG: waiting for capture process")
             self._t_capture.join()
-            print("DEBUG: joined")
             self._t_capture = None
             self.enable_buttons()
             

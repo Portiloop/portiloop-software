@@ -103,7 +103,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                 else: 
                     break
                     
-#         print(f"DEBUG: Stimulator will play sound {self.soundname}, duration: {self.duration:.3f} seconds")
+        # print(f"DEBUG: Stimulator will play sound {self.soundname}, duration: {self.duration:.3f} seconds")
 
 
     def play_sound(self):
@@ -164,14 +164,14 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                 self._thread = Thread(target=self._t_sound, daemon=True)
                 self._thread.start()
         
-#         print(f"DEBUG: Stimulation delay: {((self.end - start) * 1000):.2f}ms")
+        # print(f"DEBUG: Stimulation delay: {((self.end - start) * 1000):.2f}ms")
 
     def add_delayer(self, delayer):
         self.delayer = delayer
         self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", True)
 
     def __del__(self):
-#         print("DEBUG: releasing PCM")
+        # print("DEBUG: releasing PCM")
         del self.pcm
 
 
