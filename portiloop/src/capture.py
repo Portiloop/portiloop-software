@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import json
 from multiprocessing import Process, Queue, Value
+import queue  # for exceptions
 import os
 from time import sleep
 import time
@@ -232,8 +233,11 @@ def start_capture(
             msg = q_msg.get_nowait()
             print(f"DEBUG: received msg {msg}")
             capture_frontend.send_msg(msg)
-        except Queue.empty:
+        except queue.empty as e:
             pass
+        except queue.ShutDown as e:
+            print(f"DEBUG: something went wrong, the queue is Shutdown")
+            raise e
         
         # Then, we check if we have received a message from the capture process
         print(f"DEBUG: getting msg")
