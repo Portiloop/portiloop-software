@@ -22,7 +22,8 @@ from portiloop.src.stimulation import TimingDelayer, UpStateDelayer
 
 from portiloop.src.processing import FilterPipeline
 from portiloop.src.config.config_hardware import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
-from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, EDF_PATH, RECORDING_PATH, get_portiloop_version
+from portiloop.src.config.constants import EDF_PATH, RECORDING_PATH, CALIBRATION_PATH
+from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, get_portiloop_version
 from portiloop.src.config.constants import RUN_SETTINGS
 
 from IPython.display import clear_output, display
@@ -133,6 +134,7 @@ def start_capture(
         frequency=capture_dictionary['frequency'],
         python_clock=capture_dictionary['python_clock'],
         channel_states=capture_dictionary['channel_states'],
+        vref=capture_dictionary['vref'],
         process=capture_process,
     ) if capture_dictionary['signal_input'] == "ADS" else FileFrontend(fake_filename, capture_dictionary['nb_channels'], capture_dictionary['channel_detection'])
 
@@ -336,6 +338,9 @@ class Capture:
         self.custom_fir = False
         self.custom_fir_order = 20
         self.custom_fir_cutoff = 30
+
+        # Calibration parameters
+        self.vref = 3.3
 
         # Experiment options
         self.filter = True
@@ -569,6 +574,21 @@ class Capture:
             ])
         
         self.b_accordion_filter.set_title(index = 0, title = 'Filtering')
+
+        self.b_vref = widgets.FloatText(
+            value=self.vref,
+            description='VREF (V):',
+            disabled=False
+        )
+
+        self.b_accordion_calibration = widgets.Accordion(
+            children=[
+                widgets.VBox([
+                    self.b_vref
+                ])
+            ])
+        
+        self.b_accordion_calibration.set_title(index = 0, title = 'Calibration')
         
         self.b_duration = widgets.IntText(
             value=self.duration,
@@ -759,6 +779,7 @@ class Capture:
         self.b_custom_fir.observe(self.on_b_custom_fir, 'value')
         self.b_custom_fir_order.observe(self.on_b_custom_fir_order, 'value')
         self.b_custom_fir_cutoff.observe(self.on_b_custom_fir_cutoff, 'value')
+        self.b_vref.observe(self.on_b_vref, 'value')
         self.b_polyak_mean.observe(self.on_b_polyak_mean, 'value')
         self.b_polyak_std.observe(self.on_b_polyak_std, 'value')
         self.b_epsilon.observe(self.on_b_epsilon, 'value')
@@ -790,6 +811,7 @@ class Capture:
                             #   self.b_test_impedance,
                               self.b_accordion_delaying,
                               self.b_accordion_filter,
+                              self.b_accordion_calibration,
                               self.b_capture,
                               self.b_pause]))
 
@@ -819,6 +841,7 @@ class Capture:
         self.b_custom_fir.disabled = False
         self.b_custom_fir_order.disabled = not self.custom_fir
         self.b_custom_fir_cutoff.disabled = not self.custom_fir
+        self.b_vref.disabled = False
         self.b_stimulate.disabled = not self.detect
         self.b_threshold.disabled = not self.detect
         self.b_pause.disabled = not self.detect
@@ -856,6 +879,7 @@ class Capture:
         self.b_custom_fir.disabled = True
         self.b_custom_fir_order.disabled = True
         self.b_custom_fir_cutoff.disabled = True
+        self.b_vref.disabled = True
         self.b_threshold.disabled = True
         # self.b_test_stimulus.disabled = not self.stimulate # only enabled when running
         self.b_test_impedance.disabled = True
@@ -1038,6 +1062,10 @@ class Capture:
     def on_b_use_std(self, value):
         val = value['new']
         self.filter_args[2] = val
+    
+    def on_b_vref(self, value):
+        val = value['new']
+        self.vref = val
     
     def on_b_stimulate(self, value):
         val = value['new']

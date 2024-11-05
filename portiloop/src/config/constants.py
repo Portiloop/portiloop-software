@@ -1,5 +1,13 @@
+from pathlib import Path
+
 from portiloop.src.hardware.frontend import Frontend
 from portiloop.src.utils import get_portiloop_version
+
+
+HOME_PATH = Path.home()
+EDF_PATH = HOME_PATH / 'workspace' / 'edf_recordings'
+RECORDING_PATH = HOME_PATH / 'portiloop-software' / 'portiloop' / 'recordings'
+CALIBRATION_PATH = HOME_PATH / 'portiloop-software' / 'portiloop' / 'calibration'
 
 try:
     version = get_portiloop_version()
@@ -56,5 +64,6 @@ RUN_SETTINGS = {
         ]
     },
     "width_display": 1250,
-    "filename": "/home/mendel/workspace/edf_recordings/recording_test1.csv"
+    "filename": "/home/mendel/workspace/edf_recordings/recording_test1.csv",
+    "vref": 3.3
 }

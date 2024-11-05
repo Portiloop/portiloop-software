@@ -1,3 +1,6 @@
+ADS_GAIN = 24
+ADS_LSB = (2 / ADS_GAIN) / (2**24 - 1)  # needs to be multiplied by VREF
+
 DEFAULT_FRONTEND_CONFIG = [
     # nomenclature: name [default setting] [bits 7-0] : description
     # Read only ID:
