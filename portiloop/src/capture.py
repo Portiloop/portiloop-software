@@ -340,7 +340,7 @@ class Capture:
         self.custom_fir_cutoff = 30
 
         # Calibration parameters
-        self.vref = 3.3
+        self.vref = 2.64  # FIXME: this value is a temporary fix for what seems to be a hardware bug
 
         # Experiment options
         self.filter = True

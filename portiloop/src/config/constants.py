@@ -65,5 +65,5 @@ RUN_SETTINGS = {
     },
     "width_display": 1250,
     "filename": "/home/mendel/workspace/edf_recordings/recording_test1.csv",
-    "vref": 3.3
+    "vref": 2.64  # FIXME: this value is a temporary fix for what seems to be a hardware bug
 }

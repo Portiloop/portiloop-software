@@ -243,7 +243,7 @@ with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
         ############# Line Plot stuff ################
         line_timer = ui.timer(1/25, update_line_plot, active=False)
         start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
-        line_plot = ui.line_plot(n=1, limit=250 * 5, update_every=25, figsize=(3, 2))
+        line_plot = ui.line_plot(n=1, limit=250 * 5, update_every=25, figsize=(3, 2), layout='tight')
 
         ui.separator()
         ############# Display Control ###############
