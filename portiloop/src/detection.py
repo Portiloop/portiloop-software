@@ -195,7 +195,7 @@ class SleepSpindleRealTimeDetector(Detector, register_name="Spindle"):
         return output_data_y, output_data_h
 
 
-class SlowWaveDetector(Detector, register_name="SlowWave"):
+class SlowOscillationDetector(Detector, register_name="SlowOscillation"):
     def __init__(
         self,
         fs=250,

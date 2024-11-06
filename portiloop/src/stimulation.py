@@ -185,7 +185,7 @@ class SleepSpindleRealTimeStimulator(Stimulator, register_name="Spindle"):
         del self.pcm
 
 
-class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
+class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator, register_name="SpindleTrain"):
     def __init__(self):
         self.max_spindle_train_t = 6.0
         super().__init__()
@@ -211,7 +211,7 @@ class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
                 self.last_detected_ts = ts
 
 
-class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
+class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator, register_name="IsolatedSpindleTrain"):
     def stimulate(self, detection_signal):
         for sig in detection_signal:
             # We detect a stimulation
@@ -238,7 +238,7 @@ class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
 ##############################################
 
 
-class AlternatingStimulator(Stimulator, register_name="Interval"):
+class AlternatingStimulator(Stimulator, register_name="AlternatingSpindle"):
     def __init__(
         self, soundname=None, lsl_streamer=Dummy(), stim_interval=0.250, sham=None
     ):

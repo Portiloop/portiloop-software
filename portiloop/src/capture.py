@@ -163,8 +163,8 @@ def start_capture(
     lsl_streamer = LSLStreamer(streams, capture_dictionary['nb_channels'], capture_dictionary['frequency'], id=PORTILOOP_ID) if capture_dictionary['lsl'] else Dummy()
     stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer,sham=not capture_dictionary['stimulate']) if stimulator_cls is not None else None
     # Initialize filtering pipeline
-    if filter:
-        fp = BaseFilter.get_filter(detector_type)(
+    if capture_dictionary['filter']:
+        fp = BaseFilter.get_filter(detector_type or 'Spindle')(
             nb_channels=capture_dictionary["nb_channels"],
             sampling_rate=capture_dictionary["frequency"],
             power_line_fq=capture_dictionary["filter_settings"]["power_line"],
@@ -246,7 +246,7 @@ def start_capture(
 
     start_time = time.time()
     last_time = 0
-    print("eveb befire naub kiio;")
+
     # Main capture loop
     while True:
         # First, we send all outgoing messages to the capture process
@@ -351,7 +351,12 @@ def start_capture(
     del detector
 
 class Capture:
-    def __init__(self, detector_cls=None, stimulator_cls=None):
+    def __init__(self, detector_type=None, stimulator_type=None):
+        """
+        params:
+            detector_type (str): Name of detector from `portiloop.src.detection.Detector._registry.keys()`
+            stimulator_type (str): Name of stimulator from `portiloop.src.stimulation.Stimulator._registry.keys()`        
+        """
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
         self.filename = EDF_PATH / 'recording.edf'
         
@@ -401,7 +406,7 @@ class Capture:
         self.signal_labels = [f"ch{i+1}" for i in range(self.nb_channels)]
         self.channel_states = ['bias'] + ['disabled' for _ in range(self.nb_channels - 1)]
         self.channel_detection = 2
-        self.detection_sound = "stimul_100ms.wav"
+        self.detection_sound = self.get_capture_dictionary()['detection_sound']
 
         # Delayer parameters
         self.spindle_detection_mode = 'Fast'
@@ -410,8 +415,8 @@ class Capture:
         self.inter_stim_delay = 0.0
 
         # Stimulator and detector classes
-        self.detector_cls = detector_cls
-        self.stimulator_cls = stimulator_cls
+        self.detector_type = detector_type
+        self.stimulator_type = stimulator_type
 
         if ADS:
             try:
@@ -627,6 +632,39 @@ class Capture:
             ])
         
         self.b_accordion_calibration.set_title(index = 0, title = 'Calibration')
+
+
+        self.b_detector = widgets.Dropdown(
+            options=list(Detector._registry.keys()),
+            value='Spindle',
+            description='Detector',
+            style={'description_width': 'initial'}
+        )
+
+        self.b_accordion_detector = widgets.Accordion(
+            children=[
+                widgets.VBox([
+                    self.b_detector
+                ])
+            ])
+
+        self.b_accordion_detector.set_title(index = 0, title = 'Detector')
+        
+        self.b_stimulator = widgets.Dropdown(
+            options=list(Stimulator._registry.keys()),
+            value='Spindle',
+            description='Stimulator',
+            style={'description_width': 'initial'}
+        )
+
+        self.b_accordion_stimulator = widgets.Accordion(
+            children=[
+                widgets.VBox([
+                    self.b_stimulator
+                ])
+            ])
+
+        self.b_accordion_stimulator.set_title(index = 0, title = 'Stimulator')
         
         self.b_duration = widgets.IntText(
             value=self.duration,
@@ -827,6 +865,8 @@ class Capture:
         self.b_pause.observe(self.on_b_pause, 'value')
         self.b_stim_delay.observe(self.on_b_delay, 'value')
         self.b_inter_stim_delay.observe(self.on_b_inter_delay, 'value')
+        self.b_detector.observe(self.on_b_detector, 'value')
+        self.b_stimulator.observe(self.on_b_stimulator, 'value')
         
 
 
@@ -849,6 +889,8 @@ class Capture:
                             #   self.b_test_impedance,
                               self.b_accordion_delaying,
                               self.b_accordion_filter,
+                              self.b_accordion_detector, 
+                              self.b_accordion_stimulator,
                               self.b_accordion_calibration,
                               self.b_capture,
                               self.b_pause]))
@@ -930,7 +972,7 @@ class Capture:
 
     def on_b_channel_detect(self, value):
         self.channel_detection = value['new']
-        
+
     def on_b_spindle_freq(self, value): 
         val = value['new']
         if val > 0:
@@ -953,8 +995,8 @@ class Capture:
             if self._t_capture is not None:
                 warnings.warn("Capture already running, operation aborted.")
                 return
-            detector_cls = self.detector_cls if self.detect else None
-            stimulator_cls = self.stimulator_cls if self.stimulate else None
+            detector_type = self.detector_type if self.detect else None
+            stimulator_type = self.stimulator_type if self.stimulate else None
 
             self.filter_settings = {
                 "power_line": self.power_line,
@@ -969,21 +1011,18 @@ class Capture:
 
             self.width_display = 5 * self.frequency # Display 5 seconds of signal
 
-            self._t_capture = Process(target=start_capture,
-                                     args=(detector_cls,
-                                           stimulator_cls,
-                                           self.get_capture_dictionary(),
-                                           self.q_msg,
-                                           None,  # no q_display, use a LiveDisplay instead
-                                           self.pause_value,))
-            """
-            detector_cls,
-            stimulator_cls,
-            capture_dictionary,
-            q_msg,
-            q_display,
-            pause_value
-            """
+            self._t_capture = Process(
+                target=start_capture,
+                args=(
+                    detector_type,
+                    stimulator_type,
+                    self.get_capture_dictionary(),
+                    self.q_msg,
+                    None,  # no q_display, use a LiveDisplay instead
+                    self.pause_value,
+                )
+            )
+
             self._t_capture.start()
             print(f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
         elif val == 'Stop':
@@ -1153,8 +1192,16 @@ class Capture:
         val = value['new']
         self.inter_stim_delay = val
 
+
+    def on_b_detector(self, value):
+        self.detector_type = value['new']
+
+    def on_b_stimulator(self, value):
+        self.stimulator_type = value['new']
+
+
     def run_test_stimulus(self):
-        stimulator_class = self.stimulator_cls(soundname=self.detection_sound)
+        stimulator_class = Stimulator.get_stimulator(self.stimulator_type)(soundname=self.detection_sound)
         stimulator_class.test_stimulus()
         del stimulator_class
 

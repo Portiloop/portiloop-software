@@ -100,13 +100,6 @@ class ExperimentState:
             # self.stimulator_cls = AlternatingStimulator
             self.run_dict["detect"] = False
 
-        # self.detector_cls = (
-        #     SleepSpindleRealTimeDetector
-        #     if self.detector_type == 'Spindle'
-        #     else SlowOscillationDetector
-        # )
-        # print(self.detector_cls)
-
         if self.lsl:
             self.run_dict["lsl"] = True
         else:
