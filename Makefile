@@ -48,6 +48,7 @@ step5.temp: step4.temp
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp miniforge_jupyter.service /etc/systemd/system/jupyter.service
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp simplegui.service /etc/systemd/system/simplegui.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp 99-auto-mount.rules /etc/udev/rules.d/99-auto-mount.rules
 	touch step5.temp
 
@@ -56,6 +57,8 @@ step6.temp: step5.temp
 	sudo systemctl daemon-reload
 	echo "Enabling jupyter service..."
 	sudo systemctl enable jupyter.service
+	echo "Enabling simple GUI service..."
+	sudo systemctl enable simplegui.service
 	touch step6.temp
 
 step7.temp: step6.temp
@@ -65,40 +68,6 @@ step7.temp: step6.temp
 	touch step7.temp
 
 miniforge: step7.temp
-	echo "Launching jupyter notebook password manager..."
-	~/miniforge3/envs/portiloop/bin/jupyter notebook password
-	rm *.temp
-	echo "All done! Please reboot the device."
-
-# === Miniforge simple GUI Pipeline ===
-
-step5_simple.temp: step4.temp
-	echo "Installing the Portiloop software [This may take a while]"
-	cd ~/portiloop-software && sudo apt-get install git-lfs && git lfs pull && ~/miniforge3/envs/portiloop/bin/pip3 install notebook && ~/miniforge3/envs/portiloop/bin/pip3 install -e .
-	echo "Activating the widgets for the jupyter notebook..."
-	~/miniforge3/envs/portiloop/bin/jupyter nbextension enable --py widgetsnbextension
-	echo "Creating workspace directory..."
-	cd ~ && mkdir workspace && mkdir workspace/edf_recordings
-	echo "Copying files..."
-	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
-	cd ~/portiloop-software/portiloop/setup_files && sudo cp simplegui.service /etc/systemd/system/simplegui.service
-	cd ~/portiloop-software/portiloop/setup_files && sudo cp 99-auto-mount.rules /etc/udev/rules.d/99-auto-mount.rules
-	touch step5_simple.temp
-
-step6_simple.temp: step5_simple.temp
-	echo "Reloading systemctl daemon..."
-	sudo systemctl daemon-reload
-	echo "Enabling simple GUI service..."
-	sudo systemctl enable simplegui.service
-	touch step6_simple.temp
-
-step7_simple.temp: step6_simple.temp
-	echo "Playing test sound to update ALSA:"
-	echo "NOTE: This step may fail, just call make again when it does."
-	cd ~/portiloop-software/portiloop/sounds && aplay -Dplug:softvol stimulus.wav
-	touch step7_simple.temp
-
-miniforge_simplegui: step7_simple.temp
 	echo "Launching jupyter notebook password manager..."
 	~/miniforge3/envs/portiloop/bin/jupyter notebook password
 	rm *.temp
@@ -159,6 +128,7 @@ vstep5.temp: vstep4.temp
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp jupyter.service /etc/systemd/system/jupyter.service
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp simplegui.service /etc/systemd/system/simplegui.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp 99-auto-mount.rules /etc/udev/rules.d/99-auto-mount.rules
 	touch vstep5.temp
 
@@ -167,6 +137,8 @@ vstep6.temp: vstep5.temp
 	sudo systemctl daemon-reload
 	echo "Enabling jupyter service..."
 	sudo systemctl enable jupyter.service
+	echo "Enabling simple GUI service..."
+	sudo systemctl enable simplegui.service
 	touch vstep6.temp
 
 vstep7.temp: vstep6.temp

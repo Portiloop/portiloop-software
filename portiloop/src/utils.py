@@ -11,12 +11,7 @@ import os
 import warnings
 import multiprocessing as mp
 import time
-from portiloop.src.processing import int_to_float
-
-
-EDF_PATH = Path.home() / 'workspace' / 'edf_recording'
-# Path to the recordings
-RECORDING_PATH = Path.home() / 'portiloop-software' / 'portiloop' / 'recordings'
+from portiloop.src.processing import bin_to_microvolt
 
 
 def get_portiloop_version():
@@ -100,7 +95,6 @@ class EDFRecorder:
 
 class LiveDisplay():
     def __init__(self, channel_names, window_len=100):
-        self.datapoint_dim = len(channel_names)
         self.history = []
         self.pp = ProgressPlot(plot_names=channel_names,
                                max_window_len=window_len)
@@ -144,7 +138,7 @@ class Dummy:
 
 class CaptureFrontend(ABC):
     """
-    Interface that defines how we talk to a capture frontend:
+    Interface that defines how we talk to a capture frontend
     """
     @abstractmethod
     def init_capture(self):
@@ -168,7 +162,7 @@ class CaptureFrontend(ABC):
 
 
 class ADSFrontend(CaptureFrontend):
-    def __init__(self, duration, frequency, python_clock, channel_states, process):
+    def __init__(self, duration, frequency, python_clock, channel_states, vref, process):
         """
         duration (float): duration of the capture in seconds
         frequency (float): sampling frequency in Hz
@@ -180,6 +174,7 @@ class ADSFrontend(CaptureFrontend):
         self.frequency = frequency
         self.python_clock = python_clock
         self.channel_states = channel_states
+        self.vref = vref
 
         # Initialize The data pipes to talk to the data process
         self.capture_started = False
@@ -232,7 +227,7 @@ class ADSFrontend(CaptureFrontend):
             point = self.p_data_i.recv()
 
         # Convert point from int to corresponding value in microvolts
-        return int_to_float(np.array([point])) if point is not None else None
+        return bin_to_microvolt(np.array([point]), self.vref) if point is not None else None
 
     def close(self):
         # Empty pipes

@@ -2,20 +2,28 @@ from abc import ABC, abstractmethod
 import numpy as np
 from scipy import signal
 
+from portiloop.src.config.config_hardware import ADS_LSB
 
-def filter_24(value):
-    return (value * 4.5) / (2**23 - 1) / 24.0 * 1e6  # 23 because 1 bit is lost for sign
+
+def filter_scale(value, vref):
+    """
+    Scales the integer value into microvolts
+    """
+    return value * 1e6 * vref * ADS_LSB
 
 
 def filter_2scomplement_np(value):
+    """
+    Converts the binary ADS value into an integer by applying 2's complement
+    """
     return np.where((value & (1 << 23)) != 0, value - (1 << 24), value)
 
 
-def int_to_float(value):
+def bin_to_microvolt(value, vref):
     """
-    Convert the int value out of the ADS into a value in microvolts
+    Convert the binary value out of the ADS into a float value in microvolts
     """
-    return filter_24(filter_2scomplement_np(value))
+    return filter_scale(filter_2scomplement_np(value), vref)
 
 
 def shift_numpy(arr, num, fill_value=np.nan):

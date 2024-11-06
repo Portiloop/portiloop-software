@@ -7,68 +7,18 @@ from portiloop.src.capture import start_capture
 from portiloop.src.detection import Detector
 from portiloop.src.stimulation import Stimulator
 from portiloop.src.hardware.leds import Color, LEDs
-import socket
+from portiloop.src.config.constants import RUN_SETTINGS, version, nb_channels
+from portiloop.src.utils import DummyAlsaMixer
 import os
-from portiloop.src.utils import get_portiloop_version
-from portiloop.src.hardware.frontend import Frontend
+import socket
 import alsaaudio
 from alsaaudio import ALSAAudioError
 import psutil
 
-# This line is to start something which seems to be necessary to make sure the sound works properly. Not sure why
-os.system("aplay /home/mendel/portiloop-software/portiloop/sounds/sample1.wav")
-
 WORKSPACE_DIR_SD = "/media/sd_card/workspace/edf_recordings/"
 WORKSPACE_DIR_IN = "/home/mendel/workspace/edf_recordings/"
 
-try:
-    version = get_portiloop_version()
-    frontend = Frontend(version)
-    nb_channels = frontend.get_version()
-finally:
-    frontend.close()
-    del frontend
-# version = 2
-# nb_channels = 6
 portiloop_ID = socket.gethostname()
-
-RUN_SETTINGS = {
-    "desciption": "test ssw",
-    "version": version,
-    "nb_channels": nb_channels,
-    "frequency": 250,
-    "duration": 36000,
-    "filter": True,
-    "record": True,
-    "detect": True,
-    "stimulate": False,
-    "lsl": False,
-    "display": False,
-    "threshold": 0.75,
-    "signal_input": "ADS",
-    "python_clock": True,
-    "signal_labels": [f"ch{i+1}" for i in range(nb_channels)],
-    "channel_states": ["simple", "simple", "simple", "simple", "disabled", "disabled"],
-    "channel_detection": 2,
-    "detection_sound": "15msPN_48kHz_norm_stereo.wav",
-    "spindle_detection_mode": "Fast",
-    "spindle_freq": 10,
-    "stim_delay": 0.0,
-    "inter_stim_delay": 0.0,
-    "volume": 100,
-    "filter_settings": {
-        "power_line": 60,
-        "custom_fir": False,
-        "custom_fir_order": 20,
-        "custom_fir_cutoff": 30,
-        "polyak_mean": 0.1,
-        "polyak_std": 0.001,
-        "epsilon": 1e-06,
-        "filter_args": [True, True, True],
-    },
-    "width_display": 1250,
-    "filename": "/home/mendel/workspace/edf_recording/recording_test1.csv",
-}
 
 
 class ExperimentState:
@@ -334,9 +284,9 @@ with ui.tab_panels(tabs, value=control_tab).classes("w-full"):
     ############### Output Tab ####################
     with ui.tab_panel(output_tab).classes("w-full items-center"):
         ############# Line Plot stuff ################
-        line_timer = ui.timer(1 / 25, update_line_plot, active=False)
-        start_button.bind_enabled_to(line_timer, "active", forward=lambda x: not x)
-        line_plot = ui.line_plot(n=1, limit=250 * 5, update_every=25, figsize=(6, 2))
+        line_timer = ui.timer(1/25, update_line_plot, active=False)
+        start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
+        line_plot = ui.line_plot(n=1, limit=250 * 5, update_every=25, figsize=(3, 2), layout='tight')
 
         ui.separator()
         ############# Display Control ###############
