@@ -23,7 +23,6 @@ if ADS:
     from portiloop.src.hardware.frontend import Frontend
 print("ADS")
 
-from portiloop.src.processing import FilterPipeline
 from portiloop.src.config.config_hardware import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
 from portiloop.src.config.constants import EDF_PATH, RECORDING_PATH, CALIBRATION_PATH
 from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, get_portiloop_version
