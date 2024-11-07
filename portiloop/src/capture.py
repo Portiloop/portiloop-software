@@ -172,7 +172,7 @@ def start_capture(
 
     # Buffer used for the visualization and the recording
     buffer = []
-    detection_buffer = [] if detector_cls is not None else None
+    detection_buffer = []
 
     # Initialize stimulation delayer if requested
     delay = not ((capture_dictionary['stim_delay'] == 0.0) and (capture_dictionary['inter_stim_delay'] == 0.0)) and (stimulator is not None)
