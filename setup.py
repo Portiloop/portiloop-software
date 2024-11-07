@@ -11,7 +11,6 @@ def is_coral():
     return False
 
 requirements_list = ['wheel',
-                     'pyEDFLib',
                      'numpy',
                      'portilooplot',
                      'ipywidgets',
