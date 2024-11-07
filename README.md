@@ -77,11 +77,11 @@ The `Channels` pannel enables you to configure each electrode:
 
 - `Freq` is the desired sampling rate
 - `Time` is the maximum duration of the experiment (you can also stop the experiment manually)
-- `Recording` is the name of the `.edf` output file if you wish to record the signal locally
+- `Recording` is the name of the `.csv` output file if you wish to record the signal locally
 - Tick `Filter` to enable the online filtering pipeline
 - Tick `Detect` to enable the online detection pipeline
 - Tick `Stimulate` to enable the online stimulation pipeline
-- Tick `Record EDF` to record the signal in the file designated in `Recording`
+- Tick `Record CSV` to record the signal in the file designated in `Recording`
 - Tick `Stream LSL` to broadcast the signal on the local network via [LSL](https://labstreaminglayer.readthedocs.io/info/intro.html)
 - Tick `Display` to display the signal in the GUI
 - `Threshold` enables customizing the optional detection threshold from the GUI (e.g., for classifiers)

@@ -1,5 +1,4 @@
 wheel
-EDFlib-Python
 numpy
 portilooplot
 ipywidgets

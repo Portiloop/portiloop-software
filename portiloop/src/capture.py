@@ -619,7 +619,7 @@ class Capture:
 
         self.b_record = widgets.Checkbox(
             value=self.record,
-            description='Record EDF',
+            description='Record CSV',
             disabled=False,
             indent=False
         )
