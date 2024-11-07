@@ -361,7 +361,7 @@ class Capture:
 
         # Channel parameters
         self.signal_labels = [f"ch{i+1}" for i in range(self.nb_channels)]
-        self.channel_states = ['bias'] + ['disabled' for _ in range(self.nb_channels - 1)]
+        self.channel_states = ['disabled' for _ in range(self.nb_channels)]
         self.channel_detection = 2
         self.detection_sound = "stimul_100ms.wav"
 
@@ -404,8 +404,8 @@ class Capture:
                 disabled=False,
                 # button_style='info',  # 'success', 'info', 'warning', 'danger' or ''
                 tooltip=f'Enable channel {i+1}',
-                options=['disabled', 'simple', 'bias'],
-                value='bias' if i == 0 else 'disabled',
+                options=['disabled', 'simple', 'bias', 'test', 'temp'],
+                value='disabled',
             ))
         
         self.b_channel_detect = widgets.Dropdown(

@@ -134,6 +134,13 @@ def mod_config(config, datarate, channel_modes):
             mod = mod | 0x02
         elif chan_mode == 'disabled':
             mod = mod | 0x81  # PDn = 1 and input shorted (001)
+        elif chan_mode == 'test':
+            # Set the last 3 bits to 101 to output the test signal
+            mod = mod | 0x05
+        elif chan_mode == 'temp':
+            # Set the last 3 bits to 100 to output the teperature
+            # Note: the resulting signal (uV) must be fed to get_temperature_celsius (from portiloop.src.utils)
+            mod = mod | 0x04
         else:
             assert False, f"Wrong key: {chan_mode}."
         config[config_idx] = mod

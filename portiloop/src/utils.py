@@ -352,3 +352,6 @@ class LSLStreamer:
     @staticmethod
     def string_for_detection_activation(pause):
         return "DETECT_OFF" if pause else "DETECT_ON"
+
+def get_temperature_celsius(value_microvolt):
+    return (value_microvolt - 145300) / 490 + 25

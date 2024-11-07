@@ -68,9 +68,10 @@ The GUI now looks like this:
 ### Channels:
 
 The `Channels` pannel enables you to configure each electrode:
-- `disabled`: the electrode is not used
-- `simple`: the electrode is simply used to measure signal (not recommended)
-- `bias`: the electrode is used to output the bias ("ground") signal
+- `simple`: the electrode is used to measure signal
+- `bias`: the electrode is used to output the measured bias ("ground") signal
+- `test`: the electrode is used to output a test signal
+- `temp`: the electrode is used to output a signal corresponding to the ADS temperature (conversion required)
 
 ### General controls:
 
