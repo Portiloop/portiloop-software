@@ -1,7 +1,5 @@
-# from EDFlib.edfwriter import EDFwriter
 from abc import ABC, abstractmethod
 import io
-from pyedflib import highlevel
 from portilooplot.jupyter_plot import ProgressPlot
 from pathlib import Path
 import numpy as np
@@ -39,7 +37,7 @@ class DummyAlsaMixer:
     def setvolume(self, volume):
         self.volume = volume
 
-class EDFRecorder:
+class CSVRecorder:
     def __init__(self, filename):
         self.writing_buffer = []
         self.max_write = 1

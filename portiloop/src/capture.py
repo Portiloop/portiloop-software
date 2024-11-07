@@ -22,8 +22,8 @@ from portiloop.src.stimulation import TimingDelayer, UpStateDelayer
 
 from portiloop.src.processing import FilterPipeline
 from portiloop.src.config.config_hardware import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
-from portiloop.src.config.constants import EDF_PATH, RECORDING_PATH, CALIBRATION_PATH
-from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, get_portiloop_version
+from portiloop.src.config.constants import CSV_PATH, RECORDING_PATH, CALIBRATION_PATH
+from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, CSVRecorder, get_portiloop_version
 from portiloop.src.config.constants import RUN_SETTINGS
 
 from IPython.display import clear_output, display
@@ -168,7 +168,7 @@ def start_capture(
     live_disp = LiveDisplay(channel_names=capture_dictionary['signal_labels'], window_len=capture_dictionary['width_display']) if live_disp_activated else Dummy()
 
     # Initialize recording if requested
-    recorder = EDFRecorder(capture_dictionary['filename']) if capture_dictionary['record'] else Dummy()
+    recorder = CSVRecorder(capture_dictionary['filename']) if capture_dictionary['record'] else Dummy()
 
     # Buffer used for the visualization and the recording
     buffer = []
@@ -315,7 +315,7 @@ def start_capture(
 class Capture:
     def __init__(self, detector_cls=None, stimulator_cls=None):
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
-        self.filename = EDF_PATH / 'recording.edf'
+        self.filename = CSV_PATH / 'recording.csv'
         
         self.version = get_portiloop_version()
 
@@ -488,7 +488,7 @@ class Capture:
         )
         
         self.b_filename = widgets.Text(
-            value='recording.edf',
+            value='recording.csv',
             description='Recording:',
             disabled=False
         )
@@ -1001,11 +1001,11 @@ class Capture:
     def on_b_filename(self, value):
         val = value['new']
         if val != '':
-            if not val.endswith('.edf'):
-                val += '.edf'
-            self.filename = EDF_PATH / val
+            if not val.endswith('.csv'):
+                val += '.csv'
+            self.filename = CSV_PATH / val
         else:
-            self.filename = EDF_PATH / 'recording.edf'
+            self.filename = CSV_PATH / 'recording.csv'
         
     def on_b_duration(self, value):
         val = value['new']

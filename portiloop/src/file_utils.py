@@ -64,12 +64,5 @@ def read_xdf_file(xdf_file, channel):
     return array, columns
 
 
-def read_edf_file(edf_file):
-    """
-    Read a single edf file and return the data as a dictionary.
-    """
-    pass
-
-
 if __name__ == "__main__": 
     pass

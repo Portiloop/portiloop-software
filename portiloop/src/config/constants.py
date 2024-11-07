@@ -5,7 +5,7 @@ from portiloop.src.utils import get_portiloop_version
 
 
 HOME_PATH = Path.home()
-EDF_PATH = HOME_PATH / 'workspace' / 'edf_recordings'
+CSV_PATH = HOME_PATH / 'workspace' / 'edf_recordings'
 RECORDING_PATH = HOME_PATH / 'portiloop-software' / 'portiloop' / 'recordings'
 CALIBRATION_PATH = HOME_PATH / 'portiloop-software' / 'portiloop' / 'calibration'
 
