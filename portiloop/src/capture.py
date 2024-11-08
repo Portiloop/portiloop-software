@@ -152,7 +152,7 @@ def start_capture(
             threshold=capture_dictionary["threshold"],
             channel=capture_dictionary["channel_detection"],
         )
-        if capture_dictionary["detect"]
+        if capture_dictionary["detect"] and detector_type
         else None
     )
     streams = {
@@ -351,7 +351,7 @@ def start_capture(
     del detector
 
 class Capture:
-    def __init__(self, detector_type=None, stimulator_type=None):
+    def __init__(self):
         """
         params:
             detector_type (str): Name of detector from `portiloop.src.detection.Detector._registry.keys()`
@@ -415,8 +415,8 @@ class Capture:
         self.inter_stim_delay = 0.0
 
         # Stimulator and detector classes
-        self.detector_type = detector_type
-        self.stimulator_type = stimulator_type
+        self.detector_type = 'Spindle'
+        self.stimulator_type = 'Spindle'
 
         if ADS:
             try:

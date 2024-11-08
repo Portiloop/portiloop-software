@@ -192,7 +192,7 @@ class SpindleFilter(BaseFilter, register_name="Spindle"):
         return value
 
 
-class SlowWaveFilter(BaseFilter, register_name="SlowWave"):
+class SlowOscillationFilter(BaseFilter, register_name="SlowOscillation"):
     def __init__(self, nb_channels, sampling_rate, verbose=False, **kwargs):
         print("SOOnlineFiltering initialized")
         self.fs = sampling_rate
