@@ -24,8 +24,8 @@ if ADS:
 print("ADS")
 
 from portiloop.src.config.config_hardware import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
-from portiloop.src.config.constants import EDF_PATH, RECORDING_PATH, CALIBRATION_PATH
-from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, EDFRecorder, get_portiloop_version
+from portiloop.src.config.constants import CSV_PATH, RECORDING_PATH, CALIBRATION_PATH
+from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, CSVRecorder, get_portiloop_version
 from portiloop.src.config.constants import RUN_SETTINGS
 
 from IPython.display import clear_output, display
@@ -187,15 +187,11 @@ def start_capture(
     live_disp = LiveDisplay(channel_names=capture_dictionary['signal_labels'], window_len=capture_dictionary['width_display']) if live_disp_activated else Dummy()
 
     # Initialize recording if requested
-    recorder = (
-        EDFRecorder(capture_dictionary["filename"])
-        if capture_dictionary["record"]
-        else Dummy()
-    )
+    recorder = CSVRecorder(capture_dictionary['filename']) if capture_dictionary['record'] else Dummy()
 
     # Buffer used for the visualization and the recording
     buffer = []
-    detection_buffer = [] if detector_cls is not None else None
+    detection_buffer = []
 
     # Initialize stimulation delayer if requested
     delay = not (
@@ -358,7 +354,7 @@ class Capture:
             stimulator_type (str): Name of stimulator from `portiloop.src.stimulation.Stimulator._registry.keys()`        
         """
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
-        self.filename = EDF_PATH / 'recording.edf'
+        self.filename = CSV_PATH / 'recording.csv'
         
         self.version = get_portiloop_version()
 
@@ -404,7 +400,7 @@ class Capture:
 
         # Channel parameters
         self.signal_labels = [f"ch{i+1}" for i in range(self.nb_channels)]
-        self.channel_states = ['bias'] + ['disabled' for _ in range(self.nb_channels - 1)]
+        self.channel_states = ['disabled' for _ in range(self.nb_channels)]
         self.channel_detection = 2
         self.detection_sound = self.get_capture_dictionary()['detection_sound']
 
@@ -447,8 +443,8 @@ class Capture:
                 disabled=False,
                 # button_style='info',  # 'success', 'info', 'warning', 'danger' or ''
                 tooltip=f'Enable channel {i+1}',
-                options=['disabled', 'simple', 'bias'],
-                value='bias' if i == 0 else 'disabled',
+                options=['disabled', 'simple', 'bias', 'test', 'temp'],
+                value='disabled',
             ))
         
         self.b_channel_detect = widgets.Dropdown(
@@ -531,7 +527,7 @@ class Capture:
         )
         
         self.b_filename = widgets.Text(
-            value='recording.edf',
+            value='recording.csv',
             description='Recording:',
             disabled=False
         )
@@ -695,7 +691,7 @@ class Capture:
 
         self.b_record = widgets.Checkbox(
             value=self.record,
-            description='Record EDF',
+            description='Record CSV',
             disabled=False,
             indent=False
         )
@@ -1078,11 +1074,11 @@ class Capture:
     def on_b_filename(self, value):
         val = value['new']
         if val != '':
-            if not val.endswith('.edf'):
-                val += '.edf'
-            self.filename = EDF_PATH / val
+            if not val.endswith('.csv'):
+                val += '.csv'
+            self.filename = CSV_PATH / val
         else:
-            self.filename = EDF_PATH / 'recording.edf'
+            self.filename = CSV_PATH / 'recording.csv'
         
     def on_b_duration(self, value):
         val = value['new']
