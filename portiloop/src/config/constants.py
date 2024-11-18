@@ -48,6 +48,7 @@ RUN_SETTINGS = {
     "spindle_freq": 10,
     "stim_delay": 0.0,
     "inter_stim_delay": 0.0,
+    "so_phase_delay": True,
     "volume": 100,
     "filter_settings": {
         "power_line": 60,
@@ -63,6 +64,7 @@ RUN_SETTINGS = {
             True
         ]
     },
+    "fake_filename": "test_recording.csv",
     "width_display": 1250,
     "filename": "/home/mendel/workspace/edf_recordings/recording_test1.csv",
     "vref": 2.64  # FIXME: this value is a temporary fix for what seems to be a hardware bug

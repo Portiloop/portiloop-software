@@ -293,7 +293,7 @@ class SlowOscillationDetector(Detector, register_name="SlowOscillation"):
             and tpo < self.max_tPo
         ):
             return True
-
+        return False
 
 def carrier_detect(
     data: np.ndarray,

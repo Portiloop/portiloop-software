@@ -218,3 +218,95 @@ class UpStateDelayer(Delayer):
             )
             return (len(self.buffer) - peaks[-1]) * (1.0 / self.sample_freq)
         return (avg_dist - (len(self.buffer) - peaks[-1])) * (1.0 / self.sample_freq)
+
+
+class SOPhaseDelayer(Delayer):
+    def __init__(self, target_phase = 0, 
+        k_p: float = 0.05, k_i:float = 5e-8, k_0: float = 0.03,
+        sample_freq=250,
+    ):
+        """
+        Phase Locked Loop for In-Phase Detection 
+        params:
+            target_phase (float): Targeted phase to deliver stimulus in radius
+        """
+        self.k_p = k_p 
+        self.k_i = k_i
+        self.k_0 = k_0
+        self.fs = sample_freq
+
+        self.target_phase = target_phase
+        
+        self.sin_out = 0
+        self.cos_out = 1
+        self.pd_output = 0      # phase detector output
+        self.lf_output = 0      # loop filter output
+        self.integrator = 0
+
+        self.freq_const = 2 * np.pi * (1/self.fs)
+        self.init_estimate = 0
+        self.phase_estimate = self.freq_const
+        
+        self.atol = np.deg2rad(10)
+        self.time_counter = 0
+
+        self.prev_cos_out = 1
+        self.cos_outs = []
+        self.phase_estimates = []
+        self.phase_indicators = []
+        self.stimulate_flag = False
+
+    def wrap_phase(self, phase):
+        return np.angle(np.exp(1j * phase))
+    
+    def pll_detect(self, point):
+        self.pd_output = point * self.sin_out
+        
+        self.integrator += self.k_i * self.pd_output
+        self.lf_output = self.k_p * self.pd_output + self.integrator
+
+        next_phase = self.phase_estimate + self.init_estimate
+        self.init_estimate = self.freq_const + self.k_0 * self.lf_output
+
+        self.sin_out = -np.sin(self.phase_estimate)
+        next_cos_out = np.cos(self.phase_estimate)
+
+        self.phase_indicator = (
+            ( np.isclose(self.wrap_phase(self.phase_estimate), self.target_phase, atol = self.atol) ) and 
+            ( self.prev_cos_out <= self.cos_out >= next_cos_out )  
+        )
+        self.cos_outs.append(self.cos_out)
+        self.phase_estimates.append(self.phase_estimate)
+        self.phase_indicators.append(self.phase_indicator)
+        
+        self.prev_cos_out = self.cos_out
+        self.cos_out = next_cos_out
+        self.phase_estimate = next_phase
+        
+        return self.phase_indicator
+
+    def step(self, point):
+        """
+        Moves through the state machine
+        """
+        pll_output = self.pll_detect(point)
+        if self.stimulate_flag and pll_output:
+            self.stimulate()
+            self.stimulate_flag = False
+            return True
+        return False
+
+
+    def step_timestep(self, point):
+        """
+        Moves through the state machine
+        """
+        self.step(point)
+        pass
+       
+
+    def detected(self):
+        """
+        Defines what happens when a detection comes depending on what state you are in
+        """
+        self.stimulate_flag = True

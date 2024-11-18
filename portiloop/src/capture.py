@@ -14,7 +14,7 @@ from portiloop.src import ADS
 from portiloop.src.hardware.leds import Color, LEDs
 from portiloop.src.detection import Detector
 from portiloop.src.stimulation import Stimulator
-from portiloop.src.delayers import TimingDelayer, UpStateDelayer
+from portiloop.src.delayers import TimingDelayer, UpStateDelayer, SOPhaseDelayer
 from portiloop.src.processing import BaseFilter
 
 if ADS:
@@ -136,7 +136,7 @@ def start_capture(
 
     print(capture_dictionary)
     # Initialize data frontend
-    fake_filename = RECORDING_PATH / 'test_recording.csv'
+    fake_filename = RECORDING_PATH / capture_dictionary["fake_filename"]
     capture_frontend = ADSFrontend(
         duration=capture_dictionary['duration'],
         frequency=capture_dictionary['frequency'],
@@ -144,7 +144,11 @@ def start_capture(
         channel_states=capture_dictionary['channel_states'],
         vref=capture_dictionary['vref'],
         process=capture_process,
-    ) if capture_dictionary['signal_input'] == "ADS" else FileFrontend(fake_filename, capture_dictionary['nb_channels'], capture_dictionary['channel_detection'])
+    ) if capture_dictionary['signal_input'] == "ADS" else FileFrontend(
+        fake_filename, 
+        capture_dictionary['nb_channels'],
+        capture_dictionary['channel_detection'],
+    )
 
     # Initialize detector, LSL streamer and stimulatorif requested
     detector = (
@@ -214,6 +218,8 @@ def start_capture(
             capture_dictionary["spindle_detection_mode"] == "Peak",
             0.3,
         )
+    elif detector_type == 'SlowOscillation' and capture_dictionary['so_phase_delay']:
+        stimulation_delayer = SOPhaseDelayer()
     else:
         stimulation_delayer = Dummy()
 
@@ -391,6 +397,7 @@ class Capture:
         self.display = False
         self.threshold = 0.82
         self.signal_input = "ADS"
+        self.fake_filename = os.listdir(RECORDING_PATH)[-1]
         self.python_clock = True
 
         # Communication parameters for messages with capture 
@@ -409,6 +416,7 @@ class Capture:
         self.spindle_freq = 10
         self.stim_delay = 0.0
         self.inter_stim_delay = 0.0
+        self.so_phase_delay = True
 
         # Stimulator and detector classes
         self.detector_type = 'Spindle'
@@ -517,6 +525,14 @@ class Capture:
                       'Read data from file.'],
         )
         
+        self.b_fake_filename = widgets.Dropdown(
+            options=os.listdir(RECORDING_PATH),
+            value=os.listdir(RECORDING_PATH)[0],
+            description='Fake Filename',
+            disabled=True,
+            style={'description_width': 'initial'}
+        )
+
         self.b_custom_fir = widgets.ToggleButtons(
             options=['Default', 'Custom'],
             description='FIR filter:',
@@ -634,7 +650,8 @@ class Capture:
             options=list(Detector._registry.keys()),
             value='Spindle',
             description='Detector',
-            style={'description_width': 'initial'}
+            style={'description_width': 'initial'},
+            disabled=False,
         )
 
         self.b_accordion_detector = widgets.Accordion(
@@ -650,7 +667,8 @@ class Capture:
             options=list(Stimulator._registry.keys()),
             value='Spindle',
             description='Stimulator',
-            style={'description_width': 'initial'}
+            style={'description_width': 'initial'},
+            disabled=False,
         )
 
         self.b_accordion_stimulator = widgets.Accordion(
@@ -770,6 +788,12 @@ class Capture:
             style={'description_width': 'initial'}
         )
 
+        self.b_so_phase_delay = widgets.Checkbox(
+            value=self.so_phase_delay,
+            description='SO Phase Delay',
+            disabled=False,
+        )
+
         self.b_accordion_delaying = widgets.Accordion(
             children=[
                 widgets.VBox([
@@ -778,7 +802,8 @@ class Capture:
                     widgets.HBox([
                         self.b_spindle_mode, 
                         self.b_spindle_freq
-                    ])
+                    ]),
+                    self.b_so_phase_delay
                 ]),
             ]
         )
@@ -829,6 +854,7 @@ class Capture:
         self.b_capture.observe(self.on_b_capture, 'value')
         self.b_clock.observe(self.on_b_clock, 'value')
         self.b_signal_input.observe(self.on_b_signal_input, 'value')
+        self.b_fake_filename.observe(self.on_b_fake_filename, 'value')
         self.b_frequency.observe(self.on_b_frequency, 'value')
         self.b_threshold.observe(self.on_b_threshold, 'value')
         self.b_duration.observe(self.on_b_duration, 'value')
@@ -861,6 +887,7 @@ class Capture:
         self.b_pause.observe(self.on_b_pause, 'value')
         self.b_stim_delay.observe(self.on_b_delay, 'value')
         self.b_inter_stim_delay.observe(self.on_b_inter_delay, 'value')
+        self.b_so_phase_delay.observe(self.on_b_so_phase_delay, 'value')
         self.b_detector.observe(self.on_b_detector, 'value')
         self.b_stimulator.observe(self.on_b_stimulator, 'value')
         
@@ -876,6 +903,7 @@ class Capture:
                               self.b_frequency,
                               self.b_duration,
                               self.b_filename,
+                              self.b_fake_filename,
                               self.b_signal_input,
                               self.b_power_line,
                               self.b_clock,
@@ -905,6 +933,7 @@ class Capture:
             self.chann_buttons[i].disabled = False
         self.b_power_line.disabled = False
         self.b_signal_input.disabled = False
+        self.b_fake_filename.disabled = self.signal_input == 'ADS'
         self.b_channel_detect.disabled = False
         self.b_spindle_freq.disabled = False
         self.b_spindle_mode.disabled = False
@@ -925,8 +954,11 @@ class Capture:
         self.b_test_impedance.disabled = False
         self.b_stim_delay.disabled = False
         self.b_inter_stim_delay.disabled = False
+        self.b_so_phase_delay.disabled = False
         self.b_sound_detect.disabled = False
-    
+        self.b_detector.disabled = False
+        self.b_stimulator.disabled = False 
+        
     def disable_buttons(self):
         self.b_frequency.disabled = True
         self.b_duration.disabled = True
@@ -945,6 +977,7 @@ class Capture:
         self.b_spindle_freq.disabled = True
         self.b_spindle_mode.disabled = True
         self.b_signal_input.disabled = True
+        self.b_fake_filename.disabled = True
         self.b_power_line.disabled = True
         self.b_polyak_mean.disabled = True
         self.b_polyak_std.disabled = True
@@ -961,7 +994,11 @@ class Capture:
         self.b_test_impedance.disabled = True
         self.b_stim_delay.disabled = True
         self.b_inter_stim_delay.disabled = True
+        self.b_so_phase_delay.disabled = True
         self.b_sound_detect.disabled = True
+        self.b_detector.disabled = True
+        self.b_stimulator.disabled = True 
+
 
     def on_b_sound_detect(self, value):
         self.detection_sound = value['new']
@@ -1049,6 +1086,12 @@ class Capture:
             self.signal_input = "ADS"
         elif val == "File":
             self.signal_input = "File"
+        self.enable_buttons()
+
+    def on_b_fake_filename(self, value):
+        val = value['new']
+        self.fake_filename = val
+        
 
     def on_b_power_line(self, value):
         val = value['new']
@@ -1188,6 +1231,9 @@ class Capture:
         val = value['new']
         self.inter_stim_delay = val
 
+    def on_b_so_phase_delay(self, value):
+        val = value['new']
+        self.so_phase_delay = val
 
     def on_b_detector(self, value):
         self.detector_type = value['new']
