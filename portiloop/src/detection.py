@@ -307,7 +307,18 @@ def carrier_detect(
     fmin_max=[0.16, 4],
     verbose=False,
 ):
-    print(Ntrials)
+    """
+	Output of the function
+	SSW.marker : One marker field per epoch with the following fields,
+	. nsamp is a table of [start end], the number of lines is the number of SSW
+	. Neg is an array of DOWN phase amplitudes (uV) [filtered signal]
+	. P2P is an array of peak-to-peak amplitudes (uV) [filtered signal]
+	. Neg_raw is an array of DOWN phase amplitudes (uV) [raw signal]
+	. P2P_raw is an array of peak-to-peak amplitudes (uV) [raw signal]
+	. tNe is an array of duration of the DOWN phase
+	. tPo is an array of duration of the UP phase
+	. mfr is an array of the mean frequency"
+    """
     # Extract parameters
     Ntrials, _ = data.shape
 
@@ -324,7 +335,7 @@ def carrier_detect(
 
         sig = data[it, :].astype(float)
         Duree += len(sig) / fs / 60  # minutes
-        print(sig)
+
         # Filter in SSW band
         sigf = signal.filtfilt(ssw_filter, [1], sig)
         data_f_sw[it, :] = sigf
@@ -333,8 +344,6 @@ def carrier_detect(
         f1 = (sigf[1:] * sigf[:-1]) < 0
         f2 = sigf[:-1] > 0
         n_zc = np.where(f1 & f2)[0]
-
-        print(n_zc)
 
         # Initialize arrays for SSW properties
         n_t = np.zeros((len(n_zc) - 1, 2), dtype=int)
@@ -397,22 +406,12 @@ def carrier_detect(
     Stat_SSW = {"N_SSW": N_SSW, "d_SSW": N_SSW / Duree, "duree": Duree}
 
     # Print detection results
-    # print(f"\tSSW Carrier detector({fmin_max[0]:.2f}-", f"{fmin_max[1]:.2f} Hz):")
-    print(f"\twe found {N_SSW} SSW over {Ntrials} trials")
-    # print(f"\t({N_SSW/Duree:.2f} SSW/minute)")
+    if verbose:
+        print(f"\twe found {N_SSW} SSW over {Ntrials} trials")
+        print(f"\t({N_SSW/Duree:.2f} SSW/minute)")
 
     # Prepare output
     SSW = {
-        "Comments": "\n\tOutput of the function\n\t"
-        "SSW.marker : One marker field per epoch with the following fields,\n\t"
-        ". nsamp is a table of [start end], the number of lines is the number of SSW\n\t"
-        ". Neg is an array of DOWN phase amplitudes (uV) [filtered signal]\n\t"
-        ". P2P is an array of peak-to-peak amplitudes (uV) [filtered signal]\n\t"
-        ". Neg_raw is an array of DOWN phase amplitudes (uV) [raw signal]\n\t"
-        ". P2P_raw is an array of peak-to-peak amplitudes (uV) [raw signal]\n\t"
-        ". tNe is an array of duration of the DOWN phase\n\t"
-        ". tPo is an array of duration of the UP phase\n\t"
-        ". mfr is an array of the mean frequency\n\t",
         "markers": marker,
         "stat": Stat_SSW,
         "filtered_signals": data_f_sw,

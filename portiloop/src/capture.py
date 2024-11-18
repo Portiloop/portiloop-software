@@ -25,7 +25,9 @@ print("ADS")
 
 from portiloop.src.config.config_hardware import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
 from portiloop.src.config.constants import CSV_PATH, RECORDING_PATH, CALIBRATION_PATH
-from portiloop.src.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, CSVRecorder, get_portiloop_version
+from portiloop.src.capture_frontends import ADSFrontend, FileFrontend
+from portiloop.src.io import CSVRecorder, LSLStreamer, LiveDisplay
+from portiloop.src.utils import Dummy, DummyAlsaMixer, get_portiloop_version
 from portiloop.src.config.constants import RUN_SETTINGS
 
 from IPython.display import clear_output, display
