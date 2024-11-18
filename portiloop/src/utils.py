@@ -44,6 +44,7 @@ class CSVRecorder:
         self.filename = filename
         self.file = open(self.filename, 'a')
         self.writer = csv.writer(self.file)
+        self.writer.writerow(['Fpz', 'Cz', 'Fz', 'Pz', 'e5', 'e6', 'stim'])
         print(f"Saving file to {self.filename}")
         self.out_format = 'csv' # 'npy'
 
