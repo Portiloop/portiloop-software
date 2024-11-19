@@ -1,4 +1,5 @@
 import csv
+import os
 import numpy as np
 from portilooplot.jupyter_plot import ProgressPlot
 
@@ -7,15 +8,24 @@ class CSVRecorder:
         self.writing_buffer = []
         self.max_write = 1
         self.filename = filename
+        
+        file_exists = os.path.exists(self.filename)
+        file_empty = file_exists and os.path.getsize(self.filename) == 0
+        
         self.file = open(self.filename, 'a')
         self.writer = csv.writer(self.file)
-        self.writer.writerow(['Fpz', 'Cz', 'Fz', 'Pz', 'e5', 'e6', 'stim'])
+
+        if not file_exists or file_empty:
+            self.writer.writerow(['Fpz', 'Cz', 'Fz', 'Pz', 'e5', 'e6', 'stim'])
+        
         print(f"Saving file to {self.filename}")
         self.out_format = 'csv' # 'npy'
 
     def __del__(self):
         print(f"Closing")
         # self.file.close()
+        if hasattr(self, 'file') and not self.file.closed:
+            self.file.close()
 
     def add_recording_data(self, points, detection_info, detection_on, stim_on):
         stim_label = 2 if stim_on else 1
