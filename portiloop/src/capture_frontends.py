@@ -3,7 +3,28 @@ import multiprocessing as mp
 import csv
 import time
 import numpy as np
+from portiloop.src.config.config_hardware import ADS_LSB
 
+
+def filter_scale(value, vref):
+    """
+    Scales the integer value into microvolts
+    """
+    return value * 1e6 * vref * ADS_LSB
+
+
+def filter_2scomplement_np(value):
+    """
+    Converts the binary ADS value into an integer by applying 2's complement
+    """
+    return np.where((value & (1 << 23)) != 0, value - (1 << 24), value)
+
+
+def bin_to_microvolt(value, vref):
+    """
+    Convert the binary value out of the ADS into a float value in microvolts
+    """
+    return filter_scale(filter_2scomplement_np(value), vref)
 
 class CaptureFrontend(ABC):
     """
