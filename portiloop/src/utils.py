@@ -33,3 +33,5 @@ class Dummy:
         return lambda *args, **kwargs: None
 
 
+def get_temperature_celsius(value_microvolt):
+    return (value_microvolt - 145300) / 490 + 25
