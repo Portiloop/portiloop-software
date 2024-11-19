@@ -133,7 +133,6 @@ class SleepSpindleRealTimeStimulator(Stimulator, register_name="Spindle"):
         for sig in detection_signal:
             # We detect a stimulation
             if sig:
-                print('TRUEEEE')
                 # Record time of stimulation
                 ts = time.time()
 
@@ -147,7 +146,8 @@ class SleepSpindleRealTimeStimulator(Stimulator, register_name="Spindle"):
                         self.send_stimulation("FAST_STIM", False)
                     else:
                         self.send_stimulation("STIM", not self.sham)
-
+                else:
+                    stim.append(False)
                 self.last_detected_ts = ts
             else:
                 stim.append(False)
@@ -415,7 +415,7 @@ class AlternatingStimulator(Stimulator, register_name="AlternatingSpindle"):
 class SlowOscillationStimulator(SleepSpindleRealTimeStimulator, register_name="SlowOscillation"):
     def __init__(self, soundname=None, lsl_streamer=Dummy(), sham=False):
         super().__init__(soundname=soundname, lsl_streamer=lsl_streamer, sham=sham)
-        self.wait_t = 1 # longer for slow oscillation
+        self.wait_t = .1
 
     def stimulate(self, detection_signal):
         pass
@@ -437,9 +437,11 @@ class SlowOscillationStimulator(SleepSpindleRealTimeStimulator, register_name="S
                         self.send_stimulation("FAST_STIM", False)
                     else:
                         self.send_stimulation("STIM", not self.sham)
-
+                else:
+                    stim.append(False)
                 self.last_detected_ts = ts
             else:
+                self.delayer.not_detected()
                 stim.append(False)
         return stim
 
