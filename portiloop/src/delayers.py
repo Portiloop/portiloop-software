@@ -23,6 +23,10 @@ class Delayer(ABC):
     @abstractmethod
     def detected(self):
         pass
+    
+    @abstractmethod
+    def not_detected(self):
+        pass
 
 
 class TimingStates(Enum):
@@ -95,7 +99,9 @@ class TimingDelayer(Delayer):
             self.state = TimingStates.DELAYING
             self.delaying_start = time.time()
             self.delaying_counter = 0
-
+    
+    def not_detected(self): 
+        pass
 
 class UpStateStates(Enum):
     NO_SPINDLE = 0
@@ -218,7 +224,9 @@ class UpStateDelayer(Delayer):
             )
             return (len(self.buffer) - peaks[-1]) * (1.0 / self.sample_freq)
         return (avg_dist - (len(self.buffer) - peaks[-1])) * (1.0 / self.sample_freq)
-
+    
+    def not_detected(self): 
+        pass
 
 class SOPhaseDelayer(Delayer):
     def __init__(self, target_phase = 0, 
@@ -310,3 +318,6 @@ class SOPhaseDelayer(Delayer):
         Defines what happens when a detection comes depending on what state you are in
         """
         self.stimulate_flag = True
+
+    def not_detected(self):
+        self.stimulate_flag = False
