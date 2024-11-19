@@ -15,7 +15,7 @@ from portiloop.src.hardware.leds import Color, LEDs
 from portiloop.src.detection import Detector
 from portiloop.src.stimulation import Stimulator
 from portiloop.src.delayers import TimingDelayer, UpStateDelayer, SOPhaseDelayer
-from portiloop.src.processing import BaseFilter
+from portiloop.src.filter import BaseFilter
 
 if ADS:
     import alsaaudio
