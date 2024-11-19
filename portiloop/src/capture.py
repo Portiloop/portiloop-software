@@ -399,7 +399,7 @@ class Capture:
         self.display = False
         self.threshold = 0.82
         self.signal_input = "ADS"
-        self.fake_filename = os.listdir(RECORDING_PATH)[-1]
+        self.fake_filename = os.listdir(RECORDING_PATH)[0]
         self.python_clock = True
 
         # Communication parameters for messages with capture 
@@ -794,6 +794,7 @@ class Capture:
             value=self.so_phase_delay,
             description='SO Phase Delay',
             disabled=False,
+            indent=False
         )
 
         self.b_accordion_delaying = widgets.Accordion(
