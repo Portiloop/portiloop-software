@@ -47,6 +47,7 @@ class ExperimentState:
         self.stim_delay = 0
         self.sleep_timeout = 0
         self.select_freq = 250
+        self.so_phase_delay = True
 
     def start(self):
         print(f"Frequency: {self.select_freq}, Sleep_timeout: {self.sleep_timeout}")
@@ -109,6 +110,8 @@ class ExperimentState:
             self.run_dict["record"] = True
         else:
             self.run_dict["record"] = False
+        
+        self.run_dict['so_phase_delay'] = self.so_phase_delay
 
         if self.sd_card:
             workspace_dir = WORKSPACE_DIR_SD
@@ -329,6 +332,10 @@ with ui.tab_panels(tabs, value=control_tab).classes("w-full"):
             save_checker = ui.checkbox(
                 "Save Recording Locally", value=True
             ).bind_value_to(exp_state, "save_local")
+            so_phase_delay_checker = ui.checkbox(
+                "In-phase detection for Slow Oscillation", value=True
+            ).bind_value_to(exp_state, "so_phase_delay")
+
             stim_delay = ui.number(
                 value=0, label="Stimulation Delay (in ms)"
             ).bind_value_to(exp_state, "stim_delay")
@@ -338,14 +345,15 @@ with ui.tab_panels(tabs, value=control_tab).classes("w-full"):
                 on_change=disable_stim_toggle_callback,
                 label="Stimulator",
             ).bind_value_to(exp_state, "stimulator_type")
-
+            select_stimulator.classes("w-1/5")
             select_detector = ui.select(
                 list(Detector._registry.keys()), value="Spindle", label="Detector"
             ).bind_value_to(exp_state, "detector_type")
+            select_detector.classes("w-1/5")
 
-            select_stimulator.classes("w-1/2")
             start_button.bind_enabled_to(lsl_checker)
             start_button.bind_enabled_to(save_checker)
+            start_button.bind_enabled_to(so_phase_delay_checker)
             start_button.bind_enabled_to(select_stimulator)
             start_button.bind_enabled_to(select_detector)
             start_button.bind_enabled_to(stim_delay)
