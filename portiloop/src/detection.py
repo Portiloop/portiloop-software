@@ -202,14 +202,13 @@ class SlowOscillationDetector(Detector, register_name="SlowOscillation"):
         numtaps=17,
         verbose=False,
         channel=2,
-        moving_average=False,
+        record=False,
         **kwargs,
     ):
         self.fs = fs
         self.numtaps = numtaps
         self.verbose = verbose
         self.channel = channel
-        self.moving_average = moving_average
 
         self.th_PaP = 75
         self.th_Neg = 40
@@ -223,6 +222,7 @@ class SlowOscillationDetector(Detector, register_name="SlowOscillation"):
         self.filtered_buffer = []
         self.so_results = []
         self.count = 0
+        self.record = record
 
         self.ssw_filter = signal.firwin(
             self.numtaps, self.fmin_max, fs=self.fs, pass_zero="bandpass"
@@ -245,7 +245,7 @@ class SlowOscillationDetector(Detector, register_name="SlowOscillation"):
             self.count += 1
             result = self.detect_point(point[self.channel - 1])
             results.append(result)
-            if result:
+            if result and self.record:
                 self.so_results.append(self.count)
         return results
 
@@ -256,9 +256,6 @@ class SlowOscillationDetector(Detector, register_name="SlowOscillation"):
 
         self.buffer.append(point)
         self.filtered_buffer.append(filtered_point[0])
-
-        if self.moving_average:
-            filtered_point[0] = np.mean(self.filtered_buffer[-25:])
 
         tsignal = filtered_point[0]
         if tsignal > self.max_peak:

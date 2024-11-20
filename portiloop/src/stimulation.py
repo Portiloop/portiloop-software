@@ -415,7 +415,7 @@ class AlternatingStimulator(Stimulator, register_name="AlternatingSpindle"):
 class SlowOscillationStimulator(SleepSpindleRealTimeStimulator, register_name="SlowOscillation"):
     def __init__(self, soundname=None, lsl_streamer=Dummy(), sham=False):
         super().__init__(soundname=soundname, lsl_streamer=lsl_streamer, sham=sham)
-        self.wait_t = .1
+        self.wait_t = .1 # Stimulate the first point of a detected SO only
 
     def stimulate(self, detection_signal):
         pass

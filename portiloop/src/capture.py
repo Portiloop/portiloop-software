@@ -138,7 +138,7 @@ def start_capture(
 
     print(capture_dictionary)
     # Initialize data frontend
-    fake_filename = RECORDING_PATH / capture_dictionary["fake_filename"]
+    input_filename = RECORDING_PATH / capture_dictionary["input_filename"]
     capture_frontend = ADSFrontend(
         duration=capture_dictionary['duration'],
         frequency=capture_dictionary['frequency'],
@@ -147,14 +147,14 @@ def start_capture(
         vref=capture_dictionary['vref'],
         process=capture_process,
     ) if capture_dictionary['signal_input'] == "ADS" else FileFrontend(
-        fake_filename, 
+        input_filename, 
         capture_dictionary['nb_channels'],
         capture_dictionary['channel_detection'],
     )
 
     # Initialize detector, LSL streamer and stimulatorif requested
     detector = (
-        Detector.get_detector(detector_type)(
+        detector_cls(
             threshold=capture_dictionary["threshold"],
             channel=capture_dictionary["channel_detection"],
         )
@@ -162,9 +162,9 @@ def start_capture(
         else None
     )
     streams = {
-            'filtered': filter,
-            'markers': detector is not None,
-        }
+        'filtered': filter,
+        'markers': detector is not None,
+    }
 
     lsl_streamer = LSLStreamer(streams, capture_dictionary['nb_channels'], capture_dictionary['frequency'], id=PORTILOOP_ID) if capture_dictionary['lsl'] else Dummy()
     stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer,sham=not capture_dictionary['stimulate']) if stimulator_cls is not None else None
@@ -283,7 +283,7 @@ def start_capture(
             filtered_point = fp.filter(deepcopy(raw_point))
         else:
             filtered_point = deepcopy(raw_point)
-        # print(f'main loop: filtered point shape; {filtered_point.shape}')
+
         # Contains the filtered point (if filtering is off, contains a copy of the raw point)
         filtered_point = filtered_point.tolist()
         raw_point = raw_point.tolist()
@@ -399,7 +399,7 @@ class Capture:
         self.display = False
         self.threshold = 0.82
         self.signal_input = "ADS"
-        self.fake_filename = os.listdir(RECORDING_PATH)[0]
+        self.input_filename = os.listdir(RECORDING_PATH)[0]
         self.python_clock = True
 
         # Communication parameters for messages with capture 
@@ -527,10 +527,10 @@ class Capture:
                       'Read data from file.'],
         )
         
-        self.b_fake_filename = widgets.Dropdown(
+        self.b_input_filename = widgets.Dropdown(
             options=os.listdir(RECORDING_PATH),
             value=os.listdir(RECORDING_PATH)[0],
-            description='Fake Filename',
+            description='input Filename',
             disabled=True,
             style={'description_width': 'initial'}
         )
@@ -793,7 +793,7 @@ class Capture:
         self.b_so_phase_delay = widgets.Checkbox(
             value=self.so_phase_delay,
             description='SO Phase Delay',
-            disabled=False,
+            disabled=True,
             indent=False
         )
 
@@ -857,7 +857,7 @@ class Capture:
         self.b_capture.observe(self.on_b_capture, 'value')
         self.b_clock.observe(self.on_b_clock, 'value')
         self.b_signal_input.observe(self.on_b_signal_input, 'value')
-        self.b_fake_filename.observe(self.on_b_fake_filename, 'value')
+        self.b_input_filename.observe(self.on_b_input_filename, 'value')
         self.b_frequency.observe(self.on_b_frequency, 'value')
         self.b_threshold.observe(self.on_b_threshold, 'value')
         self.b_duration.observe(self.on_b_duration, 'value')
@@ -906,7 +906,7 @@ class Capture:
                               self.b_frequency,
                               self.b_duration,
                               self.b_filename,
-                              self.b_fake_filename,
+                              self.b_input_filename,
                               self.b_signal_input,
                               self.b_power_line,
                               self.b_clock,
@@ -936,7 +936,7 @@ class Capture:
             self.chann_buttons[i].disabled = False
         self.b_power_line.disabled = False
         self.b_signal_input.disabled = False
-        self.b_fake_filename.disabled = self.signal_input == 'ADS'
+        self.b_input_filename.disabled = self.signal_input == 'ADS'
         self.b_channel_detect.disabled = False
         self.b_spindle_freq.disabled = False
         self.b_spindle_mode.disabled = False
@@ -957,7 +957,10 @@ class Capture:
         self.b_test_impedance.disabled = False
         self.b_stim_delay.disabled = False
         self.b_inter_stim_delay.disabled = False
-        self.b_so_phase_delay.disabled = False
+        self.b_so_phase_delay.disabled = not (
+            self.stimulator_type == 'SlowOscillation' and 
+            self.detector_type == 'SlowOscillation'
+        )
         self.b_sound_detect.disabled = False
         self.b_detector.disabled = False
         self.b_stimulator.disabled = False 
@@ -980,7 +983,7 @@ class Capture:
         self.b_spindle_freq.disabled = True
         self.b_spindle_mode.disabled = True
         self.b_signal_input.disabled = True
-        self.b_fake_filename.disabled = True
+        self.b_input_filename.disabled = True
         self.b_power_line.disabled = True
         self.b_polyak_mean.disabled = True
         self.b_polyak_std.disabled = True
@@ -1091,9 +1094,9 @@ class Capture:
             self.signal_input = "File"
         self.enable_buttons()
 
-    def on_b_fake_filename(self, value):
+    def on_b_input_filename(self, value):
         val = value['new']
-        self.fake_filename = val
+        self.input_filename = val
         
 
     def on_b_power_line(self, value):
@@ -1240,10 +1243,11 @@ class Capture:
 
     def on_b_detector(self, value):
         self.detector_type = value['new']
+        self.enable_buttons()
 
     def on_b_stimulator(self, value):
         self.stimulator_type = value['new']
-
+        self.enable_buttons()
 
     def run_test_stimulus(self):
         stimulator_class = Stimulator.get_stimulator(self.stimulator_type)(soundname=self.detection_sound)
