@@ -89,6 +89,14 @@ The `Channels` pannel enables you to configure each electrode:
   - `Coral` sets the `ADS1299` sampling rate to twice your target sampling rate, and uses the Coral Real-Time clock to stick to your target sampling rate
   - `ADS` sets the `ADS1299` sampling rate to the closest compatible to your target sampling rate and uses the ADS interrupts
 
+### Custom Delaying 
+The `Delaying` section provides control over timing of detection and stimulation events.
+
+- Use the `Stim Delay` slider to set a time delay between detection and stimulation events
+- Use the `Inter Stim Delay` slider to set a time delay between stimulations
+- Choose from `Spindle Stimulation Mode` for either time delay (`Fast`) and phase delay (`Peak`) for spindles  
+- Tick `SO Phase Delay` to enable in-phase stimulation for slow oscillation. It will only be available when both the detector and stimulator are set to `SlowOscillation`
+
 ### Custom Filtering
 
 The `Filtering` section lets you customize the filtering pipeline from the GUI.
