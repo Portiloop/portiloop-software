@@ -292,6 +292,48 @@ class SlowOscillationDetector(Detector, register_name="SlowOscillation"):
             return True
         return False
 
+class CoupledSpindleSODetector(Detector, register_name="Coupled"):
+    def __init__(
+        self,
+        threshold=0.5,
+        num_models_parallel=8,
+        window_size=54,
+        seq_stride=42,
+        model_path=None,
+        verbose=False,
+        channel=2,
+
+        fs=250,
+        numtaps=17,
+        **kwargs,
+    ):
+        self.spindle_detector = SleepSpindleRealTimeDetector(
+            threshold=threshold,
+            channel=channel,
+            num_models_parallel=num_models_parallel,
+            window_size=window_size,
+            seq_stride=seq_stride,
+            model_path=model_path,
+            verbose=verbose,
+        )
+
+        self.so_detector = SlowOscillationDetector(
+            fs=fs, 
+            channel=channel,
+            numtaps=numtaps,
+            verbose=verbose,
+        )
+
+    def detect(self, datapoints):
+        results = []
+        so_result = self.so_detector.detect(datapoints)
+        spindle_result = self.spindle_detector.detect(datapoints)
+        for i, point in enumerate(datapoints):
+            result = so_result[i] and spindle_result[i]
+            results.append(result)
+        return results
+
+
 def carrier_detect(
     data: np.ndarray,
     fs,

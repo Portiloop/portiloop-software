@@ -48,7 +48,7 @@ RUN_SETTINGS = {
     "spindle_freq": 10,
     "stim_delay": 0.0,
     "inter_stim_delay": 0.0,
-    "so_phase_delay": True,
+    "so_phase_delay": False,
     "volume": 100,
     "filter_settings": {
         "power_line": 60,

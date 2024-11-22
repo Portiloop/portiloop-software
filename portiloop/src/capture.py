@@ -170,7 +170,11 @@ def start_capture(
     stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer,sham=not capture_dictionary['stimulate']) if stimulator_cls is not None else None
     # Initialize filtering pipeline
     if capture_dictionary['filter']:
-        fp = BaseFilter.get_filter(detector_type or 'Spindle')(
+        if detector_type in list(BaseFilter._registry.keys()):
+            filter_type = detector_type
+        else:
+            filter_type = 'SlowOscillation'
+        fp = BaseFilter.get_filter(filter_type)(
             nb_channels=capture_dictionary["nb_channels"],
             sampling_rate=capture_dictionary["frequency"],
             power_line_fq=capture_dictionary["filter_settings"]["power_line"],
@@ -418,7 +422,7 @@ class Capture:
         self.spindle_freq = 10
         self.stim_delay = 0.0
         self.inter_stim_delay = 0.0
-        self.so_phase_delay = True
+        self.so_phase_delay = False
 
         # Stimulator and detector classes
         self.detector_type = 'Spindle'
