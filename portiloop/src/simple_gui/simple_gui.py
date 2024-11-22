@@ -47,7 +47,7 @@ class ExperimentState:
         self.stim_delay = 0
         self.sleep_timeout = 0
         self.select_freq = 250
-        self.so_phase_delay = True
+        self.so_phase_delay = False
 
     def start(self):
         print(f"Frequency: {self.select_freq}, Sleep_timeout: {self.sleep_timeout}")
