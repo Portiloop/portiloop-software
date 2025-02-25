@@ -24,7 +24,7 @@ if ADS:
 print("ADS")
 
 from portiloop.src.config.config_hardware import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
-from portiloop.src.config.constants import CSV_PATH, RECORDING_PATH, CALIBRATION_PATH
+from portiloop.src.config.constants import CSV_PATH, CSV_PATH_SD, RECORDING_PATH, CALIBRATION_PATH
 from portiloop.src.capture_frontends import ADSFrontend, FileFrontend
 from portiloop.src.io import CSVRecorder, LSLStreamer, LiveDisplay
 from portiloop.src.utils import Dummy, DummyAlsaMixer, get_portiloop_version
@@ -366,7 +366,9 @@ class Capture:
             stimulator_type (str): Name of stimulator from `portiloop.src.stimulation.Stimulator._registry.keys()`        
         """
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
-        self.filename = CSV_PATH / 'recording.csv'
+        self.sdcard = False
+        self.folder = CSV_PATH
+        self.filename = self.folder / 'recording.csv'
         
         self.version = get_portiloop_version()
 
@@ -552,6 +554,13 @@ class Capture:
             value='recording.csv',
             description='Recording:',
             disabled=False
+        )
+
+        self.b_sdcard = widgets.Checkbox(
+            value=self.sdcard,
+            description='SD card',
+            disabled=False,
+            indent=False
         )
         
         self.b_frequency = widgets.IntText(
@@ -875,6 +884,7 @@ class Capture:
         self.b_lsl.observe(self.on_b_lsl, 'value')
         self.b_display.observe(self.on_b_display, 'value')
         self.b_filename.observe(self.on_b_filename, 'value')
+        self.b_sdcard.observe(self.on_b_sdcard, 'value')
         self.b_channel_detect.observe(self.on_b_channel_detect, 'value')
         self.b_sound_detect.observe(self.on_b_sound_detect, 'value')
         self.b_spindle_mode.observe(self.on_b_spindle_mode, 'value')
@@ -910,6 +920,7 @@ class Capture:
                               self.b_frequency,
                               self.b_duration,
                               self.b_filename,
+                              self.b_sdcard,
                               self.b_input_filename,
                               self.b_signal_input,
                               self.b_power_line,
@@ -930,6 +941,7 @@ class Capture:
         self.b_frequency.disabled = False
         self.b_duration.disabled = False
         self.b_filename.disabled = False
+        self.b_sdcard.disabled = False
         self.b_filter.disabled = False
         self.b_detect.disabled = False
         self.b_record.disabled = False
@@ -973,6 +985,7 @@ class Capture:
         self.b_frequency.disabled = True
         self.b_duration.disabled = True
         self.b_filename.disabled = True
+        self.b_sdcard.disabled = True
         self.b_filter.disabled = True
         self.b_stimulate.disabled = True
         self.b_filter.disabled = True
@@ -1129,9 +1142,19 @@ class Capture:
         if val != '':
             if not val.endswith('.csv'):
                 val += '.csv'
-            self.filename = CSV_PATH / val
+            self.filename = self.folder / val
         else:
-            self.filename = CSV_PATH / 'recording.csv'
+            self.filename = self.folder / 'recording.csv'
+    
+    def on_b_sdcard(self, value):
+        val = value['new']
+        self.sdcard = val
+        name = self.filename.name
+        if self.sdcard:
+            self.folder = CSV_PATH_SD
+        else:
+            self.folder = CSV_PATH
+        self.filename = self.folder / name
         
     def on_b_duration(self, value):
         val = value['new']
