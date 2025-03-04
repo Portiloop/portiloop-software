@@ -9,7 +9,7 @@ import os
 import warnings
 import multiprocessing as mp
 import time
-from portiloop.src.processing import bin_to_microvolt
+from portiloop.src.core.processing import bin_to_microvolt
 
 
 def get_portiloop_version():

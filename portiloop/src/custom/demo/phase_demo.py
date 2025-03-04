@@ -1,6 +1,6 @@
 import gradio as gr
 
-from portiloop.src.demo.offline import run_offline
+from portiloop.src.custom.demo.offline import run_offline
 
         
 def on_upload_file(file):

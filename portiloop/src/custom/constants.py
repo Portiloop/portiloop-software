@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from portiloop.src.hardware.frontend import Frontend
-from portiloop.src.utils import get_portiloop_version
+from portiloop.src.core.hardware import Frontend
+from portiloop.src.core.utils import get_portiloop_version
 
 
 HOME_PATH = Path.home()

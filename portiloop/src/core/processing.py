@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.signal import firwin
 
-from portiloop.src.config.config_hardware import ADS_LSB
+from portiloop.src.core.hardware.config_hardware import ADS_LSB
 
 
 def filter_scale(value, vref):

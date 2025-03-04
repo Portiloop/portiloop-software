@@ -3,7 +3,7 @@ import pyxdf
 from wonambi.detect.spindle import DetectSpindle, detect_Lacourse2018, detect_Wamsley2012
 from scipy.signal import butter, filtfilt, iirnotch, detrend
 import time
-from portiloop.src.stimulation import Stimulator
+from portiloop.src.core.stimulation import Stimulator
 
 
 STREAM_NAMES = {

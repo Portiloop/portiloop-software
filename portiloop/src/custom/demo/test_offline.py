@@ -1,10 +1,10 @@
 import itertools
 import unittest
-from portiloop.src.demo.offline import run_offline
+from portiloop.src.custom.demo.offline import run_offline
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-from portiloop.src.demo.utils import sleep_stage, xdf2array
+from portiloop.src.custom.demo.utils import sleep_stage, xdf2array
 
 class TestOffline(unittest.TestCase):
 
