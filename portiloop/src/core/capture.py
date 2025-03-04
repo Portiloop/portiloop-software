@@ -11,19 +11,20 @@ from datetime import datetime
 import warnings
 from threading import Thread, Lock
 from portiloop.src import ADS
-from portiloop.src.core.hardware import Color, LEDs
+from portiloop.src.core.hardware.leds import Color, LEDs
 
 if ADS:
     import alsaaudio
     from alsaaudio import ALSAAudioError
-    from portiloop.src.core.hardware import Frontend
+    from portiloop.src.core.hardware.frontend import Frontend
 
 from portiloop.src.core.stimulation import TimingDelayer, UpStateDelayer
 
 from portiloop.src.core.processing import FilterPipeline
 from portiloop.src.core.hardware.config_hardware import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
-from portiloop.src.custom.constants import CSV_PATH, RECORDING_PATH, CALIBRATION_PATH
 from portiloop.src.core.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, CSVRecorder, get_portiloop_version
+
+from portiloop.src.custom.constants import CSV_PATH, RECORDING_PATH, CALIBRATION_PATH
 from portiloop.src.custom.constants import RUN_SETTINGS
 
 from IPython.display import clear_output, display
