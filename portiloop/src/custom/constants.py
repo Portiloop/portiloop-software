@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from portiloop.src.core.hardware import Frontend
+from portiloop.src.core.hardware.frontend import Frontend
 from portiloop.src.core.utils import get_portiloop_version
 
 
