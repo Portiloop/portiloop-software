@@ -9,7 +9,7 @@ import copy
 
 from portiloop.src import ADS
 from portiloop.src.core.utils import Dummy
-from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator, SpindleTrainRealTimeStimulator
+# from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator, SpindleTrainRealTimeStimulator
 
 if ADS:
     import alsaaudio
