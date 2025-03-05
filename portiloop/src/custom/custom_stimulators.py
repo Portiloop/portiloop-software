@@ -19,14 +19,18 @@ if ADS:
 
 
 class SleepSpindleRealTimeStimulator(Stimulator):
-    def __init__(self, soundname=None, lsl_streamer=Dummy(), sham=False):
-        """
-        params:
-            stimulation_delay (float): simple delay between a detection and a stimulation
-            inter_stim_delay (float): time to wait between a stimulation and the next detection
-        """
+    def __init__(self, config_dict):
+        super().__init__(config_dict)
+        # soundname = None
+        # lsl_streamer = Dummy()
+        # sham = False
+
+        soundname = config_dict['detection_sound']
+        lsl_streamer = config_dict['lsl_streamer']
+        sham = not config_dict['stimulate']
+
         if soundname is None:
-            self.soundname = 'stimulus.wav' # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
+            self.soundname = 'stimulus.wav'  # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
         else:
             self.soundname = soundname
         self._sound = SOUNDS_FOLDER / self.soundname
@@ -149,9 +153,9 @@ class SleepSpindleRealTimeStimulator(Stimulator):
 
 
 class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
-    def __init__(self):
+    def __init__(self, config_dict):
         self.max_spindle_train_t = 6.0
-        super().__init__()
+        super().__init__(config_dict)
 
     def stimulate(self, detection_signal):
         for sig in detection_signal:
@@ -197,13 +201,19 @@ class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
 
 
 class AlternatingStimulator(Stimulator):
-    def __init__(self, soundname=None, lsl_streamer=Dummy(), stim_interval=0.250):
-        """
-        params:
-            stimulation_delay (float): simple delay between a detection and a stimulation
-            inter_stim_delay (float): time to wait between a stimulation and the next detection
-        """
-        self.pos_soundname = 'syllPos120.wav' # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
+    def __init__(self, config_dict):
+        super().__init__(config_dict)
+
+        # soundname = None
+        # lsl_streamer = Dummy()
+
+        stim_interval = 0.250  # TODO: handle this properly
+
+        soundname = config_dict['detection_sound']  # TODO: handle this properly
+        lsl_streamer = config_dict['lsl_streamer']
+        # sham = not config_dict['stimulate']
+
+        self.pos_soundname = 'syllPos120.wav'  # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
         self.neg_soundname = 'syllNeg120.wav'
 
         self.pos_sound = SOUNDS_FOLDER / self.pos_soundname
@@ -398,8 +408,8 @@ class TimingDelayer(Delayer):
         elif self.state == TimingStates.DELAYING:
             if time.time() - self.delaying_start > self.stimulation_delay:
                 # Actually stimulate the patient after the delay
-                if self.stimulate is not None:
-                    self.stimulate()
+                if self.stimulate is not None:  # FIXME: what is this?
+                    self.stimulate()  # FIXME: what is this?
                 self.state = TimingStates.WAITING
                 self.waiting_start = time.time()
                 return True
@@ -419,8 +429,8 @@ class TimingDelayer(Delayer):
             self.delaying_counter += 1
             if self.delaying_counter > self.stimulation_delay * self.sample_freq:
                 # Actually stimulate the patient after the delay
-                if self.stimulate is not None:
-                    self.stimulate()
+                if self.stimulate is not None:  # FIXME: what is this?
+                    self.stimulate()  # FIXME: what is this?
                 self.state = TimingStates.WAITING
                 self.waiting_counter = 0
                 return True

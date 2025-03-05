@@ -24,11 +24,12 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
     """
     Args:
         p_data_o: multiprocessing.Pipe: captured datapoints are put here
-        p_msg_io: mutliprocessing.Pipe: to communicate with the parent process
+        p_msg_io: multiprocessing.Pipe: to communicate with the parent process
         duration: float: max duration of the experiment in seconds
         frequency: float: sampling frequency
-        ptyhon_clock: bool: if True, the Coral clock is used, otherwise, the ADS interrupts are used
+        python_clock: bool: if True, the Coral clock is used, otherwise, the ADS interrupts are used
         time_msg_in: float: min time between attempts to recv incomming messages
+        channel_states: list: list of strings representing channel states ('disabled', 'simple', etc.)
     """
     if duration <= 0:
         duration = np.inf
@@ -103,8 +104,8 @@ def start_capture(
         capture_dictionary,
         q_msg, 
         q_display,
-        pause_value
-): 
+        pause_value):
+
     # print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
 
     # Initialize the LED
@@ -126,14 +127,16 @@ def start_capture(
     ) if capture_dictionary['signal_input'] == "ADS" else FileFrontend(fake_filename, capture_dictionary['nb_channels'], capture_dictionary['channel_detection'])
 
     # Initialize detector, LSL streamer and stimulatorif requested
-    detector = detector_cls(capture_dictionary['threshold'], channel=capture_dictionary['channel_detection']) if capture_dictionary['detect'] else None
+    detector = detector_cls(capture_dictionary) if capture_dictionary['detect'] else None
     streams = {
             'filtered': capture_dictionary['filter'],  # FIXME: replace all these "filter"
             'markers': detector is not None,
         }
 
     lsl_streamer = LSLStreamer(streams, capture_dictionary['nb_channels'], capture_dictionary['frequency'], id=PORTILOOP_ID) if capture_dictionary['lsl'] else Dummy()
-    stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer,sham=not capture_dictionary['stimulate']) if stimulator_cls is not None else None
+    capture_dictionary['lsl_streamer'] = lsl_streamer
+    stimulator = stimulator_cls(capture_dictionary) if stimulator_cls is not None else None
+
     # Initialize filtering pipeline
     if capture_dictionary['filter']:
         processor = processor_cls(nb_channels=capture_dictionary['nb_channels'],

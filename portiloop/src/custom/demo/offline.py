@@ -75,14 +75,15 @@ def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq, dete
 
     # Create the detector
     if online_detection:
-        detector = SleepSpindleRealTimeDetector(threshold=threshold, channel=1) # always 1 because we have only one channel
+        config_dict = {"threshold": threshold, "channel": 1}
+        detector = SleepSpindleRealTimeDetector(config_dict)  # always 1 because we have only one channel
 
         if detect_trains == "All Spindles":
-            stimulator = OfflineSleepSpindleRealTimeStimulator()
+            stimulator = OfflineSleepSpindleRealTimeStimulator(config_dict)
         elif detect_trains == "Trains":
-            stimulator = OfflineSpindleTrainRealTimeStimulator()
+            stimulator = OfflineSpindleTrainRealTimeStimulator(config_dict)
         elif detect_trains == "Isolated & First":
-            stimulator = OfflineIsolatedSpindleRealTimeStimulator()
+            stimulator = OfflineIsolatedSpindleRealTimeStimulator(config_dict)
 
         if stimulation_phase != "Fast":
             stimulation_delayer = UpStateDelayer(freq, stimulation_phase == 'Peak', time_to_buffer=buffer_time, stimulate=lambda: None)

@@ -5,6 +5,9 @@ from abc import ABC, abstractmethod
 
 class Stimulator(ABC):
 
+    def __init__(self, config_dict):
+        self.config_dict = config_dict
+
     @abstractmethod
     def stimulate(self, detection_signal):
         """

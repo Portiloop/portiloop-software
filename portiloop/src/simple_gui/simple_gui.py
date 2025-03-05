@@ -160,9 +160,9 @@ def stop():
     start_button.enabled = True
 
 def test_sound():
-    stimulator_class = exp_state.stimulator_cls(soundname=RUN_SETTINGS['detection_sound'])
-    stimulator_class.test_stimulus()
-    del stimulator_class
+    stimulator = exp_state.stimulator_cls(RUN_SETTINGS)
+    stimulator.test_stimulus()
+    del stimulator
 
 def update_line_plot():
     now = datetime.now()
