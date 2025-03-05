@@ -1,6 +1,6 @@
 import numpy as np
 from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
-from portiloop.src.core.stimulation import UpStateDelayer
+from portiloop.src.custom.custom_stimulators import UpStateDelayer
 from portiloop.src.core.processing import FilterPipeline
 from portiloop.src.custom.demo.utils import OfflineIsolatedSpindleRealTimeStimulator, OfflineSpindleTrainRealTimeStimulator, compute_output_table, sleep_stage, xdf2array, offline_detect, offline_filter, OfflineSleepSpindleRealTimeStimulator
 import gradio as gr

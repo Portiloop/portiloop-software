@@ -1,17 +1,14 @@
 import time
-from pathlib import Path
 import numpy as np
 
 from portiloop.src.core.detection import Detector
+from portiloop.src.core.constants import DEFAULT_MODEL_PATH
 
 from portiloop.src import ADS
 if ADS:
     from pycoral.utils import edgetpu
 else:
     import tensorflow as tf
-
-
-DEFAULT_MODEL_PATH = str(Path(__file__).parent.parent.parent / "models/portiloop_model_quant.tflite")  # TODO: remove hardcoded path
 
 
 class SleepSpindleRealTimeDetector(Detector):

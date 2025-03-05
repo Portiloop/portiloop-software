@@ -1,20 +1,23 @@
 from multiprocessing import Process, Queue, Value
 import time
-from nicegui import ui
-from datetime import datetime
-from portiloop.src.core.capture import start_capture
-from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
-from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator, AlternatingStimulator
-from portiloop.src.custom.constants import RUN_SETTINGS, version, nb_channels
-from portiloop.src.core.utils import DummyAlsaMixer
 import os
 import socket
+from datetime import datetime
+
 import alsaaudio
 from alsaaudio import ALSAAudioError
 import psutil
+from nicegui import ui
 
-WORKSPACE_DIR_SD = "/media/sd_card/workspace/edf_recordings/"
-WORKSPACE_DIR_IN = "/home/mendel/workspace/edf_recordings/"
+from portiloop.src.core.capture import start_capture
+from portiloop.src.core.utils import DummyAlsaMixer
+from portiloop.src.core.constants import WORKSPACE_DIR_SD, WORKSPACE_DIR_IN
+from portiloop.src.core.processing import FilterPipeline
+
+from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
+from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator, AlternatingStimulator
+from portiloop.src.custom.config import RUN_SETTINGS
+
 
 portiloop_ID = socket.gethostname()
 
@@ -24,6 +27,7 @@ class ExperimentState:
         self.started = False
         self.time_started = datetime.now()
         self.q_msg = Queue()
+        self.processor_cls = FilterPipeline
         self.detector_cls = SleepSpindleRealTimeDetector
         self.stimulator_cls = SleepSpindleRealTimeStimulator
         self.run_dict = RUN_SETTINGS
@@ -111,12 +115,13 @@ class ExperimentState:
         self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name)
 
         self._t_capture = Process(target=start_capture,
-                                     args=(self.detector_cls,
-                                           self.stimulator_cls,
-                                           self.run_dict,
-                                           self.q_msg,
-                                           self.display_q,
-                                           self.pause_value,))
+                                  args=(self.processor_cls,
+                                        self.detector_cls,
+                                        self.stimulator_cls,
+                                        self.run_dict,
+                                        self.q_msg,
+                                        self.display_q,
+                                        self.pause_value,))
         self._t_capture.start()
         print(f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
         
@@ -195,7 +200,7 @@ def disable_stim_toggle_callback(caller):
 ui.label('Portiloop 🧠').classes('text-4xl font-mono')
 ui.label('Control Center').classes('text-2xl font-mono')
 
-ui.html(f"Connected to: <strong>{portiloop_ID}</strong> (v{version} - {nb_channels} channels)")
+ui.html(f"Connected to: <strong>{portiloop_ID}</strong> (v{RUN_SETTINGS['version']} - {RUN_SETTINGS['nb_channels']} channels)")
 ui.separator()
 
 with ui.tabs().classes('w-full') as tabs:

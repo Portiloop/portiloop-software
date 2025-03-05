@@ -1,8 +1,3 @@
-from abc import ABC, abstractmethod
-from time import sleep
-from datetime import datetime
-from threading import Thread, Lock
-
 import warnings
 import time
 from multiprocessing import Process, Queue, Value
@@ -10,10 +5,16 @@ import os
 
 from portiloop.src import ADS
 from portiloop.src.core.capture import start_capture
-
 from portiloop.src.core.hardware.config_hardware import to_ads_frequency, LEADOFF_CONFIG
 from portiloop.src.core.utils import get_portiloop_version, DummyAlsaMixer
-from portiloop.src.custom.constants import CSV_PATH, RUN_SETTINGS
+from portiloop.src.core.constants import CSV_PATH
+from portiloop.src.core.processing import FilterPipeline
+
+from portiloop.src.custom.config import RUN_SETTINGS
+from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
+from portiloop.src.custom.custom_stimulators import (SleepSpindleRealTimeStimulator,
+                                                     SpindleTrainRealTimeStimulator,
+                                                     IsolatedSpindleRealTimeStimulator)
 
 from IPython.display import clear_output, display
 import ipywidgets as widgets
@@ -26,7 +27,7 @@ if ADS:
 
 
 class Capture:
-    def __init__(self, detector_cls=None, stimulator_cls=None):
+    def __init__(self, processor_cls=FilterPipeline, detector_cls=None, stimulator_cls=None):
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
         self.filename = CSV_PATH / 'recording.csv'
 
@@ -84,7 +85,8 @@ class Capture:
         self.stim_delay = 0.0
         self.inter_stim_delay = 0.0
 
-        # Stimulator and detector classes
+        # Pipeline
+        self.processor_cls = processor_cls
         self.detector_cls = detector_cls
         self.stimulator_cls = stimulator_cls
 
@@ -630,6 +632,7 @@ class Capture:
             if self._t_capture is not None:
                 warnings.warn("Capture already running, operation aborted.")
                 return
+            processor_cls = self.processor_cls if self.filter else None
             detector_cls = self.detector_cls if self.detect else None
             stimulator_cls = self.stimulator_cls if self.stimulate else None
 
@@ -647,7 +650,8 @@ class Capture:
             self.width_display = 5 * self.frequency  # Display 5 seconds of signal
 
             self._t_capture = Process(target=start_capture,
-                                      args=(detector_cls,
+                                      args=(processor_cls,
+                                            detector_cls,
                                             stimulator_cls,
                                             self.get_capture_dictionary(),
                                             self.q_msg,

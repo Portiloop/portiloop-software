@@ -5,6 +5,7 @@ import numpy as np
 import csv
 import multiprocessing as mp
 import time
+
 from portiloop.src.core.processing import bin_to_microvolt
 
 
@@ -23,6 +24,7 @@ def get_portiloop_version():
         version = -1
     return version
 
+
 class DummyAlsaMixer:
     def __init__(self):
         self.volume = 50
@@ -32,6 +34,7 @@ class DummyAlsaMixer:
 
     def setvolume(self, volume):
         self.volume = volume
+
 
 class CSVRecorder:
     def __init__(self, filename):
@@ -86,8 +89,7 @@ class CSVRecorder:
             self.writing_buffer = []
 
 
-
-class LiveDisplay():
+class LiveDisplay:
     def __init__(self, channel_names, window_len=100):
         self.history = []
         self.pp = ProgressPlot(plot_names=channel_names,
@@ -346,6 +348,7 @@ class LSLStreamer:
     @staticmethod
     def string_for_detection_activation(pause):
         return "DETECT_OFF" if pause else "DETECT_ON"
+
 
 def get_temperature_celsius(value_microvolt):
     return (value_microvolt - 145300) / 490 + 25

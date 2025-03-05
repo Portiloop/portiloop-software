@@ -2,10 +2,10 @@ from abc import ABC, abstractmethod
 
 
 class Detector(ABC):
-    
+
     def __init__(self, threshold=None, channel=None):
         """
-        Mandatory arguments are from the in the Portiloop GUI.
+        Mandatory arguments are from the Jupyter GUI.
         """
         self.threshold = threshold
         self.channel = channel
@@ -26,4 +26,3 @@ class Detector(ABC):
                 If you don't mean to use a Stimulator, you can simply return None.
         """
         raise NotImplementedError
-

@@ -3,25 +3,33 @@ from pathlib import Path
 from portiloop.src.core.hardware.frontend import Frontend
 from portiloop.src.core.utils import get_portiloop_version
 
-
-HOME_PATH = Path.home()
-CSV_PATH = HOME_PATH / 'workspace' / 'edf_recordings'
-RECORDING_PATH = HOME_PATH / 'portiloop-software' / 'portiloop' / 'recordings'
-# CALIBRATION_PATH = HOME_PATH / 'portiloop-software' / 'portiloop' / 'calibration'
-
 try:
-    version = get_portiloop_version()
-    frontend = Frontend(version)
+    VERSION = get_portiloop_version()
+    frontend = Frontend(VERSION)
     nb_channels = frontend.get_version()
 finally:
     frontend.close()
     del frontend
 
-# version = 2
-# nb_channels = 6
 
-RUN_SETTINGS = {
-    "version": version,
+# Home:
+HOME_FOLDER = Path.home()
+
+# Portiloop repository:
+RECORDING_FOLDER = HOME_FOLDER / 'portiloop-software' / 'portiloop' / 'recordings'
+SOUNDS_FOLDER = HOME_FOLDER / 'portiloop-software' / 'portiloop' / 'sounds'
+DEFAULT_MODEL_PATH = HOME_FOLDER / 'portiloop-software' / 'portiloop' / 'models' / 'portiloop_model_quant.tflite'
+
+# Workspace:
+CSV_PATH = HOME_FOLDER / 'workspace' / 'edf_recordings'
+WORKSPACE_DIR_SD = Path("/media/sd_card/workspace") / 'edf_recordings'
+WORKSPACE_DIR_IN = HOME_FOLDER / 'workspace' / 'edf_recordings'
+# TODO: remove all mentions of EDF format
+
+# This dictionary contains the default options that are relevant to core functions
+# It can be copied and extended by custom modules
+DEFAULT_CONFIG_DICT = {
+    "version": VERSION,
     "nb_channels": nb_channels,
     "frequency": 250,
     "duration": 36000,
@@ -35,13 +43,7 @@ RUN_SETTINGS = {
     "signal_input": "ADS",
     "python_clock": True,
     "signal_labels": [f"ch{i+1}" for i in range(nb_channels)],
-    "channel_states": [
-        "simple",
-        "simple",
-        "simple",
-        "simple",
-        "disabled",
-        "disabled"],
+    "channel_states": ["simple" for _ in range(nb_channels)],
     "channel_detection": 2,
     "detection_sound": "15msPN_48kHz_norm_stereo.wav",
     "spindle_detection_mode": "Fast",

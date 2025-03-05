@@ -4,22 +4,17 @@ import os
 import time
 import numpy as np
 from copy import deepcopy
-from portiloop.src import ADS
+import socket
+
 from portiloop.src.core.hardware.leds import Color, LEDs
-
-if ADS:
-    from portiloop.src.core.hardware.frontend import Frontend
-
-from portiloop.src.core.stimulation import TimingDelayer, UpStateDelayer
-
-from portiloop.src.core.processing import FilterPipeline
+from portiloop.src.custom.custom_stimulators import TimingDelayer, UpStateDelayer
 from portiloop.src.core.hardware.config_hardware import mod_config, FRONTEND_CONFIG
 from portiloop.src.core.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, CSVRecorder, get_portiloop_version
+from portiloop.src.core.constants import RECORDING_FOLDER
 
-from portiloop.src.custom.constants import RECORDING_PATH # CALIBRATION_PATH
-
-
-import socket
+from portiloop.src import ADS
+if ADS:
+    from portiloop.src.core.hardware.frontend import Frontend
 
 
 PORTILOOP_ID = f"{socket.gethostname()}-portiloop"
@@ -102,6 +97,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
 
 
 def start_capture(
+        processor_cls,
         detector_cls,
         stimulator_cls,
         capture_dictionary,
@@ -119,7 +115,7 @@ def start_capture(
         leds.led1(Color.PURPLE)
 
     # Initialize data frontend
-    fake_filename = RECORDING_PATH / 'test_recording.csv'
+    fake_filename = RECORDING_FOLDER / 'test_recording.csv'
     capture_frontend = ADSFrontend(
         duration=capture_dictionary['duration'],
         frequency=capture_dictionary['frequency'],
@@ -132,24 +128,26 @@ def start_capture(
     # Initialize detector, LSL streamer and stimulatorif requested
     detector = detector_cls(capture_dictionary['threshold'], channel=capture_dictionary['channel_detection']) if capture_dictionary['detect'] else None
     streams = {
-            'filtered': filter,  # FIXME: replace all these "filter"
+            'filtered': capture_dictionary['filter'],  # FIXME: replace all these "filter"
             'markers': detector is not None,
         }
 
     lsl_streamer = LSLStreamer(streams, capture_dictionary['nb_channels'], capture_dictionary['frequency'], id=PORTILOOP_ID) if capture_dictionary['lsl'] else Dummy()
     stimulator = stimulator_cls(soundname=capture_dictionary['detection_sound'], lsl_streamer=lsl_streamer,sham=not capture_dictionary['stimulate']) if stimulator_cls is not None else None
     # Initialize filtering pipeline
-    if filter:
-        fp = FilterPipeline(nb_channels=capture_dictionary['nb_channels'],
-                            sampling_rate=capture_dictionary['frequency'],
-                            power_line_fq=capture_dictionary['filter_settings']['power_line'],
-                            use_custom_fir=capture_dictionary['filter_settings']['custom_fir'],
-                            custom_fir_order=capture_dictionary['filter_settings']['custom_fir_order'],
-                            custom_fir_cutoff=capture_dictionary['filter_settings']['custom_fir_cutoff'],
-                            alpha_avg=capture_dictionary['filter_settings']['polyak_mean'],
-                            alpha_std=capture_dictionary['filter_settings']['polyak_std'],
-                            epsilon=capture_dictionary['filter_settings']['epsilon'],
-                            filter_args=capture_dictionary['filter_settings']['filter_args'])
+    if capture_dictionary['filter']:
+        processor = processor_cls(nb_channels=capture_dictionary['nb_channels'],
+                                  sampling_rate=capture_dictionary['frequency'],
+                                  power_line_fq=capture_dictionary['filter_settings']['power_line'],
+                                  use_custom_fir=capture_dictionary['filter_settings']['custom_fir'],
+                                  custom_fir_order=capture_dictionary['filter_settings']['custom_fir_order'],
+                                  custom_fir_cutoff=capture_dictionary['filter_settings']['custom_fir_cutoff'],
+                                  alpha_avg=capture_dictionary['filter_settings']['polyak_mean'],
+                                  alpha_std=capture_dictionary['filter_settings']['polyak_std'],
+                                  epsilon=capture_dictionary['filter_settings']['epsilon'],
+                                  filter_args=capture_dictionary['filter_settings']['filter_args'])
+    else:
+        processor = None
     
     # Launch the capture process
     capture_frontend.init_capture()
@@ -235,8 +233,8 @@ def start_capture(
             continue
         
         # Go through filtering pipeline
-        if filter:
-            filtered_point = fp.filter(deepcopy(raw_point))
+        if processor is not None:
+            filtered_point = processor.filter(deepcopy(raw_point))
         else:
             filtered_point = deepcopy(raw_point)
 
@@ -246,7 +244,7 @@ def start_capture(
 
         # Send both raw and filtered points over LSL
         lsl_streamer.push_raw(raw_point[-1])
-        if filter:
+        if processor is not None:
             lsl_streamer.push_filtered(filtered_point[-1])
         
         # Check if detection is on or off
