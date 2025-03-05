@@ -11,6 +11,9 @@ else:
     import tensorflow as tf
 
 
+DEFAULT_MODEL_PATH = str(Path(__file__).parent.parent.parent / "models/portiloop_model_quant.tflite")  # TODO: remove hardcoded path
+
+
 class SleepSpindleRealTimeDetector(Detector):
     def __init__(self,
                  threshold=0.5,
@@ -20,7 +23,6 @@ class SleepSpindleRealTimeDetector(Detector):
                  model_path=None,
                  verbose=False,
                  channel=2):
-        DEFAULT_MODEL_PATH = str(Path(__file__).parent.parent / "models/portiloop_model_quant.tflite")
         model_path = DEFAULT_MODEL_PATH if model_path is None else model_path
         self.verbose = verbose
         self.num_models_parallel = num_models_parallel

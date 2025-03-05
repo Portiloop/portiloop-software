@@ -99,7 +99,8 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         p_msg_io.send('STOP')
         p_msg_io.close()
         p_data_o.close()
-    
+
+
 def start_capture(
         detector_cls,
         stimulator_cls,
@@ -131,7 +132,7 @@ def start_capture(
     # Initialize detector, LSL streamer and stimulatorif requested
     detector = detector_cls(capture_dictionary['threshold'], channel=capture_dictionary['channel_detection']) if capture_dictionary['detect'] else None
     streams = {
-            'filtered': filter,
+            'filtered': filter,  # FIXME: replace all these "filter"
             'markers': detector is not None,
         }
 
@@ -280,7 +281,7 @@ def start_capture(
         # Add point to the buffer to send to viz and recorder
         buffer += raw_point
 
-        # Adding the raw point an it's timestamp for display
+        # Adding the raw point and its timestamp for display
         timestamp = time.time() - start_time
         if q_display is not None:
             q_display.put([timestamp, raw_point, filtered_point])
