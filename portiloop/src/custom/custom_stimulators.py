@@ -13,6 +13,9 @@ if ADS:
     import alsaaudio
 
 
+SOUNDS_FOLDER = Path(__file__).parent.parent.parent / 'sounds'  # TODO: remove hardcoded pathes
+
+
 class SleepSpindleRealTimeStimulator(Stimulator):
     def __init__(self, soundname=None, lsl_streamer=Dummy(), sham=False):
         """
@@ -24,7 +27,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
             self.soundname = 'stimulus.wav' # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
         else:
             self.soundname = soundname
-        self._sound = Path(__file__).parent.parent / 'sounds' / self.soundname
+        self._sound = SOUNDS_FOLDER / self.soundname
         self._thread = None
         self._lock = Lock()
         self.last_detected_ts = time.time()
@@ -201,8 +204,8 @@ class AlternatingStimulator(Stimulator):
         self.pos_soundname = 'syllPos120.wav' # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
         self.neg_soundname = 'syllNeg120.wav'
 
-        self.pos_sound = Path(__file__).parent.parent / 'sounds' / self.pos_soundname
-        self.neg_sound = Path(__file__).parent.parent / 'sounds' / self.neg_soundname
+        self.pos_sound = SOUNDS_FOLDER / self.pos_soundname
+        self.neg_sound = SOUNDS_FOLDER / self.neg_soundname
 
         self._thread = None
         self._lock = Lock()
