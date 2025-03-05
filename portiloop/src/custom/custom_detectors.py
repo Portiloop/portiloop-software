@@ -20,7 +20,7 @@ class SleepSpindleRealTimeDetector(Detector):
                  model_path=None,
                  verbose=False,
                  channel=2):
-        model_path = DEFAULT_MODEL_PATH if model_path is None else model_path
+        model_path = str(DEFAULT_MODEL_PATH if model_path is None else model_path)
         self.verbose = verbose
         self.num_models_parallel = num_models_parallel
 
