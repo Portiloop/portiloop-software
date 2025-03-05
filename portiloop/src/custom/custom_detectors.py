@@ -18,11 +18,11 @@ class SleepSpindleRealTimeDetector(Detector):
         channel = config_dict['channel_detection']
 
         # threshold = 0.5,
-        num_models_parallel = 8,
-        window_size = 54,
-        seq_stride = 42,
-        model_path = None,
-        verbose = False,
+        num_models_parallel = 8
+        window_size = 54
+        seq_stride = 42
+        model_path = None
+        verbose = False
         # channel = 2
 
         model_path = str(DEFAULT_MODEL_PATH if model_path is None else model_path)
