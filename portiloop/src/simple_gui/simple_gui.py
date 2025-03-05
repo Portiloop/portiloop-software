@@ -1,13 +1,10 @@
 from multiprocessing import Process, Queue, Value
 import time
 from nicegui import ui
-from nicegui.events import ValueChangeEventArguments
 from datetime import datetime
 from portiloop.src.core.capture import start_capture
 from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
-from portiloop.src.core.stimulation import AlternatingStimulator
-from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator
-from portiloop.src.core.hardware.leds import Color, LEDs
+from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator, AlternatingStimulator
 from portiloop.src.custom.constants import RUN_SETTINGS, version, nb_channels
 from portiloop.src.core.utils import DummyAlsaMixer
 import os

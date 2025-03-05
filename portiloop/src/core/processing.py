@@ -10,6 +10,7 @@ def filter_scale(value, vref):
     """
     return value * 1e6 * vref * ADS_LSB
 
+
 def filter_2scomplement_np(value):
     """
     Converts the binary ADS value into an integer by applying 2's complement

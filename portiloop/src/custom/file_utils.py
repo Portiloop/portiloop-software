@@ -1,9 +1,6 @@
-
 import numpy as np
 import pyxdf
-import os
-import matplotlib.pyplot as plt
-import pandas as pd
+
 
 STREAM_NAMES = {
     'filtered_data': 'Portiloop Filtered',

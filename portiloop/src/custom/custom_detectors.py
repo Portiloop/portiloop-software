@@ -1,5 +1,14 @@
-from portiloop.src import ADS
+import time
+from pathlib import Path
+import numpy as np
+
 from portiloop.src.core.detection import Detector
+
+from portiloop.src import ADS
+if ADS:
+    from pycoral.utils import edgetpu
+else:
+    import tensorflow as tf
 
 
 class SleepSpindleRealTimeDetector(Detector):

@@ -1,4 +1,4 @@
-from periphery import GPIO, PWM
+from periphery import GPIO
 from enum import Enum
 
 

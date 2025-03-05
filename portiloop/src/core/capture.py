@@ -1,36 +1,25 @@
-from abc import ABC, abstractmethod
 import json
-from multiprocessing import Process, Queue, Value
 import queue  # for exceptions
 import os
-from time import sleep
 import time
 import numpy as np
 from copy import deepcopy
-from datetime import datetime
-import warnings
-from threading import Thread, Lock
 from portiloop.src import ADS
 from portiloop.src.core.hardware.leds import Color, LEDs
 
 if ADS:
-    import alsaaudio
-    from alsaaudio import ALSAAudioError
     from portiloop.src.core.hardware.frontend import Frontend
 
 from portiloop.src.core.stimulation import TimingDelayer, UpStateDelayer
 
 from portiloop.src.core.processing import FilterPipeline
-from portiloop.src.core.hardware.config_hardware import mod_config, LEADOFF_CONFIG, FRONTEND_CONFIG, to_ads_frequency
-from portiloop.src.core.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, DummyAlsaMixer, CSVRecorder, get_portiloop_version
+from portiloop.src.core.hardware.config_hardware import mod_config, FRONTEND_CONFIG
+from portiloop.src.core.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, CSVRecorder, get_portiloop_version
 
-from portiloop.src.custom.constants import CSV_PATH, RECORDING_PATH, CALIBRATION_PATH
-from portiloop.src.custom.constants import RUN_SETTINGS
+from portiloop.src.custom.constants import RECORDING_PATH # CALIBRATION_PATH
 
-from IPython.display import clear_output, display
-import ipywidgets as widgets
+
 import socket
-from pathlib import Path
 
 
 PORTILOOP_ID = f"{socket.gethostname()}-portiloop"

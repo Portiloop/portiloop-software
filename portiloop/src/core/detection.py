@@ -1,16 +1,5 @@
 from abc import ABC, abstractmethod
-import time
-from pathlib import Path
-from portiloop.src import ADS
 
-if ADS:
-    from pycoral.utils import edgetpu
-else:
-    import tensorflow as tf
-import numpy as np
-
-
-# Abstract interface for developers:
 
 class Detector(ABC):
     

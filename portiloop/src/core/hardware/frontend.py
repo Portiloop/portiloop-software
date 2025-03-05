@@ -1,6 +1,6 @@
 from periphery import GPIO
 from spidev import SpiDev
-from time import sleep
+# from time import sleep
 
 WAKEUP = 0x02
 STANDBY = 0x04
