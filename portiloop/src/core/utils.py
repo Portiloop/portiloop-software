@@ -6,7 +6,7 @@ import csv
 import multiprocessing as mp
 import time
 
-from portiloop.src.core.processing import bin_to_microvolt
+from portiloop.src.custom.custom_processors import filter_scale
 
 
 def get_portiloop_version():
@@ -23,6 +23,20 @@ def get_portiloop_version():
     except Exception:
         version = -1
     return version
+
+
+def filter_2scomplement_np(value):
+    """
+    Converts the binary ADS value into an integer by applying 2's complement
+    """
+    return np.where((value & (1 << 23)) != 0, value - (1 << 24), value)
+
+
+def bin_to_microvolt(value, vref):
+    """
+    Convert the binary value out of the ADS into a float value in microvolts
+    """
+    return filter_scale(filter_2scomplement_np(value), vref)
 
 
 class DummyAlsaMixer:

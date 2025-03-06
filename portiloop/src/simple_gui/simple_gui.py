@@ -12,7 +12,7 @@ from nicegui import ui
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.utils import DummyAlsaMixer
 from portiloop.src.core.constants import WORKSPACE_DIR_SD, WORKSPACE_DIR_IN
-from portiloop.src.core.processing import FilterPipeline
+from portiloop.src.custom.custom_processors import FilterPipeline
 
 from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
 from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator, AlternatingStimulator

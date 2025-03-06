@@ -8,7 +8,7 @@ from portiloop.src.core.capture import start_capture
 from portiloop.src.core.hardware.config_hardware import to_ads_frequency, LEADOFF_CONFIG
 from portiloop.src.core.utils import get_portiloop_version, DummyAlsaMixer
 from portiloop.src.core.constants import CSV_PATH
-from portiloop.src.core.processing import FilterPipeline
+from portiloop.src.custom.custom_processors import FilterPipeline
 
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
