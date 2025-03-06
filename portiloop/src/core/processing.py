@@ -71,15 +71,15 @@ class FilterPipeline(Processor):
     def __init__(self, config_dict, lsl_streamer):
         super().__init__(config_dict, lsl_streamer)
 
-        nb_channels = config_dict['nb_channels'],
-        sampling_rate = config_dict['frequency'],
-        power_line_fq = config_dict['filter_settings']['power_line'],
-        use_custom_fir = config_dict['filter_settings']['custom_fir'],
-        custom_fir_order = config_dict['filter_settings']['custom_fir_order'],
-        custom_fir_cutoff = config_dict['filter_settings']['custom_fir_cutoff'],
-        alpha_avg = config_dict['filter_settings']['polyak_mean'],
-        alpha_std = config_dict['filter_settings']['polyak_std'],
-        epsilon = config_dict['filter_settings']['epsilon'],
+        nb_channels = config_dict['nb_channels']
+        sampling_rate = config_dict['frequency']
+        power_line_fq = config_dict['filter_settings']['power_line']
+        use_custom_fir = config_dict['filter_settings']['custom_fir']
+        custom_fir_order = config_dict['filter_settings']['custom_fir_order']
+        custom_fir_cutoff = config_dict['filter_settings']['custom_fir_cutoff']
+        alpha_avg = config_dict['filter_settings']['polyak_mean']
+        alpha_std = config_dict['filter_settings']['polyak_std']
+        epsilon = config_dict['filter_settings']['epsilon']
         filter_args = config_dict['filter_settings']['filter_args']
 
         if len(filter_args) > 0:
