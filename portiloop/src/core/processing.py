@@ -92,7 +92,7 @@ class FilterPipeline(Processor):
         self.use_notch = use_notch
         self.use_std = use_std
         self.nb_channels = nb_channels
-        assert power_line_fq in [50, 60], f"The only supported power line frequencies are 50 Hz and 60 Hz"
+        assert power_line_fq in [50, 60], f"The only supported power line frequencies are 50 Hz and 60 Hz. Received {power_line_fq}"
         if power_line_fq == 60:
             self.notch_coeff1 = -0.12478308884588535
             self.notch_coeff2 = 0.98729186796473023
