@@ -19,14 +19,13 @@ if ADS:
 
 
 class SleepSpindleRealTimeStimulator(Stimulator):
-    def __init__(self, config_dict):
-        super().__init__(config_dict)
+    def __init__(self, config_dict, lsl_streamer):
+        super().__init__(config_dict, lsl_streamer)
         # soundname = None
         # lsl_streamer = Dummy()
         # sham = False
 
         soundname = config_dict['detection_sound']
-        lsl_streamer = config_dict['lsl_streamer']
         sham = not config_dict['stimulate']
 
         if soundname is None:
@@ -128,7 +127,6 @@ class SleepSpindleRealTimeStimulator(Stimulator):
                     self._thread = Thread(target=self._t_sound, daemon=True)
                     self._thread.start()
 
-
     def _t_sound(self):
         self.play_sound()
         with self._lock:
@@ -153,9 +151,9 @@ class SleepSpindleRealTimeStimulator(Stimulator):
 
 
 class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
-    def __init__(self, config_dict):
+    def __init__(self, config_dict, lsl_streamer):
+        super().__init__(config_dict, lsl_streamer)
         self.max_spindle_train_t = 6.0
-        super().__init__(config_dict)
 
     def stimulate(self, detection_signal):
         for sig in detection_signal:
@@ -201,8 +199,8 @@ class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
 
 
 class AlternatingStimulator(Stimulator):
-    def __init__(self, config_dict):
-        super().__init__(config_dict)
+    def __init__(self, config_dict, lsl_streamer):
+        super().__init__(config_dict, lsl_streamer)
 
         # soundname = None
         # lsl_streamer = Dummy()
@@ -210,7 +208,6 @@ class AlternatingStimulator(Stimulator):
         stim_interval = 0.250  # TODO: handle this properly
 
         soundname = config_dict['detection_sound']  # TODO: handle this properly
-        lsl_streamer = config_dict['lsl_streamer']
         # sham = not config_dict['stimulate']
 
         self.pos_soundname = 'syllPos120.wav'  # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH

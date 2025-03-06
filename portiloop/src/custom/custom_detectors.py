@@ -12,7 +12,8 @@ else:
 
 
 class SleepSpindleRealTimeDetector(Detector):
-    def __init__(self, config_dict):
+    def __init__(self, config_dict, lsl_streamer):
+        super().__init__(config_dict, lsl_streamer)
 
         self.threshold = config_dict['threshold']
         self.channel = config_dict['channel_detection']
@@ -53,8 +54,6 @@ class SleepSpindleRealTimeDetector(Detector):
         self.h = [np.zeros((1, 7), dtype=np.int8) for _ in range(self.num_models_parallel)]
 
         self.current_stride_counter = self.stride_counters[0] - 1
-
-        super().__init__(config_dict)
 
     def detect(self, datapoints):
         """

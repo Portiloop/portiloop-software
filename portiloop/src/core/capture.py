@@ -127,15 +127,14 @@ def start_capture(
     ) if capture_dictionary['signal_input'] == "ADS" else FileFrontend(fake_filename, capture_dictionary['nb_channels'], capture_dictionary['channel_detection'])
 
     # Initialize detector, LSL streamer and stimulatorif requested
-    detector = detector_cls(capture_dictionary) if capture_dictionary['detect'] else None
     streams = {
-            'filtered': capture_dictionary['filter'],  # FIXME: replace all these "filter"
-            'markers': detector is not None,
-        }
-
+        'filtered': capture_dictionary['filter'],
+        'markers': capture_dictionary['detect'],
+    }
     lsl_streamer = LSLStreamer(streams, capture_dictionary['nb_channels'], capture_dictionary['frequency'], id=PORTILOOP_ID) if capture_dictionary['lsl'] else Dummy()
-    capture_dictionary['lsl_streamer'] = lsl_streamer
-    stimulator = stimulator_cls(capture_dictionary) if stimulator_cls is not None else None
+
+    detector = detector_cls(capture_dictionary, lsl_streamer) if capture_dictionary['detect'] else None
+    stimulator = stimulator_cls(capture_dictionary, lsl_streamer) if stimulator_cls is not None else None
 
     # Initialize filtering pipeline
     if capture_dictionary['filter']:
