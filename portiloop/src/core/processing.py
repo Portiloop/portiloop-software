@@ -3,6 +3,21 @@ from scipy.signal import firwin
 
 from portiloop.src.core.hardware.config_hardware import ADS_LSB
 
+from abc import ABC, abstractmethod
+
+
+class Processor(ABC):
+    def __init__(self, config_dict=None, lsl_streamer=None):
+        self.config_dict = config_dict
+        self.lsl_streamer = lsl_streamer
+
+    @abstractmethod
+    def filter(self, value):
+        """
+        value: a numpy array of shape (data series, channels)
+        """
+        raise NotImplementedError
+
 
 def filter_scale(value, vref):
     """
@@ -52,18 +67,21 @@ class FIR:
         return filtered
 
     
-class FilterPipeline:
-    def __init__(self,
-                 nb_channels,
-                 sampling_rate,
-                 power_line_fq=60,
-                 use_custom_fir=False,
-                 custom_fir_order=20,
-                 custom_fir_cutoff=30,
-                 alpha_avg=0.1,
-                 alpha_std=0.001,
-                 epsilon=0.000001,
-                 filter_args=[]):
+class FilterPipeline(Processor):
+    def __init__(self, config_dict, lsl_streamer):
+        super().__init__(config_dict, lsl_streamer)
+
+        nb_channels = config_dict['nb_channels'],
+        sampling_rate = config_dict['frequency'],
+        power_line_fq = config_dict['filter_settings']['power_line'],
+        use_custom_fir = config_dict['filter_settings']['custom_fir'],
+        custom_fir_order = config_dict['filter_settings']['custom_fir_order'],
+        custom_fir_cutoff = config_dict['filter_settings']['custom_fir_cutoff'],
+        alpha_avg = config_dict['filter_settings']['polyak_mean'],
+        alpha_std = config_dict['filter_settings']['polyak_std'],
+        epsilon = config_dict['filter_settings']['epsilon'],
+        filter_args = config_dict['filter_settings']['filter_args']
+
         if len(filter_args) > 0:
             use_fir, use_notch, use_std = filter_args
         else:

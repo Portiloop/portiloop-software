@@ -138,16 +138,7 @@ def start_capture(
 
     # Initialize filtering pipeline
     if capture_dictionary['filter']:
-        processor = processor_cls(nb_channels=capture_dictionary['nb_channels'],
-                                  sampling_rate=capture_dictionary['frequency'],
-                                  power_line_fq=capture_dictionary['filter_settings']['power_line'],
-                                  use_custom_fir=capture_dictionary['filter_settings']['custom_fir'],
-                                  custom_fir_order=capture_dictionary['filter_settings']['custom_fir_order'],
-                                  custom_fir_cutoff=capture_dictionary['filter_settings']['custom_fir_cutoff'],
-                                  alpha_avg=capture_dictionary['filter_settings']['polyak_mean'],
-                                  alpha_std=capture_dictionary['filter_settings']['polyak_std'],
-                                  epsilon=capture_dictionary['filter_settings']['epsilon'],
-                                  filter_args=capture_dictionary['filter_settings']['filter_args'])
+        processor = processor_cls(capture_dictionary, lsl_streamer)
     else:
         processor = None
     

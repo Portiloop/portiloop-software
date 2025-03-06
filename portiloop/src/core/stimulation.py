@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 # Abstract interface for developers:
 
 class Stimulator(ABC):
-
     def __init__(self, config_dict=None, lsl_streamer=None):
         self.config_dict = config_dict
         self.lsl_streamer = lsl_streamer
