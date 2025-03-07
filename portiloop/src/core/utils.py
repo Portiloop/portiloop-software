@@ -227,17 +227,17 @@ class CSVRecorder:
         for idx in range(len_data):
             line = []
             if self.raw_signal_buffer is not None:
-                line += self.raw_signal_buffer[idx]
+                line += self.raw_signal_buffer[idx]  # list of n channels
             if self.filtered_signal_buffer is not None:
-                line += self.filtered_signal_buffer[idx]
+                line += self.filtered_signal_buffer[idx]  # list of n channels
             if self.detection_signal_buffer is not None:
-                line += self.detection_signal_buffer[idx]
+                line.append(self.detection_signal_buffer[idx])  # single float
             if self.stimulation_signal_buffer is not None:
-                line += self.stimulation_signal_buffer[idx]
+                line.append(self.stimulation_signal_buffer[idx])  # single float
             if self.detection_activated_buffer is not None:
-                line += self.detection_activated_buffer[idx]
+                line.append(self.detection_activated_buffer[idx])  # single float (bool)
             if self.stimulation_activated_buffer is not None:
-                line += self.stimulation_activated_buffer[idx]
+                line.append(self.stimulation_activated_buffer[idx])  # single float (bool)
             lines.append(line)
 
         self.writing_buffer += lines
