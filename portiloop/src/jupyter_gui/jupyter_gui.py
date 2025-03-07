@@ -167,7 +167,7 @@ class JupyterUI:
 
         self.b_capture = widgets.ToggleButtons(
             options=['Stop', 'Start'],
-            description='JupyterUI:',
+            description='Capture:',
             disabled=False,
             button_style='',  # 'success', 'info', 'warning', 'danger' or ''
             tooltips=['Stop capture', 'Start capture'],
