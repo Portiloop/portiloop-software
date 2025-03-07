@@ -26,7 +26,7 @@ if ADS:
     from portiloop.src.core.hardware.frontend import Frontend
 
 
-class Capture:
+class JupyterUI:
     def __init__(self, processor_cls=FilterPipeline, detector_cls=None, stimulator_cls=None):
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
         self.filename = CSV_PATH / 'recording.csv'
@@ -89,6 +89,19 @@ class Capture:
         self.processor_cls = processor_cls
         self.detector_cls = detector_cls
         self.stimulator_cls = stimulator_cls
+
+        # Other
+        self.filter_settings = {
+            "power_line": self.power_line,
+            "custom_fir": self.custom_fir,
+            "custom_fir_order": self.custom_fir_order,
+            "custom_fir_cutoff": self.custom_fir_cutoff,
+            "polyak_mean": self.polyak_mean,
+            "polyak_std": self.polyak_std,
+            "epsilon": self.epsilon,
+            "filter_args": self.filter_args,
+        }
+        self.width_display = 5 * self.frequency
 
         if ADS:
             try:
@@ -154,7 +167,7 @@ class Capture:
 
         self.b_capture = widgets.ToggleButtons(
             options=['Stop', 'Start'],
-            description='Capture:',
+            description='JupyterUI:',
             disabled=False,
             button_style='',  # 'success', 'info', 'warning', 'danger' or ''
             tooltips=['Stop capture', 'Start capture'],
@@ -630,7 +643,7 @@ class Capture:
                 self.b_frequency.value = self.frequency
             self.display_buttons()
             if self._t_capture is not None:
-                warnings.warn("Capture already running, operation aborted.")
+                warnings.warn("JupyterUI already running, operation aborted.")
                 return
             processor_cls = self.processor_cls if self.filter else None
             detector_cls = self.detector_cls if self.detect else None
@@ -646,7 +659,6 @@ class Capture:
                 "epsilon": self.epsilon,
                 "filter_args": self.filter_args,
             }
-
             self.width_display = 5 * self.frequency  # Display 5 seconds of signal
 
             self._t_capture = Process(target=start_capture,

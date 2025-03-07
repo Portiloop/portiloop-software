@@ -52,9 +52,9 @@ _If the jupyter notebook is not yet created:_
 This creates a `jupyter` notebook, in which you can simply paste and execute te following:
 
 ```python
-from portiloop.capture import Capture
+from portiloop.capture import JupyterUI
 
-cap = Capture()
+cap = JupyterUI()
 ```
 
 _When the jupyter notebook is created:_
@@ -96,9 +96,9 @@ The `Filtering` section lets you customize the filtering pipeline from the GUI.
 - The `FIR filter` switch lets you select between the default low-pass FIR filter (used in the Portiloop [paper](https://arxiv.org/abs/2107.13473)), or customize this filter according to your needs (`FIR order` and `FIR cutoff`)
 - `Polyak mean`, `Polyak std` and `Epsilon` let you customize the online standardization pipeline, which also acts as a high-pass filter
 
-### Capture
+### JupyterUI
 
-The `Capture` switch lets you start and stop the experiment at any point in time
+The `JupyterUI` switch lets you start and stop the experiment at any point in time
 
 _Note: once the experiment is started, all widgets are deactivated until you stop the experiment._
 
