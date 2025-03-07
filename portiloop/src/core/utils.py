@@ -93,18 +93,18 @@ class CSVRecorder:
         line = []
         if self.raw_signal_buffer is not None:
             for i in range(nb_channels):
-                line.append(f'raw channel {i+1}')
+                line.append(f'raw_ch{i+1}')
         if self.filtered_signal_buffer is not None:
             for i in range(nb_channels):
-                line.append(f'filtered channel {i + 1}')
+                line.append(f'filtered_ch{i + 1}')
         if self.detection_signal_buffer is not None:
-            line.append('detection signal')
+            line.append('detection')
         if self.stimulation_signal_buffer is not None:
-            line.append('stimulation signal')
+            line.append('stimulation')
         if self.detection_activated_buffer is not None:
-            line.append('detection activated')
+            line.append('detection_on')
         if self.stimulation_activated_buffer is not None:
-            line.append('stimulation activated')
+            line.append('stimulation_on')
         self.writer.writerows([line])  # write header
         self.header_written = True
 
@@ -134,7 +134,7 @@ class CSVRecorder:
             buffer: list of lists of floats
         """
         if self.raw_signal_buffer is not None:
-            self.raw_signal_buffer.append(buffer)
+            self.raw_signal_buffer += buffer
 
     def append_filtered_signal_buffer(self, buffer):
         """
@@ -142,7 +142,7 @@ class CSVRecorder:
             buffer: list of lists of floats
         """
         if self.filtered_signal_buffer is not None:
-            self.filtered_signal_buffer.append(buffer)
+            self.filtered_signal_buffer += buffer
 
     def append_detection_signal_buffer(self, buffer):
         """
@@ -150,7 +150,7 @@ class CSVRecorder:
             buffer: list of floats
         """
         if self.detection_signal_buffer is not None:
-            self.detection_signal_buffer.append(buffer)
+            self.detection_signal_buffer += buffer
 
     def append_stimulation_signal_buffer(self, buffer):
         """
@@ -158,7 +158,7 @@ class CSVRecorder:
             buffer: list of floats
         """
         if self.stimulation_signal_buffer is not None:
-            self.stimulation_signal_buffer.append(buffer)
+            self.stimulation_signal_buffer += buffer
 
     def append_detection_activated_buffer(self, buffer):
         """
@@ -166,7 +166,7 @@ class CSVRecorder:
             buffer: list of 0/1
         """
         if self.detection_activated_buffer is not None:
-            self.detection_activated_buffer.append(buffer)
+            self.detection_activated_buffer += buffer
 
     def append_stimulation_activated_buffer(self, buffer):
         """
@@ -174,7 +174,7 @@ class CSVRecorder:
             buffer: list of 0/1
         """
         if self.stimulation_activated_buffer is not None:
-            self.stimulation_activated_buffer.append(buffer)
+            self.stimulation_activated_buffer += buffer
 
     def __del__(self):
         print(f"Closing")
