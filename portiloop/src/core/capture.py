@@ -298,7 +298,10 @@ def start_capture(
 
         if len(raw_signal_buffer) >= 50:  # TODO: make this an argument
             # live_disp.add_datapoints(raw_signal_buffer)
-            live_disp.add_datapoints(filtered_signal_buffer)
+            if processor is not None:
+                live_disp.add_datapoints(filtered_signal_buffer)
+            else:
+                live_disp.add_datapoints(raw_signal_buffer)
             # recorder.add_recording_data(raw_signal_buffer, detection_signal_buffer, capture_dictionary['detect'], capture_dictionary['stimulate'])
 
             recorder.append_raw_signal_buffer(raw_signal_buffer)
