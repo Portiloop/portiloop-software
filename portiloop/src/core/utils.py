@@ -5,6 +5,7 @@ import numpy as np
 import csv
 import multiprocessing as mp
 import time
+from pathlib import Path
 
 from portiloop.src.custom.custom_processors import filter_scale
 
@@ -51,22 +52,205 @@ class DummyAlsaMixer:
 
 
 class CSVRecorder:
-    def __init__(self, filename):
-        self.writing_buffer = []
-        self.max_write = 1
+    def __init__(self,
+                 filename,
+                 raw_signal=True,
+                 filtered_signal=False,
+                 detection_signal=False,
+                 stimulation_signal=False,
+                 detection_activated=False,
+                 stimulation_activated=False,
+                 default_detection_value=0.0,
+                 default_stimulation_value=0.0):
+
+        if not (raw_signal or filtered_signal):
+            raise RuntimeError("At least raw_signal or filtered_signal need to be activated.")
+        self.raw_signal_buffer = [] if raw_signal else None
+        self.filtered_signal_buffer = [] if filtered_signal else None
+        self.detection_signal_buffer = [] if detection_signal else None
+        self.stimulation_signal_buffer = [] if stimulation_signal else None
+        self.detection_activated_buffer = [] if detection_activated else None
+        self.stimulation_activated_buffer = [] if stimulation_activated else None
+        self.default_detection_value = default_detection_value
+        self.default_stimulation_value = default_stimulation_value
+
+        # create/open CSV:
+
         self.filename = filename
+        self.header_written = Path(filename).exists()
+
         self.file = open(self.filename, 'a')
         self.writer = csv.writer(self.file)
         print(f"Saving file to {self.filename}")
-        self.out_format = 'csv' # 'npy'
+
+        # if not exists:
+        #     self.writer.writerows([line])  # write header
+
+        self.writing_buffer = []
+        self.max_write = 1
+
+    def write_header(self, nb_channels):
+        line = []
+        if self.raw_signal_buffer is not None:
+            for i in range(nb_channels):
+                line.append(f'raw channel {i+1}')
+        if self.filtered_signal_buffer is not None:
+            for i in range(nb_channels):
+                line.append(f'filtered channel {i + 1}')
+        if self.detection_signal_buffer is not None:
+            line.append('detection signal')
+        if self.stimulation_signal_buffer is not None:
+            line.append('stimulation signal')
+        if self.detection_activated_buffer is not None:
+            line.append('detection activated')
+        if self.stimulation_activated_buffer is not None:
+            line.append('stimulation activated')
+        self.writer.writerows([line])  # write header
+        self.header_written = True
+
+    # def configure(self,
+    #               raw_signal=True,
+    #               filtered_signal=False,
+    #               detection_signal=False,
+    #               stimulation_signal=False,
+    #               detection_activated=False,
+    #               stimulation_activated=False,
+    #               default_detection_value=0.0,
+    #               default_stimulation_value=0.0):
+    #     if not (raw_signal or filtered_signal):
+    #         raise RuntimeError("At least raw_signal or filtered_signal need to be activated.")
+    #     self.raw_signal_buffer = [] if raw_signal else None
+    #     self.filtered_signal_buffer = [] if filtered_signal else None
+    #     self.detection_signal_buffer = [] if detection_signal else None
+    #     self.stimulation_signal_buffer = [] if stimulation_signal else None
+    #     self.detection_activated_buffer = [] if detection_activated else None
+    #     self.stimulation_activated_buffer = [] if stimulation_activated else None
+    #     self.default_detection_value = default_detection_value
+    #     self.default_stimulation_value = default_stimulation_value
+
+    def append_raw_signal_buffer(self, buffer):
+        """
+        Args:
+            buffer: list of lists of floats
+        """
+        if self.raw_signal_buffer is not None:
+            self.raw_signal_buffer.append(buffer)
+
+    def append_filtered_signal_buffer(self, buffer):
+        """
+        Args:
+            buffer: list of lists of floats
+        """
+        if self.filtered_signal_buffer is not None:
+            self.filtered_signal_buffer.append(buffer)
+
+    def append_detection_signal_buffer(self, buffer):
+        """
+        Args:
+            buffer: list of floats
+        """
+        if self.detection_signal_buffer is not None:
+            self.detection_signal_buffer.append(buffer)
+
+    def append_stimulation_signal_buffer(self, buffer):
+        """
+        Args:
+            buffer: list of floats
+        """
+        if self.stimulation_signal_buffer is not None:
+            self.stimulation_signal_buffer.append(buffer)
+
+    def append_detection_activated_buffer(self, buffer):
+        """
+        Args:
+            buffer: list of 0/1
+        """
+        if self.detection_activated_buffer is not None:
+            self.detection_activated_buffer.append(buffer)
+
+    def append_stimulation_activated_buffer(self, buffer):
+        """
+        Args:
+            buffer: list of 0/1
+        """
+        if self.stimulation_activated_buffer is not None:
+            self.stimulation_activated_buffer.append(buffer)
 
     def __del__(self):
         print(f"Closing")
         # self.file.close()
 
+    def write(self):
+
+        # compute the number of lines to write:
+
+        if self.raw_signal_buffer is not None:
+            len_data = len(self.raw_signal_buffer)
+            nb_channels = len(self.raw_signal_buffer[0])
+            if self.filtered_signal_buffer is not None and len(self.filtered_signal_buffer) != len_data:
+                raise RuntimeError(f"raw and filtered buffer sizes mismatch: {len_data} != {len(self.filtered_signal_buffer)}")
+        else:
+            len_data = len(self.filtered_signal_buffer)
+            nb_channels = len(self.filtered_signal_buffer[0])
+
+        if len_data == 0:
+            return
+
+        if not self.header_written:
+            self.write_header(nb_channels)
+
+        # pad missing data and check dimensions:
+
+        if self.detection_signal_buffer is not None:
+            len_buf = len(self.detection_signal_buffer)
+            diff = len_data - len_buf
+            if diff != 0:
+                self.detection_signal_buffer = [self.default_detection_value] * diff + self.detection_signal_buffer
+
+        if self.stimulation_signal_buffer is not None:
+            len_buf = len(self.stimulation_signal_buffer)
+            diff = len_data - len_buf
+            if diff != 0:
+                self.stimulation_signal_buffer = [self.default_stimulation_value] * diff + self.stimulation_signal_buffer
+
+        if self.detection_activated_buffer is not None:
+            if len(self.detection_activated_buffer) != len_data:
+                raise RuntimeError(f"detection activated size mismatch: {len(self.detection_activated_buffer)} != {len_data}")
+
+        if self.stimulation_activated_buffer is not None:
+            if len(self.stimulation_activated_buffer) != len_data:
+                raise RuntimeError(f"stimulation activated size mismatch: {len(self.stimulation_activated_buffer)} != {len_data}")
+
+        # generate lines:
+
+        lines = []
+        for idx in range(len_data):
+            line = []
+            if self.raw_signal_buffer is not None:
+                line += self.raw_signal_buffer[idx]
+            if self.filtered_signal_buffer is not None:
+                line += self.filtered_signal_buffer[idx]
+            if self.detection_signal_buffer is not None:
+                line += self.detection_signal_buffer[idx]
+            if self.stimulation_signal_buffer is not None:
+                line += self.stimulation_signal_buffer[idx]
+            if self.detection_activated_buffer is not None:
+                line += self.detection_activated_buffer[idx]
+            if self.stimulation_activated_buffer is not None:
+                line += self.stimulation_activated_buffer[idx]
+            lines.append(line)
+
+        self.writing_buffer += lines
+        if len(self.writing_buffer) >= self.max_write:
+            self.writer.writerows(self.writing_buffer)
+            self.writing_buffer = []
+
     def add_recording_data(self, points, detection_info, detection_on, stim_on):
+        """
+        Deprecated
+        """
         stim_label = 2 if stim_on else 1
-        
+
         #detection_info = (np.array(detection_info).astype(int) * stim_label).tolist()
         # No need to bother np arrays
         detection_info = [stim_label*x for x in detection_info]
@@ -89,7 +273,7 @@ class CSVRecorder:
             assert len(points) == len(detection_info)
             for idx, point in enumerate(points):
                 point.append(detection_info[idx])
-            
+
         data = points
         self.writing_buffer += data
         # write to file
@@ -97,7 +281,7 @@ class CSVRecorder:
         if len(self.writing_buffer) >= self.max_write:
             if self.out_format == 'csv':
                 self.writer.writerows(self.writing_buffer)
-                #np.savetxt(self.file, np.array(self.writing_buffer), delimiter=',')
+                # np.savetxt(self.file, np.array(self.writing_buffer), delimiter=',')
             elif self.out_format == 'npy':
                 np.save(self.file, np.array(self.writing_buffer))
             self.writing_buffer = []

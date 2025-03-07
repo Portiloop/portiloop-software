@@ -150,11 +150,24 @@ def start_capture(
     live_disp = LiveDisplay(channel_names=capture_dictionary['signal_labels'], window_len=capture_dictionary['width_display']) if live_disp_activated else Dummy()
 
     # Initialize recording if requested
-    recorder = CSVRecorder(capture_dictionary['filename']) if capture_dictionary['record'] else Dummy()
+    if capture_dictionary['record']:
+        recorder = CSVRecorder(capture_dictionary['filename'],
+                               raw_signal=True,
+                               filtered_signal=True,
+                               detection_signal=detector is not None,
+                               stimulation_signal=stimulator is not None,
+                               detection_activated=False,  # stimulation activated is enough
+                               stimulation_activated=True,
+                               default_detection_value=0.0,
+                               default_stimulation_value=0.0)
+    else:
+        recorder = Dummy()
 
     # Buffer used for the visualization and the recording
-    buffer = []
-    detection_buffer = []
+    raw_signal_buffer = []
+    filtered_signal_buffer = []
+    detection_signal_buffer = []
+    stimulation_activated_buffer = []
 
     # Initialize stimulation delayer if requested
     delay = not ((capture_dictionary['stim_delay'] == 0.0) and (capture_dictionary['inter_stim_delay'] == 0.0)) and (stimulator is not None)
@@ -220,25 +233,25 @@ def start_capture(
             print(msg[1])
 
         # Then, we retrieve the data from the capture process
-        raw_point = capture_frontend.get_data()
+        raw_points = capture_frontend.get_data()  # np.array (data series x ads_channels), or None
         # If we have no data, we continue to the next iteration
-        if raw_point is None:
+        if raw_points is None:
             continue
         
         # Go through filtering pipeline
         if processor is not None:
-            filtered_point = processor.filter(deepcopy(raw_point))
+            filtered_points = processor.filter(deepcopy(raw_points))
         else:
-            filtered_point = deepcopy(raw_point)
+            filtered_points = deepcopy(raw_points)
 
-        # Contains the filtered point (if filtering is off, contains a copy of the raw point)
-        filtered_point = filtered_point.tolist()
-        raw_point = raw_point.tolist()
+        # Contains the filtered points (if filtering is off, contains a copy of the raw points)
+        filtered_points = filtered_points.tolist()
+        raw_points = raw_points.tolist()
 
-        # Send both raw and filtered points over LSL
-        lsl_streamer.push_raw(raw_point[-1])
+        # Send both the latest raw and filtered points over LSL
+        lsl_streamer.push_raw(raw_points[-1])
         if processor is not None:
-            lsl_streamer.push_filtered(filtered_point[-1])
+            lsl_streamer.push_filtered(filtered_points[-1])
         
         # Check if detection is on or off
         pause = pause_value.value
@@ -248,17 +261,19 @@ def start_capture(
             lsl_streamer.push_marker(LSLStreamer.string_for_detection_activation(pause))
             prev_pause = pause
 
+        stimulator_activated = False
         # If detection is on
         if detector is not None and not pause:
-            # Detect using the latest point
-            detection_signal = detector.detect(filtered_point)
+            # Detect using the latest points
+            detection_signal = detector.detect(filtered_points)
             # Stimulate
             if stimulator is not None:
+                stimulator_activated = True
                 stim = stimulator.stimulate(detection_signal)
                 if stim is None:
                     stim = detection_signal
                 if capture_dictionary['detect']:
-                    detection_buffer += stim
+                    detection_signal_buffer += stim
 
                 # Send a stimulation every second (uncomment for testing)
                 # current_time = time.time()
@@ -267,21 +282,35 @@ def start_capture(
                 #     last_time = current_time
 
                 # Adds point to buffer for delayed stimulation
-                stimulation_delayer.step(filtered_point[0][capture_dictionary['channel_detection'] - 1])
+                stimulation_delayer.step(filtered_points[0][capture_dictionary['channel_detection'] - 1])
 
         # Add point to the buffer to send to viz and recorder
-        buffer += raw_point
+        raw_signal_buffer += raw_points
+        if processor is not None:
+            filtered_signal_buffer += filtered_points
+        if stimulator is not None:
+            stimulation_activated_buffer += [stimulator_activated] * len(raw_signal_buffer)
 
         # Adding the raw point and its timestamp for display
         timestamp = time.time() - start_time
         if q_display is not None:
-            q_display.put([timestamp, raw_point, filtered_point])
+            q_display.put([timestamp, raw_points, filtered_points])
 
-        if len(buffer) >= 50:
-            live_disp.add_datapoints(buffer)
-            recorder.add_recording_data(buffer, detection_buffer, capture_dictionary['detect'], capture_dictionary['stimulate'])
-            buffer = []
-            detection_buffer = []
+        if len(raw_signal_buffer) >= 50:  # TODO: make this an argument
+            # live_disp.add_datapoints(raw_signal_buffer)
+            live_disp.add_datapoints(filtered_signal_buffer)
+            # recorder.add_recording_data(raw_signal_buffer, detection_signal_buffer, capture_dictionary['detect'], capture_dictionary['stimulate'])
+
+            recorder.append_raw_signal_buffer(raw_signal_buffer)
+            recorder.append_filtered_signal_buffer(filtered_signal_buffer)
+            recorder.append_detection_signal_buffer(detection_signal_buffer)
+            recorder.append_stimulation_activated_buffer(stimulation_activated_buffer)
+            recorder.write()
+
+            raw_signal_buffer = []
+            filtered_signal_buffer = []
+            detection_signal_buffer = []
+            stimulation_activated_buffer = []
 
     # close the frontend
     leds.led1(Color.YELLOW)
