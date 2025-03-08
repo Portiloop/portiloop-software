@@ -3,6 +3,7 @@ import numpy as np
 
 from portiloop.src.core.detection import Detector
 from portiloop.src.core.constants import DEFAULT_MODEL_PATH
+from portiloop.src.core.utils import Dummy
 
 from portiloop.src import ADS
 if ADS:
@@ -12,11 +13,12 @@ else:
 
 
 class SleepSpindleRealTimeDetector(Detector):
-    def __init__(self, config_dict, lsl_streamer):
-        super().__init__(config_dict, lsl_streamer)
+    def __init__(self, config_dict, lsl_streamer, csv_recorder):
+        super().__init__(config_dict, lsl_streamer, csv_recorder)
 
         self.threshold = config_dict['threshold']
         self.channel = config_dict['channel_detection']
+        self.record_csv = not isinstance(self.csv_recorder, Dummy)
 
         # threshold = 0.5,
         num_models_parallel = 8
@@ -71,6 +73,8 @@ class SleepSpindleRealTimeDetector(Detector):
         # If we don't have a detection, it means false for us.
         if len(res) == 0:
             res = [False]
+        if self.record_csv:
+            self.csv_recorder.append_detection_signal_buffer([int(r) for r in res])
         return res
 
     def add_datapoint(self, input_float):

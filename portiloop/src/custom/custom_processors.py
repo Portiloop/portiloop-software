@@ -40,8 +40,8 @@ class FIR:
 
 
 class FilterPipeline(Processor):
-    def __init__(self, config_dict, lsl_streamer):
-        super().__init__(config_dict, lsl_streamer)
+    def __init__(self, config_dict, lsl_streamer, csv_recorder):
+        super().__init__(config_dict, lsl_streamer, csv_recorder)
 
         nb_channels = config_dict['nb_channels']
         sampling_rate = config_dict['frequency']
