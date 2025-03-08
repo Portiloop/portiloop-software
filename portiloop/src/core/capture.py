@@ -210,6 +210,12 @@ def start_capture(
     start_time = time.time()
     last_time = 0
 
+    PROFILE = True
+    if PROFILE:
+        from pyinstrument import Profiler
+        pro = Profiler()
+        pro.start()
+
     # Main capture loop
     while True:
         
@@ -325,6 +331,10 @@ def start_capture(
     del stimulation_delayer
     del stimulator
     del detector
+
+    if PROFILE:
+        pro.stop()
+        pro.print()
 
 
 if __name__ == "__main__":
