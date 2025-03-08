@@ -180,6 +180,21 @@ class CSVRecorder:
         print(f"Closing")
         # self.file.close()
 
+    def reset_buffers(self):
+        if self.raw_signal_buffer is not None:
+            self.raw_signal_buffer = []
+        if self.filtered_signal_buffer is not None:
+            self.filtered_signal_buffer = []
+        if self.detection_signal_buffer is not None:
+            self.detection_signal_buffer = []
+        if self.stimulation_signal_buffer is not None:
+            self.stimulation_signal_buffer = []
+        if self.detection_activated_buffer is not None:
+            self.detection_activated_buffer = []
+        if self.stimulation_activated_buffer is not None:
+            self.stimulation_activated_buffer = []
+        self.writing_buffer = []
+
     def write(self):
 
         # compute the number of lines to write:
@@ -243,7 +258,7 @@ class CSVRecorder:
         self.writing_buffer += lines
         if len(self.writing_buffer) >= self.max_write:
             self.writer.writerows(self.writing_buffer)
-            self.writing_buffer = []
+            self.reset_buffers()
 
     def add_recording_data(self, points, detection_info, detection_on, stim_on):
         """
