@@ -148,7 +148,7 @@ def start_capture(
     if capture_dictionary['record']:
         csv_recorder = CSVRecorder(capture_dictionary['filename'],
                                    raw_signal=True,
-                                   filtered_signal=create_processor,
+                                   filtered_signal=create_processor,  # set to False if you don't want to log the filtered signal
                                    detection_signal=create_detector,
                                    stimulation_signal=create_stimulator,
                                    detection_activated=False,  # stimulation activated is enough
@@ -170,7 +170,7 @@ def start_capture(
     # Buffer used for the visualization and the recording
     raw_signal_buffer = []
     filtered_signal_buffer = []
-    detection_signal_buffer = []
+    # detection_signal_buffer = []
     stimulation_activated_buffer = []
 
     # Initialize stimulation delayer if requested
@@ -274,10 +274,10 @@ def start_capture(
             if stimulator is not None:
                 stimulator_activated = True
                 stim = stimulator.stimulate(detection_signal)
-                if stim is None:
-                    stim = detection_signal
-                if capture_dictionary['detect']:
-                    detection_signal_buffer += stim
+                # if stim is None:
+                #     stim = detection_signal
+                # if capture_dictionary['detect']:
+                #     detection_signal_buffer += stim
 
                 # Send a stimulation every second (uncomment for testing)
                 # current_time = time.time()
@@ -310,13 +310,13 @@ def start_capture(
 
             csv_recorder.append_raw_signal_buffer(raw_signal_buffer)
             csv_recorder.append_filtered_signal_buffer(filtered_signal_buffer)
-            csv_recorder.append_detection_signal_buffer(detection_signal_buffer)
+            # csv_recorder.append_detection_signal_buffer(detection_signal_buffer)
             csv_recorder.append_stimulation_activated_buffer(stimulation_activated_buffer)
             csv_recorder.write()
 
             raw_signal_buffer = []
             filtered_signal_buffer = []
-            detection_signal_buffer = []
+            # detection_signal_buffer = []
             stimulation_activated_buffer = []
 
     # close the frontend
