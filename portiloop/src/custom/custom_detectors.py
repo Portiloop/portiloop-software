@@ -12,8 +12,8 @@ else:
 
 
 class SleepSpindleRealTimeDetector(Detector):
-    def __init__(self, config_dict, lsl_streamer):
-        super().__init__(config_dict, lsl_streamer)
+    def __init__(self, config_dict, lsl_streamer, csv_recorder):
+        super().__init__(config_dict, lsl_streamer, csv_recorder)
 
         self.threshold = config_dict['threshold']
         self.channel = config_dict['channel_detection']

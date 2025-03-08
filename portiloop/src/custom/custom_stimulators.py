@@ -19,8 +19,8 @@ if ADS:
 
 
 class SleepSpindleRealTimeStimulator(Stimulator):
-    def __init__(self, config_dict, lsl_streamer):
-        super().__init__(config_dict, lsl_streamer)
+    def __init__(self, config_dict, lsl_streamer, csv_recorder):
+        super().__init__(config_dict, lsl_streamer, csv_recorder)
         # soundname = None
         # lsl_streamer = Dummy()
         # sham = False
@@ -38,7 +38,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
         self.last_detected_ts = time.time()
         self.wait_t = 0.4  # 400 ms
         self.delayer = None
-        self.lsl_streamer = lsl_streamer
+        # self.lsl_streamer = lsl_streamer
         self.sham = sham
 
         # Initialize Alsa stuff
@@ -151,8 +151,8 @@ class SleepSpindleRealTimeStimulator(Stimulator):
 
 
 class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
-    def __init__(self, config_dict, lsl_streamer):
-        super().__init__(config_dict, lsl_streamer)
+    def __init__(self, config_dict, lsl_streamer, csv_recorder):
+        super().__init__(config_dict, lsl_streamer, csv_recorder)
         self.max_spindle_train_t = 6.0
 
     def stimulate(self, detection_signal):
@@ -199,8 +199,8 @@ class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
 
 
 class AlternatingStimulator(Stimulator):
-    def __init__(self, config_dict, lsl_streamer):
-        super().__init__(config_dict, lsl_streamer)
+    def __init__(self, config_dict, lsl_streamer, csv_recorder):
+        super().__init__(config_dict, lsl_streamer, csv_recorder)
 
         # soundname = None
         # lsl_streamer = Dummy()

@@ -132,15 +132,6 @@ def start_capture(
         'markers': capture_dictionary['detect'],
     }
     lsl_streamer = LSLStreamer(streams, capture_dictionary['nb_channels'], capture_dictionary['frequency'], id=PORTILOOP_ID) if capture_dictionary['lsl'] else Dummy()
-
-    detector = detector_cls(capture_dictionary, lsl_streamer) if capture_dictionary['detect'] else None
-    stimulator = stimulator_cls(capture_dictionary, lsl_streamer) if stimulator_cls is not None else None
-
-    # Initialize filtering pipeline
-    if capture_dictionary['filter']:
-        processor = processor_cls(capture_dictionary, lsl_streamer)
-    else:
-        processor = None
     
     # Launch the capture process
     capture_frontend.init_capture()
@@ -149,19 +140,32 @@ def start_capture(
     live_disp_activated = capture_dictionary['display']
     live_disp = LiveDisplay(channel_names=capture_dictionary['signal_labels'], window_len=capture_dictionary['width_display']) if live_disp_activated else Dummy()
 
+    create_processor = capture_dictionary['filter'] and processor_cls is not None
+    create_detector = capture_dictionary['detect'] and detector_cls is not None
+    create_stimulator = capture_dictionary['detect'] and stimulator_cls is not None  # TODO: allow manual stimulation without detection
+
     # Initialize recording if requested
     if capture_dictionary['record']:
-        recorder = CSVRecorder(capture_dictionary['filename'],
-                               raw_signal=True,
-                               filtered_signal=True,
-                               detection_signal=detector is not None,
-                               stimulation_signal=stimulator is not None,
-                               detection_activated=False,  # stimulation activated is enough
-                               stimulation_activated=True,
-                               default_detection_value=0,
-                               default_stimulation_value=0)
+        csv_recorder = CSVRecorder(capture_dictionary['filename'],
+                                   raw_signal=True,
+                                   filtered_signal=create_processor,
+                                   detection_signal=create_detector,
+                                   stimulation_signal=create_stimulator,
+                                   detection_activated=False,  # stimulation activated is enough
+                                   stimulation_activated=True,
+                                   default_detection_value=0,
+                                   default_stimulation_value=0)
     else:
-        recorder = Dummy()
+        csv_recorder = Dummy()
+
+    # Pipeline components:
+
+    detector = detector_cls(capture_dictionary, lsl_streamer, csv_recorder) if create_detector else None
+    stimulator = stimulator_cls(capture_dictionary, lsl_streamer, csv_recorder) if create_stimulator else None
+    if create_processor:
+        processor = processor_cls(capture_dictionary, lsl_streamer, csv_recorder)
+    else:
+        processor = None
 
     # Buffer used for the visualization and the recording
     raw_signal_buffer = []
@@ -304,11 +308,11 @@ def start_capture(
                 live_disp.add_datapoints(raw_signal_buffer)
             # recorder.add_recording_data(raw_signal_buffer, detection_signal_buffer, capture_dictionary['detect'], capture_dictionary['stimulate'])
 
-            recorder.append_raw_signal_buffer(raw_signal_buffer)
-            recorder.append_filtered_signal_buffer(filtered_signal_buffer)
-            recorder.append_detection_signal_buffer(detection_signal_buffer)
-            recorder.append_stimulation_activated_buffer(stimulation_activated_buffer)
-            recorder.write()
+            csv_recorder.append_raw_signal_buffer(raw_signal_buffer)
+            csv_recorder.append_filtered_signal_buffer(filtered_signal_buffer)
+            csv_recorder.append_detection_signal_buffer(detection_signal_buffer)
+            csv_recorder.append_stimulation_activated_buffer(stimulation_activated_buffer)
+            csv_recorder.write()
 
             raw_signal_buffer = []
             filtered_signal_buffer = []
@@ -320,7 +324,7 @@ def start_capture(
     capture_frontend.close()
     leds.close()
 
-    del recorder 
+    del csv_recorder
     del lsl_streamer
     del stimulation_delayer
     del stimulator
