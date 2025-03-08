@@ -365,6 +365,8 @@ def start_capture(
     # print(f"Total time: {t_end - t0}")
     tt = 0
     for k, v in perf.items():
+        if v[1] == 0:
+            continue
         tot = v[0]
         avg = tot / v[1]
         print(f"{k}: {tot} (avg: {avg})")
