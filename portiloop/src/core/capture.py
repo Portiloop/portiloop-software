@@ -289,7 +289,7 @@ def start_capture(
         if processor is not None:
             filtered_signal_buffer += filtered_points
         if stimulator is not None:
-            stimulation_activated_buffer += [stimulator_activated] * len(raw_signal_buffer)
+            stimulation_activated_buffer += [stimulator_activated] * len(raw_points)
 
         # Adding the raw point and its timestamp for display
         timestamp = time.time() - start_time
