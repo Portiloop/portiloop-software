@@ -158,8 +158,8 @@ def start_capture(
                                stimulation_signal=stimulator is not None,
                                detection_activated=False,  # stimulation activated is enough
                                stimulation_activated=True,
-                               default_detection_value=0.0,
-                               default_stimulation_value=0.0)
+                               default_detection_value=0,
+                               default_stimulation_value=0)
     else:
         recorder = Dummy()
 

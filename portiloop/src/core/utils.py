@@ -60,8 +60,8 @@ class CSVRecorder:
                  stimulation_signal=False,
                  detection_activated=False,
                  stimulation_activated=False,
-                 default_detection_value=0.0,
-                 default_stimulation_value=0.0):
+                 default_detection_value=0,
+                 default_stimulation_value=0):
 
         if not (raw_signal or filtered_signal):
             raise RuntimeError("At least raw_signal or filtered_signal need to be activated.")
@@ -78,13 +78,9 @@ class CSVRecorder:
 
         self.filename = filename
         self.header_written = Path(filename).exists()
-
         self.file = open(self.filename, 'a')
         self.writer = csv.writer(self.file)
         print(f"Saving file to {self.filename}")
-
-        # if not exists:
-        #     self.writer.writerows([line])  # write header
 
         self.writing_buffer = []
         self.max_write = 1
@@ -107,26 +103,6 @@ class CSVRecorder:
             line.append('stimulation_on')
         self.writer.writerows([line])  # write header
         self.header_written = True
-
-    # def configure(self,
-    #               raw_signal=True,
-    #               filtered_signal=False,
-    #               detection_signal=False,
-    #               stimulation_signal=False,
-    #               detection_activated=False,
-    #               stimulation_activated=False,
-    #               default_detection_value=0.0,
-    #               default_stimulation_value=0.0):
-    #     if not (raw_signal or filtered_signal):
-    #         raise RuntimeError("At least raw_signal or filtered_signal need to be activated.")
-    #     self.raw_signal_buffer = [] if raw_signal else None
-    #     self.filtered_signal_buffer = [] if filtered_signal else None
-    #     self.detection_signal_buffer = [] if detection_signal else None
-    #     self.stimulation_signal_buffer = [] if stimulation_signal else None
-    #     self.detection_activated_buffer = [] if detection_activated else None
-    #     self.stimulation_activated_buffer = [] if stimulation_activated else None
-    #     self.default_detection_value = default_detection_value
-    #     self.default_stimulation_value = default_stimulation_value
 
     def append_raw_signal_buffer(self, buffer):
         """
@@ -250,9 +226,9 @@ class CSVRecorder:
             if self.stimulation_signal_buffer is not None:
                 line.append(self.stimulation_signal_buffer[idx])  # single float
             if self.detection_activated_buffer is not None:
-                line.append(self.detection_activated_buffer[idx])  # single float (bool)
+                line.append(int(self.detection_activated_buffer[idx]))  # single float (bool)
             if self.stimulation_activated_buffer is not None:
-                line.append(self.stimulation_activated_buffer[idx])  # single float (bool)
+                line.append(int(self.stimulation_activated_buffer[idx]))  # single float (bool)
             lines.append(line)
 
         self.writing_buffer += lines
