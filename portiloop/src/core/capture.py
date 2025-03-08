@@ -210,14 +210,20 @@ def start_capture(
     start_time = time.time()
     last_time = 0
 
-    PROFILE = True
-    if PROFILE:
-        from pyinstrument import Profiler
-        pro = Profiler()
-        pro.start()
+    perf = {"wait msg": [0, 0],
+            "no data": [0, 0],
+            "got data": [0, 0],
+            "filter": [0, 0],
+            "lsl": [0, 0],
+            "detect": [0, 0],
+            "stimulate": [0, 0],
+            "csv": [0, 0]}
+    t0 = time.perf_counter()
 
     # Main capture loop
     while True:
+
+        t00 = time.perf_counter()
         
         # First, we send all outgoing messages to the capture process
         try:
@@ -238,11 +244,22 @@ def start_capture(
         elif msg[0] == 'PRT':
             print(msg[1])
 
+        t1 = time.perf_counter()
+        perf["wait msg"][0] += t1 - t00
+        perf["wait msg"][1] += 1
+
         # Then, we retrieve the data from the capture process
         raw_points = capture_frontend.get_data()  # np.array (data series x ads_channels), or None
         # If we have no data, we continue to the next iteration
         if raw_points is None:
+            t11 = time.perf_counter()
+            perf["no data"][0] += t11 - t1
+            perf["no data"][1] += 1
             continue
+
+        t2 = time.perf_counter()
+        perf["got data"][0] += t2 - t1
+        perf["got data"][1] += 1
         
         # Go through filtering pipeline
         if processor is not None:
@@ -253,6 +270,10 @@ def start_capture(
         # Contains the filtered points (if filtering is off, contains a copy of the raw points)
         filtered_points = filtered_points.tolist()
         raw_points = raw_points.tolist()
+
+        t3 = time.perf_counter()
+        perf["filter"][0] += t3 - t2
+        perf["filter"][1] += 1
 
         # Send both the latest raw and filtered points over LSL
         lsl_streamer.push_raw(raw_points[-1])
@@ -267,11 +288,20 @@ def start_capture(
             lsl_streamer.push_marker(LSLStreamer.string_for_detection_activation(pause))
             prev_pause = pause
 
+        t4 = time.perf_counter()
+        perf["lsl"][0] += t4 - t3
+        perf["lsl"][1] += 1
+
         stimulator_activated = False
         # If detection is on
         if detector is not None and not pause:
             # Detect using the latest points
             detection_signal = detector.detect(filtered_points)
+
+            t5 = time.perf_counter()
+            perf["detect"][0] += t5 - t4
+            perf["detect"][1] += 1
+
             # Stimulate
             if stimulator is not None:
                 stimulator_activated = True
@@ -281,6 +311,10 @@ def start_capture(
                 if capture_dictionary['detect']:
                     detection_signal_buffer += stim
 
+                t6 = time.perf_counter()
+                perf["stimulate"][0] += t6 - t5
+                perf["stimulate"][1] += 1
+
                 # Send a stimulation every second (uncomment for testing)
                 # current_time = time.time()
                 # if current_time - last_time >= 1.0:
@@ -289,6 +323,8 @@ def start_capture(
 
                 # Adds point to buffer for delayed stimulation
                 stimulation_delayer.step(filtered_points[0][capture_dictionary['channel_detection'] - 1])
+
+        t7 = time.perf_counter()
 
         # Add point to the buffer to send to viz and recorder
         raw_signal_buffer += raw_points
@@ -321,6 +357,20 @@ def start_capture(
             detection_signal_buffer = []
             stimulation_activated_buffer = []
 
+        t8 = time.perf_counter()
+        perf["csv"][0] += t8 - t7
+        perf["csv"][1] += 1
+
+    t_end = time.perf_counter()
+    # print(f"Total time: {t_end - t0}")
+    tt = 0
+    for k, v in perf.items():
+        tot = v[0]
+        avg = tot / v[1]
+        print(f"{k}: {tot} (avg: {avg})")
+        tt += tot
+    print(f"total measured: {tt} vs real: {t_end - t0}")
+
     # close the frontend
     leds.led1(Color.YELLOW)
     capture_frontend.close()
@@ -331,10 +381,6 @@ def start_capture(
     del stimulation_delayer
     del stimulator
     del detector
-
-    if PROFILE:
-        pro.stop()
-        pro.print()
 
 
 if __name__ == "__main__":
