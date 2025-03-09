@@ -103,19 +103,21 @@ class SleepSpindleRealTimeStimulator(Stimulator):
 
                 # Check if time since last stimulation is long enough
                 if ts - self.last_detected_ts > self.wait_t:
-                    stim.append(True)
+                    stim.append(1)  # FIXME: handle delayer
                     if not isinstance(self.delayer, Dummy):
                         # If we have a delayer, notify it
                         self.delayer.detected()
-                        # Send the LSL marer for the fast stimulation
+                        # Send the LSL marker for the fast stimulation
                         self.send_stimulation("FAST_STIM", False)
                     else:
                         self.send_stimulation("STIM", not self.sham)
-
+                else:
+                    stim.append(0)
                 self.last_detected_ts = ts
             else:
-                stim.append(False)
-        return stim
+                stim.append(0)
+        assert len(detection_signal) == len(stim)
+        self.csv_recorder.append_stimulation_signal_buffer(stim)
 
     def send_stimulation(self, lsl_text, sound):
         # Send lsl stimulation
@@ -156,6 +158,7 @@ class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
         self.max_spindle_train_t = 6.0
 
     def stimulate(self, detection_signal):
+        stim = []
         for sig in detection_signal:
             # We detect a stimulation
             if sig:
@@ -165,19 +168,26 @@ class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
                 # Check if time since last stimulation is long enough
                 elapsed = ts - self.last_detected_ts
                 if self.wait_t < elapsed < self.max_spindle_train_t:
+                    stim.append(1)
                     if self.delayer is not None:
                         # If we have a delayer, notify it
                         self.delayer.detected()
-                        # Send the LSL marer for the fast stimulation
+                        # Send the LSL marker for the fast stimulation
                         self.send_stimulation("FAST_STIM", False)
                     else:
                         self.send_stimulation("STIM", True)
-
+                else:
+                    stim.append(0)  # FIXME: handle delayer
                 self.last_detected_ts = ts
+            else:
+                stim.append(0)
+        assert len(detection_signal) == len(stim)
+        self.csv_recorder.append_stimulation_signal_buffer(stim)
 
 
 class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
     def stimulate(self, detection_signal):
+        stim = []
         for sig in detection_signal:
             # We detect a stimulation
             if sig:
@@ -187,6 +197,7 @@ class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
                 # Check if time since last stimulation is long enough
                 elapsed = ts - self.last_detected_ts
                 if self.max_spindle_train_t < elapsed:
+                    stim.append(1)  # FIXME: delayer
                     if self.delayer is not None:
                         # If we have a delayer, notify it
                         self.delayer.detected()
@@ -194,8 +205,13 @@ class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
                         self.send_stimulation("FAST_STIM", False)
                     else:
                         self.send_stimulation("STIM", True)
-
+                else:
+                    stim.append(0)
                 self.last_detected_ts = ts
+            else:
+                stim.append(0)
+        assert len(detection_signal) == len(stim)
+        self.csv_recorder.append_stimulation_signal_buffer(stim)
 
 
 class AlternatingStimulator(Stimulator):
@@ -315,17 +331,24 @@ class AlternatingStimulator(Stimulator):
         time.sleep(self.duration)
 
     def stimulate(self, detection_signal):
-        # We ignore the input signal and simply make sure we stimulate at the given interval
-        current_time = time.time()
-        if current_time - self.last_stim >= self.stim_interval:
-            # Check if we are in the inverted phase:
-            if self.stim_polarity:
-                stim_text = 'STIM_POS'
+        stim = []
+        for _ in detection_signal:
+            # We ignore the input signal and simply make sure we stimulate at the given interval
+            current_time = time.time()
+            if current_time - self.last_stim >= self.stim_interval:
+                stim.append(1)
+                # Check if we are in the inverted phase:
+                if self.stim_polarity:
+                    stim_text = 'STIM_POS'
+                else:
+                    stim_text = 'STIM_NEG'
+                self.send_stimulation(stim_text, True)
+                self.last_stim = current_time
+                self.stim_polarity = not self.stim_polarity
             else:
-                stim_text = 'STIM_NEG'
-            self.send_stimulation(stim_text, True)
-            self.last_stim = current_time
-            self.stim_polarity = not self.stim_polarity
+                stim.append(0)
+        assert len(detection_signal) == len(stim)
+        self.csv_recorder.append_stimulation_signal_buffer(stim)
 
     def send_stimulation(self, lsl_text, sound):
         # Send lsl stimulation

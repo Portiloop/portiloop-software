@@ -318,7 +318,7 @@ def start_capture(
             # Stimulate
             if stimulator is not None:
                 stimulator_activated = True
-                stim = stimulator.stimulate(detection_signal)
+                stimulator.stimulate(detection_signal)
                 # if stim is None:
                 #     stim = detection_signal
                 # if capture_dictionary['detect']:
@@ -386,7 +386,7 @@ def start_capture(
                 continue
             tot = v[0]
             avg = tot / v[1]
-            print(f"{k}: {tot} (avg: {avg*1000} ms)")
+            print(f"{k}: {tot} (avg: {avg*1000} ms/call)")
             tt += tot
         print(f"total measured time: {tt} vs real: {t_end - t0}")
 
