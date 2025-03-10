@@ -75,7 +75,7 @@ class SleepSpindleRealTimeDetector(Detector):
             res = [False]
         if self.record_csv:
             self.csv_recorder.append_detection_signal_buffer([int(r) for r in res])
-        return res
+        return res, datapoints
 
     def add_datapoint(self, input_float):
         '''

@@ -448,7 +448,7 @@ class JupyterUI:
 
         # Get all the metadata from this recording:
 
-    def get_capture_dictionary(self):
+    def get_config_dict(self):
         input_dict = RUN_SETTINGS
         # input_dict = vars(self)
         for k, v in vars(self).items():
@@ -665,14 +665,14 @@ class JupyterUI:
                                       args=(processor_cls,
                                             detector_cls,
                                             stimulator_cls,
-                                            self.get_capture_dictionary(),
+                                            self.get_config_dict(),
                                             self.q_msg,
                                             None,  # no q_display, use a LiveDisplay instead
                                             self.pause_value,))
             """
             detector_cls,
             stimulator_cls,
-            capture_dictionary,
+            config_dict,
             q_msg,
             q_display,
             pause_value

@@ -18,7 +18,54 @@ if ADS:
     import alsaaudio
 
 
-class SleepSpindleRealTimeStimulator(Stimulator):
+class DelayedStimulator(Stimulator, ABC):
+    def __init__(self, config_dict, lsl_streamer, csv_recorder):
+        super().__init__(config_dict, lsl_streamer, csv_recorder)
+
+        # Initialize stimulation delayer if requested
+        delay = not ((config_dict['stim_delay'] == 0.0) and (config_dict['inter_stim_delay'] == 0.0))
+        delay_phase = (not delay) and (not config_dict['spindle_detection_mode'] == 'Fast')
+        if delay:
+            stimulation_delayer = TimingDelayer(
+                stimulation_delay=config_dict['stim_delay'],
+                inter_stim_delay=config_dict['inter_stim_delay']
+            )
+        elif delay_phase:
+            stimulation_delayer = UpStateDelayer(
+                config_dict['frequency'],
+                config_dict['spindle_detection_mode'] == 'Peak', 0.3)
+        else:
+            stimulation_delayer = Dummy()
+
+        self.delayer = None
+        self.add_delayer(stimulation_delayer)
+
+    def stimulate(self, detection_signal):
+        """
+        In this group of custom Detectors/Stimulators, the Detector output signal is made of two lists:
+        - The detection signal per-se
+        - The input of the Detector so that the Stimulator can detect additional stuff, such as signal phase
+
+        Args:
+            detection_signal: (List, List)
+        Returns:
+            None
+
+        """
+        detection, filtered_points = detection_signal
+        self._stimulate(detection)
+        self.delayer.step(filtered_points[0][self.config_dict['channel_detection'] - 1])
+
+    @abstractmethod
+    def _stimulate(self, detection):
+        raise NotImplementedError
+
+    @abstractmethod
+    def add_delayer(self, delayer):
+        raise NotImplementedError
+
+
+class SleepSpindleRealTimeStimulator(DelayedStimulator):
     def __init__(self, config_dict, lsl_streamer, csv_recorder):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
         # soundname = None
@@ -37,7 +84,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
         self._lock = Lock()
         self.last_detected_ts = time.time()
         self.wait_t = 0.4  # 400 ms
-        self.delayer = None
+        # self.delayer = None
         # self.lsl_streamer = lsl_streamer
         self.sham = sham
 
@@ -93,7 +140,7 @@ class SleepSpindleRealTimeStimulator(Stimulator):
         # Added this to make sure the thread does not stop before the sound is done playing
         time.sleep(self.duration)
 
-    def stimulate(self, detection_signal):
+    def _stimulate(self, detection_signal):
         stim = []
         for sig in detection_signal:
             # We detect a stimulation
@@ -157,7 +204,7 @@ class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
         self.max_spindle_train_t = 6.0
 
-    def stimulate(self, detection_signal):
+    def _stimulate(self, detection_signal):
         stim = []
         for sig in detection_signal:
             # We detect a stimulation
@@ -186,7 +233,7 @@ class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
 
 
 class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
-    def stimulate(self, detection_signal):
+    def _stimulate(self, detection_signal):
         stim = []
         for sig in detection_signal:
             # We detect a stimulation
@@ -214,7 +261,7 @@ class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
         self.csv_recorder.append_stimulation_signal_buffer(stim)
 
 
-class AlternatingStimulator(Stimulator):
+class AlternatingStimulator(DelayedStimulator):
     def __init__(self, config_dict, lsl_streamer, csv_recorder):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
@@ -330,7 +377,7 @@ class AlternatingStimulator(Stimulator):
         # Added this to make sure the thread does not stop before the sound is done playing
         time.sleep(self.duration)
 
-    def stimulate(self, detection_signal):
+    def _stimulate(self, detection_signal):
         stim = []
         for _ in detection_signal:
             # We ignore the input signal and simply make sure we stimulate at the given interval

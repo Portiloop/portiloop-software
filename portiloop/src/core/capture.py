@@ -1,3 +1,13 @@
+"""
+This file defines the core logic of Portiloop pipelines in start_capture().
+
+Multichannel signal is captured from the electrodes in a dedicated python process.
+Then, it is passed asynchronously to a Processor, a Detector and a Stimulator.
+The Processor is in charge of signal processing / filtering.
+The Detector detects patterns of interest in the processed signal.
+The Stimulator produces stimuli depending on what the Detector found.
+"""
+
 import json
 import queue  # for exceptions
 import os
@@ -7,7 +17,7 @@ from copy import deepcopy
 import socket
 
 from portiloop.src.core.hardware.leds import Color, LEDs
-from portiloop.src.custom.custom_stimulators import TimingDelayer, UpStateDelayer
+# from portiloop.src.custom.custom_stimulators import TimingDelayer, UpStateDelayer
 from portiloop.src.core.hardware.config_hardware import mod_config, FRONTEND_CONFIG
 from portiloop.src.core.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, CSVRecorder, get_portiloop_version
 from portiloop.src.core.constants import RECORDING_FOLDER
@@ -102,16 +112,35 @@ def start_capture(
         processor_cls,
         detector_cls,
         stimulator_cls,
-        capture_dictionary,
-        q_msg, 
+        config_dict,
+        q_msg,
         q_display,
         pause_value):
+    """
+    Method called by Portiloop GUIs to launch a custom Portiloop pipeline.
+    start_capture() defines the core logic of all Portiloop pipelines.
+    The output of custom Detectors is the input of custom Stimulators, and is thus arbitrary.
+    All configuration arguments are passed to the Processors, Detectors and stimulators via the capture_dictionary.
 
-    # print(f"DEBUG: Channel states: {capture_dictionary['channel_states']}")
+    Args:
+        processor_cls: Processor subclass or None: custom Processor for signal processing
+        detector_cls: Detector subclass or None: custom Detector for detection in the processed signal
+        stimulator_cls: Stimulator subclass or None: custom Stimulator for stimulation from the detection signal
+        config_dict: Dict: Arguments of the pipeline.
+        q_msg: Queue
+        q_display: Queue
+        pause_value: multiprocessing.Value: whether Detection is currently paused.
+
+    Returns:
+        None
+
+    """
+
+    # print(f"DEBUG: Channel states: {config_dict['channel_states']}")
 
     # Initialize the LED
     leds = LEDs()
-    if capture_dictionary['stimulate']:
+    if config_dict['stimulate']:
         leds.led1(Color.CYAN)
     else:
         leds.led1(Color.PURPLE)
@@ -119,35 +148,35 @@ def start_capture(
     # Initialize data frontend
     fake_filename = RECORDING_FOLDER / 'test_recording.csv'
     capture_frontend = ADSFrontend(
-        duration=capture_dictionary['duration'],
-        frequency=capture_dictionary['frequency'],
-        python_clock=capture_dictionary['python_clock'],
-        channel_states=capture_dictionary['channel_states'],
-        vref=capture_dictionary['vref'],
+        duration=config_dict['duration'],
+        frequency=config_dict['frequency'],
+        python_clock=config_dict['python_clock'],
+        channel_states=config_dict['channel_states'],
+        vref=config_dict['vref'],
         process=capture_process,
-    ) if capture_dictionary['signal_input'] == "ADS" else FileFrontend(fake_filename, capture_dictionary['nb_channels'], capture_dictionary['channel_detection'])
+    ) if config_dict['signal_input'] == "ADS" else FileFrontend(fake_filename, config_dict['nb_channels'], config_dict['channel_detection'])
 
     # Initialize detector, LSL streamer and stimulatorif requested
     streams = {
-        'filtered': capture_dictionary['filter'],
-        'markers': capture_dictionary['detect'],
+        'filtered': config_dict['filter'],
+        'markers': config_dict['detect'],
     }
-    lsl_streamer = LSLStreamer(streams, capture_dictionary['nb_channels'], capture_dictionary['frequency'], id=PORTILOOP_ID) if capture_dictionary['lsl'] else Dummy()
+    lsl_streamer = LSLStreamer(streams, config_dict['nb_channels'], config_dict['frequency'], id=PORTILOOP_ID) if config_dict['lsl'] else Dummy()
     
     # Launch the capture process
     capture_frontend.init_capture()
 
     # Initialize display if requested
-    live_disp_activated = capture_dictionary['display']
-    live_disp = LiveDisplay(channel_names=capture_dictionary['signal_labels'], window_len=capture_dictionary['width_display']) if live_disp_activated else Dummy()
+    live_disp_activated = config_dict['display']
+    live_disp = LiveDisplay(channel_names=config_dict['signal_labels'], window_len=config_dict['width_display']) if live_disp_activated else Dummy()
 
-    create_processor = capture_dictionary['filter'] and processor_cls is not None
-    create_detector = capture_dictionary['detect'] and detector_cls is not None
-    create_stimulator = capture_dictionary['detect'] and stimulator_cls is not None  # TODO: allow manual stimulation without detection
+    create_processor = config_dict['filter'] and processor_cls is not None
+    create_detector = config_dict['detect'] and detector_cls is not None
+    create_stimulator = config_dict['detect'] and stimulator_cls is not None  # TODO: allow manual stimulation without detection
 
     # Initialize recording if requested
-    if capture_dictionary['record']:
-        csv_recorder = CSVRecorder(capture_dictionary['filename'],
+    if config_dict['record']:
+        csv_recorder = CSVRecorder(config_dict['filename'],
                                    raw_signal=True,
                                    filtered_signal=create_processor,  # set to False if you don't want to log the filtered signal
                                    detection_signal=create_detector,
@@ -161,10 +190,10 @@ def start_capture(
 
     # Pipeline components:
 
-    detector = detector_cls(capture_dictionary, lsl_streamer, csv_recorder) if create_detector else None
-    stimulator = stimulator_cls(capture_dictionary, lsl_streamer, csv_recorder) if create_stimulator else None
+    detector = detector_cls(config_dict, lsl_streamer, csv_recorder) if create_detector else None
+    stimulator = stimulator_cls(config_dict, lsl_streamer, csv_recorder) if create_stimulator else None
     if create_processor:
-        processor = processor_cls(capture_dictionary, lsl_streamer, csv_recorder)
+        processor = processor_cls(config_dict, lsl_streamer, csv_recorder)
     else:
         processor = None
 
@@ -174,28 +203,10 @@ def start_capture(
     # detection_signal_buffer = []
     stimulation_activated_buffer = []
 
-    # Initialize stimulation delayer if requested
-    delay = not ((capture_dictionary['stim_delay'] == 0.0) and (capture_dictionary['inter_stim_delay'] == 0.0)) and (stimulator is not None)
-    delay_phase = (not delay) and (not capture_dictionary['spindle_detection_mode'] == 'Fast') and (stimulator is not None)
-    if delay:
-        stimulation_delayer = TimingDelayer(
-            stimulation_delay=capture_dictionary['stim_delay'],
-            inter_stim_delay=capture_dictionary['inter_stim_delay']
-        )
-    elif delay_phase:
-        stimulation_delayer = UpStateDelayer(
-            capture_dictionary['frequency'], 
-            capture_dictionary['spindle_detection_mode'] == 'Peak', 0.3)
-    else:
-        stimulation_delayer = Dummy()
-        
-    if stimulator is not None:
-        stimulator.add_delayer(stimulation_delayer)
-
     # Get the metadata and save it to a file
-    metadata = capture_dictionary
+    metadata = config_dict
     # Split the original path into its components
-    dirname, basename = os.path.split(capture_dictionary['filename'])
+    dirname, basename = os.path.split(config_dict['filename'])
     # Split the file name into its name and extension components
     name, _ = os.path.splitext(basename)
     # Define the new file name
@@ -308,6 +319,7 @@ def start_capture(
         # If detection is on
         if detector is not None and not pause:
             # Detect using the latest points
+            # (Note for core developers: detection_signal is arbitrary. Please do not assume anything about it here.)
             detection_signal = detector.detect(filtered_points)
 
             if PROFILE:
@@ -321,7 +333,7 @@ def start_capture(
                 stimulator.stimulate(detection_signal)
                 # if stim is None:
                 #     stim = detection_signal
-                # if capture_dictionary['detect']:
+                # if config_dict['detect']:
                 #     detection_signal_buffer += stim
 
                 if PROFILE:
@@ -336,7 +348,7 @@ def start_capture(
                 #     last_time = current_time
 
                 # Adds point to buffer for delayed stimulation
-                stimulation_delayer.step(filtered_points[0][capture_dictionary['channel_detection'] - 1])
+                # stimulation_delayer.step(filtered_points[0][config_dict['channel_detection'] - 1])
 
         if PROFILE:
             t7 = time.perf_counter()
@@ -359,7 +371,7 @@ def start_capture(
                 live_disp.add_datapoints(filtered_signal_buffer)
             else:
                 live_disp.add_datapoints(raw_signal_buffer)
-            # recorder.add_recording_data(raw_signal_buffer, detection_signal_buffer, capture_dictionary['detect'], capture_dictionary['stimulate'])
+            # recorder.add_recording_data(raw_signal_buffer, detection_signal_buffer, config_dict['detect'], config_dict['stimulate'])
 
             csv_recorder.append_raw_signal_buffer(raw_signal_buffer)
             csv_recorder.append_filtered_signal_buffer(filtered_signal_buffer)
@@ -397,7 +409,7 @@ def start_capture(
 
     del csv_recorder
     del lsl_streamer
-    del stimulation_delayer
+    # del stimulation_delayer
     del stimulator
     del detector
 
