@@ -47,6 +47,7 @@ step5.temp: step4.temp
 	cd ~ && mkdir workspace && mkdir workspace/edf_recordings
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp create_login_folder.service /etc/systemd/system/create_login_folder.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp miniforge_jupyter.service /etc/systemd/system/jupyter.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp simplegui.service /etc/systemd/system/simplegui.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp 99-auto-mount.rules /etc/udev/rules.d/99-auto-mount.rules
@@ -55,6 +56,8 @@ step5.temp: step4.temp
 step6.temp: step5.temp
 	echo "Reloading systemctl daemon..."
 	sudo systemctl daemon-reload
+	echo "Enabling manual login service..."
+	sudo systemctl enable create_login_folder.service
 	echo "Enabling jupyter service..."
 	sudo systemctl enable jupyter.service
 	echo "Enabling simple GUI service..."
@@ -127,6 +130,7 @@ vstep5.temp: vstep4.temp
 	cd ~ && mkdir workspace && mkdir workspace/edf_recordings
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp create_login_folder.service /etc/systemd/system/create_login_folder.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp jupyter.service /etc/systemd/system/jupyter.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp simplegui.service /etc/systemd/system/simplegui.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp 99-auto-mount.rules /etc/udev/rules.d/99-auto-mount.rules
@@ -135,6 +139,8 @@ vstep5.temp: vstep4.temp
 vstep6.temp: vstep5.temp
 	echo "Reloading systemctl daemon..."
 	sudo systemctl daemon-reload
+	echo "Enabling manual login service..."
+	sudo systemctl enable create_login_folder.service
 	echo "Enabling jupyter service..."
 	sudo systemctl enable jupyter.service
 	echo "Enabling simple GUI service..."
