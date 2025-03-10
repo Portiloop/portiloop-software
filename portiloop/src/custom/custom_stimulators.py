@@ -18,6 +18,11 @@ if ADS:
     import alsaaudio
 
 
+# TODO: the "delayer" logic is a bad case of spaghetti code and should be cleaned.
+#  ATM, if a non-Dummy Delayer is set, self.delayer.step sends the actual stimulation
+#  whereas self._stimulate only sends an LSL marker where the stimulation would have been without a delayer...
+
+
 class DelayedStimulator(Stimulator, ABC):
     def __init__(self, config_dict, lsl_streamer, csv_recorder):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
@@ -53,16 +58,23 @@ class DelayedStimulator(Stimulator, ABC):
 
         """
         detection, filtered_points = detection_signal
-        self._stimulate(detection)
-        self.delayer.step(filtered_points[0][self.config_dict['channel_detection'] - 1])
+        self._stimulate(detection)  # TODO: this doesn't send the actual stimulation. Clean this logic.
+        if not isinstance(self.delayer, Dummy):  # write CSV from delayer output
+            for filtered_point in filtered_points:
+                res = self.delayer.step(filtered_point[self.config_dict['channel_detection'] - 1])  # TODO: clean.
+                self.csv_recorder.append_stimulation_signal_buffer([int(res)])
 
     @abstractmethod
     def _stimulate(self, detection):
         raise NotImplementedError
 
     @abstractmethod
-    def add_delayer(self, delayer):
+    def send_stimulation(self, lsl_text, sound):
         raise NotImplementedError
+
+    def add_delayer(self, delayer):
+        self.delayer = delayer
+        self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", True)
 
 
 class SleepSpindleRealTimeStimulator(DelayedStimulator):
@@ -73,7 +85,7 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
         # sham = False
 
         soundname = config_dict['detection_sound']
-        sham = not config_dict['stimulate']
+        sham = not config_dict['stimulate']  # FIXME: This doesn't make sense: the Stimulator is not even created if config_dict['stimulate'] is False
 
         if soundname is None:
             self.soundname = 'stimulus.wav'  # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
@@ -155,16 +167,17 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
                         # If we have a delayer, notify it
                         self.delayer.detected()
                         # Send the LSL marker for the fast stimulation
-                        self.send_stimulation("FAST_STIM", False)
+                        self.send_stimulation("FAST_STIM", False)  # TODO: this does not actually send a stimulation, but only an LSL marker...
                     else:
-                        self.send_stimulation("STIM", not self.sham)
+                        self.send_stimulation("STIM", not self.sham)  # FIXME: sham is always False. Remove?
                 else:
                     stim.append(0)
                 self.last_detected_ts = ts
             else:
                 stim.append(0)
         assert len(detection_signal) == len(stim)
-        self.csv_recorder.append_stimulation_signal_buffer(stim)
+        if isinstance(self.delayer, Dummy):
+            self.csv_recorder.append_stimulation_signal_buffer(stim)
 
     def send_stimulation(self, lsl_text, sound):
         # Send lsl stimulation
@@ -190,9 +203,9 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
 
         # print(f"DEBUG: Stimulation delay: {((self.end - start) * 1000):.2f}ms")
 
-    def add_delayer(self, delayer):
-        self.delayer = delayer
-        self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", True)
+    # def add_delayer(self, delayer):
+    #     self.delayer = delayer
+    #     self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", True)
 
     def __del__(self):
         # print("DEBUG: releasing PCM")
@@ -229,7 +242,8 @@ class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
             else:
                 stim.append(0)
         assert len(detection_signal) == len(stim)
-        self.csv_recorder.append_stimulation_signal_buffer(stim)
+        if isinstance(self.delayer, Dummy):
+            self.csv_recorder.append_stimulation_signal_buffer(stim)
 
 
 class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
@@ -244,7 +258,7 @@ class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
                 # Check if time since last stimulation is long enough
                 elapsed = ts - self.last_detected_ts
                 if self.max_spindle_train_t < elapsed:
-                    stim.append(1)  # FIXME: delayer
+                    stim.append(1)  # FIXME: handle delayer
                     if self.delayer is not None:
                         # If we have a delayer, notify it
                         self.delayer.detected()
@@ -258,19 +272,20 @@ class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
             else:
                 stim.append(0)
         assert len(detection_signal) == len(stim)
-        self.csv_recorder.append_stimulation_signal_buffer(stim)
+        if isinstance(self.delayer, Dummy):
+            self.csv_recorder.append_stimulation_signal_buffer(stim)
 
 
-class AlternatingStimulator(DelayedStimulator):
+class AlternatingStimulator(Stimulator):
     def __init__(self, config_dict, lsl_streamer, csv_recorder):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
         # soundname = None
         # lsl_streamer = Dummy()
 
-        stim_interval = 0.250  # TODO: handle this properly
+        stim_interval = 0.250
 
-        soundname = config_dict['detection_sound']  # TODO: handle this properly
+        # soundname = config_dict['detection_sound']
         # sham = not config_dict['stimulate']
 
         self.pos_soundname = 'syllPos120.wav'  # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
@@ -377,7 +392,7 @@ class AlternatingStimulator(DelayedStimulator):
         # Added this to make sure the thread does not stop before the sound is done playing
         time.sleep(self.duration)
 
-    def _stimulate(self, detection_signal):
+    def stimulate(self, detection_signal):
         stim = []
         for _ in detection_signal:
             # We ignore the input signal and simply make sure we stimulate at the given interval
@@ -424,9 +439,9 @@ class AlternatingStimulator(DelayedStimulator):
     def __del__(self):
         del self.pcm
 
-    def add_delayer(self, delayer):
-        self.delayer = delayer
-        self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", False)
+    # def add_delayer(self, delayer):
+    #     self.delayer = delayer
+    #     self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", False)
 
 
 class TimingStates(Enum):
@@ -443,9 +458,9 @@ class Delayer(ABC):
     def step(self, point):
         pass
 
-    @abstractmethod
-    def step_timestep(self, point):
-        pass
+    # @abstractmethod
+    # def step_timestep(self, point):
+    #     pass
 
     @abstractmethod
     def detected(self):
@@ -475,8 +490,8 @@ class TimingDelayer(Delayer):
         elif self.state == TimingStates.DELAYING:
             if time.time() - self.delaying_start > self.stimulation_delay:
                 # Actually stimulate the patient after the delay
-                if self.stimulate is not None:  # FIXME: what is this?
-                    self.stimulate()  # FIXME: what is this?
+                if self.stimulate is not None:  # FIXME: spaghetti code
+                    self.stimulate()  # FIXME: spaghetti code
                 self.state = TimingStates.WAITING
                 self.waiting_start = time.time()
                 return True
@@ -486,27 +501,27 @@ class TimingDelayer(Delayer):
                 self.state = TimingStates.READY
             return False
 
-    def step_timestep(self, point):
-        """
-        Moves through the state machine
-        """
-        if self.state == TimingStates.READY:
-            return False
-        elif self.state == TimingStates.DELAYING:
-            self.delaying_counter += 1
-            if self.delaying_counter > self.stimulation_delay * self.sample_freq:
-                # Actually stimulate the patient after the delay
-                if self.stimulate is not None:  # FIXME: what is this?
-                    self.stimulate()  # FIXME: what is this?
-                self.state = TimingStates.WAITING
-                self.waiting_counter = 0
-                return True
-            return False
-        elif self.state == TimingStates.WAITING:
-            self.waiting_counter += 1
-            if self.waiting_counter > self.inter_stim_delay * self.sample_freq:
-                self.state = TimingStates.READY
-            return False
+    # def step_timestep(self, point):
+    #     """
+    #     Moves through the state machine
+    #     """
+    #     if self.state == TimingStates.READY:
+    #         return False
+    #     elif self.state == TimingStates.DELAYING:
+    #         self.delaying_counter += 1
+    #         if self.delaying_counter > self.stimulation_delay * self.sample_freq:
+    #             # Actually stimulate the patient after the delay
+    #             if self.stimulate is not None:
+    #                 self.stimulate()
+    #             self.state = TimingStates.WAITING
+    #             self.waiting_counter = 0
+    #             return True
+    #         return False
+    #     elif self.state == TimingStates.WAITING:
+    #         self.waiting_counter += 1
+    #         if self.waiting_counter > self.inter_stim_delay * self.sample_freq:
+    #             self.state = TimingStates.READY
+    #         return False
 
     def detected(self):
         """
