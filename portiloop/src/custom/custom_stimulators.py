@@ -251,9 +251,17 @@ class UpStateDelayer(Delayer):
         return (avg_dist - (len(self.buffer) - peaks[-1])) * (1.0 / self.sample_freq)
 
 
+# ================== STIMULATORS ==================
+
+
 class DelayedStimulator(Stimulator, ABC):
-    def __init__(self, config_dict, lsl_streamer, csv_recorder):
+    def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
+
+        if self.lsl_streamer is None:
+            self.lsl_streamer = Dummy()
+        if self.csv_recorder is None:
+            self.csv_recorder = Dummy()
 
         # Initialize stimulation delayer if requested
         delay = not ((config_dict['stim_delay'] == 0.0) and (config_dict['inter_stim_delay'] == 0.0))
@@ -319,14 +327,9 @@ class DelayedStimulator(Stimulator, ABC):
         raise NotImplementedError
 
 
-# ================== STIMULATORS ==================
-
-
 class SleepSpindleRealTimeStimulator(DelayedStimulator):
-    def __init__(self, config_dict, lsl_streamer, csv_recorder):
+    def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
-        # soundname = None
-        # lsl_streamer = Dummy()
 
         soundname = config_dict['detection_sound']
 
@@ -339,8 +342,6 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
         self._lock = Lock()
         self.last_detected_ts = time.time()
         self.wait_t = 0.4  # 400 ms
-        # self.delayer = None
-        # self.lsl_streamer = lsl_streamer
 
         # Initialize Alsa stuff
         # Open WAV file and set PCM device
@@ -439,7 +440,7 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
 
 
 class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
-    def __init__(self, config_dict, lsl_streamer, csv_recorder):
+    def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
         self.max_spindle_train_t = 6.0
 
@@ -477,11 +478,13 @@ class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
 
 
 class AlternatingStimulator(Stimulator):
-    def __init__(self, config_dict, lsl_streamer, csv_recorder):
+    def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
-        # soundname = None
-        # lsl_streamer = Dummy()
+        if self.lsl_streamer is None:
+            self.lsl_streamer = Dummy()
+        if self.csv_recorder is None:
+            self.csv_recorder = Dummy()
 
         stim_interval = 0.250
 
@@ -495,7 +498,6 @@ class AlternatingStimulator(Stimulator):
 
         self._thread = None
         self._lock = Lock()
-        self.lsl_streamer = lsl_streamer
 
         # Stimulation parameters
         self.stim_interval = stim_interval
@@ -634,7 +636,4 @@ class AlternatingStimulator(Stimulator):
     def __del__(self):
         del self.pcm
 
-    # def add_delayer(self, delayer):
-    #     self.delayer = delayer
-    #     self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", False)
 
