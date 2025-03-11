@@ -678,8 +678,7 @@ class JupyterUI:
             pause_value
             """
             self._t_capture.start()
-            print(
-                f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
+            print(f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
         elif val == 'Stop':
             self.q_msg.put('STOP')
             assert self._t_capture is not None

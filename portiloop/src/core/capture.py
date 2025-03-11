@@ -225,7 +225,6 @@ def start_capture(
         lsl_streamer.push_marker(marker_str)
 
     start_time = time.time()
-    last_time = 0
 
     if PROFILE:
         perf = {"wait msg": [0, 0],

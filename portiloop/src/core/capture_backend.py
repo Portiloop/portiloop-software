@@ -72,8 +72,7 @@ class ADSBackend(CaptureBackend):
         self._p_capture.start()
         self.capture_started = True
         # If any issue arises, we want to kill this process
-        print(
-            f"PID capture: {self._p_capture.pid}. Kill this process if program crashes before end of execution.")
+        print(f"PID capture: {self._p_capture.pid}. Kill this process if program crashes before end of execution.")
 
     def send_msg(self, msg):
         """
