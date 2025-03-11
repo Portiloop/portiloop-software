@@ -847,9 +847,9 @@ class JupyterUI:
         self.inter_stim_delay = val
 
     def run_test_stimulus(self):
-        stimulator_class = self.stimulator_cls(soundname=self.detection_sound)
-        stimulator_class.test_stimulus()
-        del stimulator_class
+        stimulator_instance = self.stimulator_cls(config_dict=self.get_config_dict())
+        stimulator_instance.test_stimulus()
+        del stimulator_instance
 
     def run_impedance_test(self):
         backend = Backend(portiloop_version=2)
