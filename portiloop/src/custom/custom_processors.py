@@ -1,15 +1,7 @@
 import numpy as np
 from scipy.signal import firwin
 
-from portiloop.src.core.hardware.config_hardware import ADS_LSB
 from portiloop.src.core.processing import Processor
-
-
-def filter_scale(value, vref):
-    """
-    Scales the integer value into microvolts
-    """
-    return value * 1e6 * vref * ADS_LSB
 
 
 def shift_numpy(arr, num, fill_value=np.nan):

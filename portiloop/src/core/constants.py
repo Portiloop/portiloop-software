@@ -1,15 +1,15 @@
 from pathlib import Path
 
-from portiloop.src.core.hardware.frontend import Frontend
+from portiloop.src.core.hardware.backend import Backend
 from portiloop.src.core.utils import get_portiloop_version
 
 try:
     VERSION = get_portiloop_version()
-    frontend = Frontend(VERSION)
-    nb_channels = frontend.get_version()
+    backend = Backend(VERSION)
+    nb_channels = backend.get_version()
 finally:
-    frontend.close()
-    del frontend
+    backend.close()
+    del backend
 
 
 # Home:

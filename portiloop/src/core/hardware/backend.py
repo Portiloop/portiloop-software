@@ -15,6 +15,7 @@ RDATA = 0x12
 RREG = 0x20
 WREG = 0x40
 
+
 class Reading:
     def __init__(self, values, nb_channels):
         assert values[0] & 0xF0 == 0xC0, "Invalid readback"
@@ -44,7 +45,8 @@ class Reading:
         assert 0 <= idx <= 7, "Invalid loff index"
         return (self.loff_statn >> idx) & 0x01 == 0x01
 
-class Frontend:
+
+class Backend:
     def __init__(self, portiloop_version):
 
         max_speed = 1000000

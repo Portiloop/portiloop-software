@@ -23,7 +23,7 @@ from pathlib import Path
 if ADS:
     import alsaaudio
     from alsaaudio import ALSAAudioError
-    from portiloop.src.core.hardware.frontend import Frontend
+    from portiloop.src.core.hardware.backend import Backend
 
 
 class JupyterUI:
@@ -35,8 +35,8 @@ class JupyterUI:
 
         # Check which version of the ADS we are in.
         if self.version != -1:
-            frontend = Frontend(self.version)
-            self.nb_channels = frontend.get_version()
+            backend = Backend(self.version)
+            self.nb_channels = backend.get_version()
 
         # print(f"DEBUG: Current hardware: ADS1299 {self.nb_channels} channels | Portiloop Version: {self.version}")
 
@@ -853,19 +853,19 @@ class JupyterUI:
         del stimulator_class
 
     def run_impedance_test(self):
-        frontend = Frontend(portiloop_version=2)
+        backend = Backend(portiloop_version=2)
 
         def is_set(x, n):
             return x & 1 << n != 0
 
         try:
-            frontend.write_regs(0x00, LEADOFF_CONFIG)
-            frontend.start()
+            backend.write_regs(0x00, LEADOFF_CONFIG)
+            backend.start()
             start_time = time.time()
             current_time = time.time()
             while current_time - start_time < 2:
                 current_time = time.time()
-            reading = frontend.read()
+            reading = backend.read()
 
             # Check if any of the negative bits are set and initialize the impedance array
             #             impedance_check = [any([is_set(leadoff_n, i) for i in range(2, 9)])]
@@ -883,4 +883,4 @@ class JupyterUI:
             print_impedance(impedance_check)
 
         finally:
-            frontend.close()
+            backend.close()

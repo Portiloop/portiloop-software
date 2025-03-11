@@ -17,14 +17,15 @@ from copy import deepcopy
 import socket
 
 from portiloop.src.core.hardware.leds import Color, LEDs
-# from portiloop.src.custom.custom_stimulators import TimingDelayer, UpStateDelayer
-from portiloop.src.core.hardware.config_hardware import mod_config, FRONTEND_CONFIG
-from portiloop.src.core.utils import ADSFrontend, Dummy, FileFrontend, LSLStreamer, LiveDisplay, CSVRecorder, get_portiloop_version
+from portiloop.src.core.hardware.config_hardware import mod_config, BACKEND_CONFIG
+from portiloop.src.core.utils import Dummy, get_portiloop_version
+from portiloop.src.core.output import CSVRecorder, LiveDisplay, LSLStreamer
+from portiloop.src.core.capture_backend import ADSBackend, FileBackend
 from portiloop.src.core.constants import RECORDING_FOLDER
 
 from portiloop.src import ADS
 if ADS:
-    from portiloop.src.core.hardware.frontend import Frontend
+    from portiloop.src.core.hardware.backend import Backend
 
 
 PORTILOOP_ID = f"{socket.gethostname()}-portiloop"
@@ -48,18 +49,18 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
     sample_time = 1 / frequency
 
     version = get_portiloop_version()
-    frontend = Frontend(version)
+    backend = Backend(version)
     
     try:
-        config = FRONTEND_CONFIG
+        config = BACKEND_CONFIG
         if python_clock:  # set ADS to 2 * frequency
             datarate = 2 * frequency
         else:  # set ADS to frequency
             datarate = frequency
         config = mod_config(config, datarate, channel_states)
         
-        frontend.write_regs(0x00, config)
-        # data = frontend.read_regs(0x00, len(config))
+        backend.write_regs(0x00, config)
+        # data = backend.read_regs(0x00, len(config))
 
         c = True
 
@@ -69,7 +70,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         t = t_start
         
         # first sample:
-        reading = frontend.read()
+        reading = backend.read()
         datapoint = reading.channels()
         p_data_o.send(datapoint)
         
@@ -83,9 +84,9 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
                 if t <= t_next:
                     time.sleep(t_next - t)
                 t_next += sample_time
-                reading = frontend.read()
+                reading = backend.read()
             else:
-                reading = frontend.wait_new_data()
+                reading = backend.wait_new_data()
             datapoint = reading.channels()
             p_data_o.send(datapoint)
 
@@ -145,16 +146,16 @@ def start_capture(
     else:
         leds.led1(Color.PURPLE)
 
-    # Initialize data frontend
+    # Initialize data backend
     fake_filename = RECORDING_FOLDER / 'test_recording.csv'
-    capture_frontend = ADSFrontend(
+    capture_backend = ADSBackend(
         duration=config_dict['duration'],
         frequency=config_dict['frequency'],
         python_clock=config_dict['python_clock'],
         channel_states=config_dict['channel_states'],
         vref=config_dict['vref'],
         process=capture_process,
-    ) if config_dict['signal_input'] == "ADS" else FileFrontend(fake_filename, config_dict['nb_channels'], config_dict['channel_detection'])
+    ) if config_dict['signal_input'] == "ADS" else FileBackend(fake_filename, config_dict['nb_channels'], config_dict['channel_detection'])
 
     # Initialize detector, LSL streamer and stimulatorif requested
     streams = {
@@ -164,7 +165,7 @@ def start_capture(
     lsl_streamer = LSLStreamer(streams, config_dict['nb_channels'], config_dict['frequency'], id=PORTILOOP_ID) if config_dict['lsl'] else Dummy()
     
     # Launch the capture process
-    capture_frontend.init_capture()
+    capture_backend.init_capture()
 
     # Initialize display if requested
     live_disp_activated = config_dict['display']
@@ -246,14 +247,14 @@ def start_capture(
         # First, we send all outgoing messages to the capture process
         try:
             msg = q_msg.get_nowait()
-            capture_frontend.send_msg(msg)
+            capture_backend.send_msg(msg)
         except queue.Empty as e:
             pass
         except queue.ShutDown as e:
             raise e
         
         # Then, we check if we have received a message from the capture process
-        msg = capture_frontend.get_msg()
+        msg = capture_backend.get_msg()
         # Either we have received a stop message, or a print message.
         if msg is None:
             pass
@@ -268,7 +269,7 @@ def start_capture(
             perf["wait msg"][1] += 1
 
         # Then, we retrieve the data from the capture process
-        raw_points = capture_frontend.get_data()  # np.array (data series x ads_channels), or None
+        raw_points = capture_backend.get_data()  # np.array (data series x ads_channels), or None
         # If we have no data, we continue to the next iteration
         if raw_points is None:
             if PROFILE:
@@ -402,9 +403,9 @@ def start_capture(
             tt += tot
         print(f"total measured time: {tt} vs real: {t_end - t0}")
 
-    # close the frontend
+    # close the backend
     leds.led1(Color.YELLOW)
-    capture_frontend.close()
+    capture_backend.close()
     leds.close()
 
     del csv_recorder
