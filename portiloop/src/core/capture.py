@@ -235,6 +235,8 @@ def start_capture(
                 "lsl": [0, 0],
                 "detect": [0, 0],
                 "stimulate": [0, 0],
+                "buffers": [0, 0],
+                "display": [0, 0],
                 "csv": [0, 0]}
         t0 = time.perf_counter()
 
@@ -273,8 +275,8 @@ def start_capture(
         # If we have no data, we continue to the next iteration
         if raw_points is None:
             if PROFILE:
-                t11 = time.perf_counter()
-                perf["no data"][0] += t11 - t1
+                t1_1 = time.perf_counter()
+                perf["no data"][0] += t1_1 - t1
                 perf["no data"][1] += 1
             continue
 
@@ -332,24 +334,11 @@ def start_capture(
             if stimulator is not None:
                 stimulator_activated = True
                 stimulator.stimulate(detection_signal)
-                # if stim is None:
-                #     stim = detection_signal
-                # if config_dict['detect']:
-                #     detection_signal_buffer += stim
 
                 if PROFILE:
                     t6 = time.perf_counter()
                     perf["stimulate"][0] += t6 - t5
                     perf["stimulate"][1] += 1
-
-                # Send a stimulation every second (uncomment for testing)
-                # current_time = time.time()
-                # if current_time - last_time >= 1.0:
-                #     stimulator.stimulate([True])
-                #     last_time = current_time
-
-                # Adds point to buffer for delayed stimulation
-                # stimulation_delayer.step(filtered_points[0][config_dict['channel_detection'] - 1])
 
         if PROFILE:
             t7 = time.perf_counter()
@@ -366,29 +355,37 @@ def start_capture(
         if q_display is not None:
             q_display.put([timestamp, raw_points, filtered_points])
 
+        if PROFILE:
+            t8 = time.perf_counter()
+            perf["buffers"][0] += t8 - t7
+            perf["buffers"][1] += 1
+
         if len(raw_signal_buffer) >= 50:  # TODO: make this an argument
-            # live_disp.add_datapoints(raw_signal_buffer)
-            if processor is not None:
-                live_disp.add_datapoints(filtered_signal_buffer)
-            else:
-                live_disp.add_datapoints(raw_signal_buffer)
-            # recorder.add_recording_data(raw_signal_buffer, detection_signal_buffer, config_dict['detect'], config_dict['stimulate'])
+            # TODO: give the option to display either raw or filtered signal in live_disp
+            live_disp.add_datapoints(raw_signal_buffer)
+            # if processor is not None:
+            #     live_disp.add_datapoints(filtered_signal_buffer)
+            # else:
+            #     live_disp.add_datapoints(raw_signal_buffer)
+
+            if PROFILE:
+                t9 = time.perf_counter()
+                perf["display"][0] += t9 - t8
+                perf["display"][1] += 1
 
             csv_recorder.append_raw_signal_buffer(raw_signal_buffer)
             csv_recorder.append_filtered_signal_buffer(filtered_signal_buffer)
-            # csv_recorder.append_detection_signal_buffer(detection_signal_buffer)
             csv_recorder.append_stimulation_activated_buffer(stimulation_activated_buffer)
             csv_recorder.write()
 
             raw_signal_buffer = []
             filtered_signal_buffer = []
-            # detection_signal_buffer = []
             stimulation_activated_buffer = []
 
-        if PROFILE:
-            t8 = time.perf_counter()
-            perf["csv"][0] += t8 - t7
-            perf["csv"][1] += 1
+            if PROFILE:
+                t10 = time.perf_counter()
+                perf["csv"][0] += t10 - t9
+                perf["csv"][1] += 1
 
     if PROFILE:
         t_end = time.perf_counter()
@@ -410,7 +407,6 @@ def start_capture(
 
     del csv_recorder
     del lsl_streamer
-    # del stimulation_delayer
     del stimulator
     del detector
 
