@@ -43,13 +43,14 @@ DEFAULT_CONFIG_DICT = {
     "signal_input": "ADS",
     "python_clock": True,
     "signal_labels": [f"ch{i+1}" for i in range(nb_channels)],
-    "channel_states": ["simple" for _ in range(nb_channels)],
+    "channel_states": ["disabled" for _ in range(nb_channels)],
     "channel_detection": 2,
     "detection_sound": "15msPN_48kHz_norm_stereo.wav",
     "spindle_detection_mode": "Fast",
     "spindle_freq": 10,
     "stim_delay": 0.0,
     "inter_stim_delay": 0.0,
+    "so_phase_delay": None,  # None or target phase in radians
     "volume": 100,
     "filter_settings": {
         "power_line": 60,

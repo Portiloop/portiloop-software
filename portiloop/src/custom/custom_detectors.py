@@ -1,5 +1,7 @@
 import time
+
 import numpy as np
+from scipy import signal
 
 from portiloop.src.core.detection import Detector
 from portiloop.src.core.constants import DEFAULT_MODEL_PATH
@@ -139,3 +141,229 @@ class SleepSpindleRealTimeDetector(Detector):
             print(f"Computed output {output_data_y} in {end_time - start_time} seconds")
 
         return output_data_y, output_data_h
+
+
+class SlowOscillationDetector(Detector):
+    def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
+        super().__init__(config_dict, lsl_streamer, csv_recorder)
+
+        fs = config_dict["frequency"]
+        numtaps = 17
+        verbose = False
+        channel = config_dict["channel_detection"]
+        record = False
+
+        self.fs = fs
+        self.numtaps = numtaps
+        self.verbose = verbose
+        self.channel = channel
+
+        self.th_PaP = 75
+        self.th_Neg = 40
+        self.min_tNe = 125
+        self.max_tNe = 1500
+        self.max_tPo = 1000
+        self.fmin_max = [0.16, 4]
+
+        self.marker = []
+        self.buffer = []
+        self.filtered_buffer = []
+        self.so_results = []
+        self.count = 0
+        self.record = record
+
+        self.ssw_filter = signal.firwin(self.numtaps, self.fmin_max, fs=self.fs, pass_zero="bandpass")
+        self.zi = signal.lfilter_zi(self.ssw_filter, 1)
+
+        self.max_peak = None
+        self.min_peak = None
+        self.down_duration = None
+        self.up_duration = None
+        self.duration = None
+        self.prev_signal = None
+
+        self.init_segment()
+
+    def init_segment(self):
+        self.max_peak = -1
+        self.min_peak = 1000
+        self.down_duration = 0
+        self.up_duration = 0
+        self.duration = 0
+        self.prev_signal = None
+
+    def detect(self, datapoints):
+        results = []
+        for point in datapoints:
+            self.count += 1
+            result = self.detect_point(point[self.channel - 1])
+            results.append(result)
+            if result and self.record:
+                self.so_results.append(self.count)
+        return results
+
+    def detect_point(self, point):
+        filtered_point, self.zi = signal.lfilter(
+            self.ssw_filter, [1], [point], zi=self.zi
+        )
+
+        self.buffer.append(point)
+        self.filtered_buffer.append(filtered_point[0])
+
+        tsignal = filtered_point[0]
+        if tsignal > self.max_peak:
+            self.max_peak = tsignal
+        if tsignal < self.min_peak:
+            self.min_peak = tsignal
+
+        if tsignal >= 0:
+            self.up_duration += 1
+        else:
+            self.down_duration += 1
+
+        self.duration += 1
+
+        tp2p = abs(self.max_peak - self.min_peak)
+        tneg = abs(self.min_peak)
+        tne = self.down_duration / self.fs * 1000
+        tpo = self.up_duration / self.fs * 1000
+        tmfr = self.fs / self.duration
+
+        self.prev_signal = self.prev_signal or tsignal
+
+        if self.prev_signal * tsignal <= 0 < self.prev_signal:
+            self.init_segment()
+
+        self.prev_signal = tsignal
+
+        if (
+            tp2p > self.th_PaP
+            and tneg > self.th_Neg
+            and self.min_tNe < tne < self.max_tNe
+            and tpo < self.max_tPo
+        ):
+            return True
+        return False
+
+
+def carrier_detect(data: np.ndarray,
+                   fs,
+                   th_PaP=75,
+                   th_Neg=40,
+                   filter_size=501,
+                   min_tNe=125,
+                   max_tNe=1500,  # duree_min_max_Neg
+                   max_tPo=1000,  # duree_max_Pos
+                   fmin_max=[0.16, 4],
+                   verbose=False):
+    """
+    Output of the function
+    SSW.marker : One marker field per epoch with the following fields,
+    . nsamp is a table of [start end], the number of lines is the number of SSW
+    . Neg is an array of DOWN phase amplitudes (uV) [filtered signal]
+    . P2P is an array of peak-to-peak amplitudes (uV) [filtered signal]
+    . Neg_raw is an array of DOWN phase amplitudes (uV) [raw signal]
+    . P2P_raw is an array of peak-to-peak amplitudes (uV) [raw signal]
+    . tNe is an array of duration of the DOWN phase
+    . tPo is an array of duration of the UP phase
+    . mfr is an array of the mean frequency"
+    """
+    # Extract parameters
+    Ntrials, _ = data.shape
+
+    # Design SSW filter
+    wn = np.array(fmin_max) / (fs / 2)
+    ssw_filter = signal.firwin(filter_size, wn, pass_zero=False)
+
+    N_SSW = 0
+    Duree = 0
+    marker = []
+    data_f_sw = np.zeros_like(data)
+
+    for it in range(Ntrials):
+
+        sig = data[it, :].astype(float)
+        Duree += len(sig) / fs / 60  # minutes
+
+        # Filter in SSW band
+        sigf = signal.filtfilt(ssw_filter, [1], sig)
+        data_f_sw[it, :] = sigf
+
+        # Find zero crossings (from positives to negatives)
+        f1 = (sigf[1:] * sigf[:-1]) < 0
+        f2 = sigf[:-1] > 0
+        n_zc = np.where(f1 & f2)[0]
+
+        # Initialize arrays for SSW properties
+        n_t = np.zeros((len(n_zc) - 1, 2), dtype=int)
+        P2P = np.zeros(len(n_zc) - 1)
+        Neg = np.zeros(len(n_zc) - 1)
+        tNe = np.zeros(len(n_zc) - 1)
+        tPo = np.zeros(len(n_zc) - 1)
+        PaP_raw = np.zeros(len(n_zc) - 1)
+        Neg_raw = np.zeros(len(n_zc) - 1)
+        mfr = np.zeros(len(n_zc) - 1)
+        keep = []
+
+        # Analyze each zero crossing
+        for i in range(len(n_zc) - 1):
+            n_t[i, :] = [n_zc[i], n_zc[i + 1]]
+            segment = sigf[n_zc[i] + 1 : n_zc[i + 1] - 1]  # exclude endpoints
+            segNeg = segment < 0
+            segPos = segment >= 0
+
+            P2P[i] = abs(np.max(segment) - np.min(segment))
+            Neg[i] = np.max(np.abs(segment[segNeg]))
+            tNe[i] = np.sum(segNeg) / fs * 1000  # msec
+            tPo[i] = np.sum(segPos) / fs * 1000  # msec
+            mfr[i] = fs / (n_zc[i + 1] - n_zc[i])
+
+            # Raw signal analysis
+            raw_segment = sig[n_zc[i] + 1 : n_zc[i + 1] - 1]  # exclude endpoints
+            PaP_raw[i] = abs(np.max(raw_segment) - np.min(raw_segment))
+            Neg_raw[i] = np.max(np.abs(raw_segment[segNeg]))
+
+            # Apply Carrier Criterion
+            if (
+                P2P[i] > th_PaP
+                and Neg[i] > th_Neg
+                and min_tNe < tNe[i] < max_tNe
+                and tPo[i] < max_tPo
+            ):
+                keep.append(i)
+
+        # Store SSW found in this trial
+        marker.append(
+            {
+                "Thresholds_PaP_Neg": [th_PaP, th_Neg],
+                "nsamp": n_t[keep],
+                "P2P": P2P[keep],
+                "Neg": Neg[keep],
+                "tNe": tNe[keep],
+                "tPo": tPo[keep],
+                "P2P_raw": PaP_raw[keep],
+                "Neg_raw": Neg_raw[keep],
+                "mfr": mfr[keep],
+            }
+        )
+
+        N_SSW += len(keep)
+        if verbose:
+            print(f"Trial {it}: ")
+            print(marker[it]["nsamp"])
+    # Calculate statistics
+    Stat_SSW = {"N_SSW": N_SSW, "d_SSW": N_SSW / Duree, "duree": Duree}
+
+    # Print detection results
+    if verbose:
+        print(f"\twe found {N_SSW} SSW over {Ntrials} trials")
+        print(f"\t({N_SSW/Duree:.2f} SSW/minute)")
+
+    # Prepare output
+    SSW = {
+        "markers": marker,
+        "stat": Stat_SSW,
+        "filtered_signals": data_f_sw,
+    }
+
+    return N_SSW, SSW

@@ -8,13 +8,9 @@ from portiloop.src.core.capture import start_capture
 from portiloop.src.core.hardware.config_hardware import to_ads_frequency, LEADOFF_CONFIG
 from portiloop.src.core.utils import get_portiloop_version, DummyAlsaMixer
 from portiloop.src.core.constants import CSV_PATH
-from portiloop.src.custom.custom_processors import FilterPipeline
 
 from portiloop.src.custom.config import RUN_SETTINGS
-from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
-from portiloop.src.custom.custom_stimulators import (SleepSpindleRealTimeStimulator,
-                                                     SpindleTrainRealTimeStimulator,
-                                                     IsolatedSpindleRealTimeStimulator)
+from portiloop.src.custom.custom_pipelines import PIPELINES
 
 from IPython.display import clear_output, display
 import ipywidgets as widgets
@@ -26,8 +22,12 @@ if ADS:
     from portiloop.src.core.hardware.backend import Backend
 
 
+DEFAULT_PIPELINE_KEY = "Sleep spindles"
+
+
 class JupyterUI:
-    def __init__(self, processor_cls=FilterPipeline, detector_cls=None, stimulator_cls=None):
+    def __init__(self):
+
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
         self.filename = CSV_PATH / 'recording.csv'
 
@@ -86,9 +86,10 @@ class JupyterUI:
         self.inter_stim_delay = 0.0
 
         # Pipeline
-        self.processor_cls = processor_cls
-        self.detector_cls = detector_cls
-        self.stimulator_cls = stimulator_cls
+        pipeline = PIPELINES[DEFAULT_PIPELINE_KEY]
+        self.processor_cls = pipeline["processor"]
+        self.detector_cls = pipeline["detector"]
+        self.stimulator_cls = pipeline["stimulator"]
 
         # Other
         self.filter_settings = {
@@ -125,6 +126,17 @@ class JupyterUI:
             self.volume = self.mixer.getvolume()[0]
 
         # widgets ===============================
+
+        # PIPELINE ------------------------------
+
+        options = [key for key in PIPELINES.keys()]
+        self.b_pipeline = widgets.Dropdown(
+            options=options,
+            value=PIPELINES.keys()[0],
+            description='Pipeline:',
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
 
         # CHANNELS ------------------------------
         self.chann_buttons = []
@@ -485,6 +497,7 @@ class JupyterUI:
 
             self.chann_buttons[i].observe(callback_wrapper(i), 'value')
 
+        self.b_pipeline.observe(self.on_b_pipeline, 'value')
         self.b_capture.observe(self.on_b_capture, 'value')
         self.b_clock.observe(self.on_b_clock, 'value')
         self.b_signal_input.observe(self.on_b_signal_input, 'value')
@@ -525,7 +538,8 @@ class JupyterUI:
         self.b_capture.close()
 
     def display_buttons(self):
-        display(widgets.VBox([self.b_accordion_channels,
+        display(widgets.VBox([self.b_pipeline,
+                              self.b_accordion_channels,
                               self.b_channel_detect,
                               self.b_sound_detect,
                               self.b_frequency,
@@ -546,6 +560,7 @@ class JupyterUI:
                               self.b_pause]))
 
     def enable_buttons(self):
+        self.b_pipeline.disabled = False
         self.b_frequency.disabled = False
         self.b_duration.disabled = False
         self.b_filename.disabled = False
@@ -582,6 +597,7 @@ class JupyterUI:
         self.b_sound_detect.disabled = False
 
     def disable_buttons(self):
+        self.b_pipeline.disabled = True
         self.b_frequency.disabled = True
         self.b_duration.disabled = True
         self.b_filename.disabled = True
@@ -616,6 +632,13 @@ class JupyterUI:
         self.b_stim_delay.disabled = True
         self.b_inter_stim_delay.disabled = True
         self.b_sound_detect.disabled = True
+
+    def on_b_pipeline(self, value):
+        key = value['new']
+        pipeline = PIPELINES[key]
+        self.processor_cls = pipeline["processor"]
+        self.detector_cls = pipeline["detector"]
+        self.stimulator_cls = pipeline["stimulator"]
 
     def on_b_sound_detect(self, value):
         self.detection_sound = value['new']

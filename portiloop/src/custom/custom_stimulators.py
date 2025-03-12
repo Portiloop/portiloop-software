@@ -48,11 +48,10 @@ class Delayer(ABC):
     # def step_timestep(self, point):
     #     pass
 
-    @abstractmethod
     def detected(self):
-        """
-        Called before step() when the detection signal is True
-        """
+        pass
+
+    def not_detected(self):
         pass
 
 
@@ -251,6 +250,95 @@ class UpStateDelayer(Delayer):
         return (avg_dist - (len(self.buffer) - peaks[-1])) * (1.0 / self.sample_freq)
 
 
+class SOPhaseDelayer(Delayer):
+    def __init__(self,
+                 target_phase=0,
+                 k_p: float = 0.05,
+                 k_i: float = 5e-8,
+                 k_0: float = 0.03,
+                 sample_freq=250):
+        """
+        Phase Locked Loop for In-Phase Slow Oscillation Detection
+        params:
+            target_phase (float): Targeted phase to deliver stimulus (radian)
+        """
+        self.k_p = k_p
+        self.k_i = k_i
+        self.k_0 = k_0
+        self.fs = sample_freq
+
+        self.target_phase = target_phase
+
+        self.sin_out = 0
+        self.cos_out = 1
+        self.pd_output = 0      # phase detector output
+        self.lf_output = 0      # loop filter output
+        self.integrator = 0
+
+        self.freq_const = 2 * np.pi * (1/self.fs)
+        self.init_estimate = 0
+        self.phase_estimate = self.freq_const
+
+        self.atol = np.deg2rad(10)
+        self.time_counter = 0
+
+        self.prev_cos_out = 1
+        self.cos_outs = []
+        self.phase_estimates = []
+        self.phase_indicators = []
+        self.stimulate_flag = False
+
+        self.phase_indicator = None
+        self.stimulate = None
+
+    def wrap_phase(self, phase):
+        return np.angle(np.exp(1j * phase))
+
+    def pll_detect(self, point):
+        self.pd_output = point * self.sin_out
+
+        self.integrator += self.k_i * self.pd_output
+        self.lf_output = self.k_p * self.pd_output + self.integrator
+
+        next_phase = self.phase_estimate + self.init_estimate
+        self.init_estimate = self.freq_const + self.k_0 * self.lf_output
+
+        self.sin_out = -np.sin(self.phase_estimate)
+        next_cos_out = np.cos(self.phase_estimate)
+
+        self.phase_indicator = (
+            (np.isclose(self.wrap_phase(self.phase_estimate), self.target_phase, atol=self.atol)) and
+            (self.prev_cos_out <= self.cos_out >= next_cos_out)
+        )
+        self.cos_outs.append(self.cos_out)
+        self.phase_estimates.append(self.phase_estimate)
+        self.phase_indicators.append(self.phase_indicator)
+
+        self.prev_cos_out = self.cos_out
+        self.cos_out = next_cos_out
+        self.phase_estimate = next_phase
+
+        return self.phase_indicator
+
+    def step(self, point):
+        """
+        Moves through the state machine
+        """
+        pll_output = self.pll_detect(point)
+        if self.stimulate_flag and pll_output:
+            if self.stimulate is not None:
+                self.stimulate()
+            self.stimulate_flag = False
+            return True
+        return False
+
+    def detected(self):
+        self.stimulate_flag = True
+
+    def not_detected(self):
+        self.stimulate_flag = False
+
+
 # ================== STIMULATORS ==================
 
 
@@ -266,6 +354,7 @@ class DelayedStimulator(Stimulator, ABC):
         # Initialize stimulation delayer if requested
         delay = not ((config_dict['stim_delay'] == 0.0) and (config_dict['inter_stim_delay'] == 0.0))
         delay_phase = (not delay) and (not config_dict['spindle_detection_mode'] == 'Fast')
+        so_delay_phase = not (delay or delay_phase) and config_dict['so_phase_delay'] is not None
         if delay:
             stimulation_delayer = TimingDelayer(
                 stimulation_delay=config_dict['stim_delay'],
@@ -275,6 +364,8 @@ class DelayedStimulator(Stimulator, ABC):
             stimulation_delayer = UpStateDelayer(
                 config_dict['frequency'],
                 config_dict['spindle_detection_mode'] == 'Peak', 0.3)
+        elif so_delay_phase:
+            stimulation_delayer = SOPhaseDelayer(target_phase=config_dict['so_phase_delay'])
         else:
             stimulation_delayer = None
 
@@ -637,3 +728,56 @@ class AlternatingStimulator(Stimulator):
         del self.pcm
 
 
+class SlowOscillationStimulator(SleepSpindleRealTimeStimulator):
+    def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
+        super().__init__(config_dict, lsl_streamer, csv_recorder)
+        self.wait_t = .1  # Stimulate the first point of a detected SO only
+
+    # def stimulate(self, detection_signal):
+    #     pass
+    #     # change for so
+    #     stim = []
+    #     for sig in detection_signal:
+    #         # We detect a stimulation
+    #         if sig:
+    #             # Record time of stimulation
+    #             ts = time.time()
+    #
+    #             # Check if time since last stimulation is long enough
+    #             if ts - self.last_detected_ts > self.wait_t:
+    #                 stim.append(True)
+    #                 if not isinstance(self.delayer, Dummy):
+    #                     # If we have a delayer, notify it
+    #                     self.delayer.detected()
+    #                     # Send the LSL marer for the fast stimulation
+    #                     self.send_stimulation("FAST_STIM", False)
+    #                 else:
+    #                     self.send_stimulation("STIM", not self.sham)
+    #             else:
+    #                 stim.append(False)
+    #             self.last_detected_ts = ts
+    #         else:
+    #             self.delayer.not_detected()
+    #             stim.append(False)
+    #     return stim
+
+    def _stimulate(self, detection_point):
+        res = False
+        if detection_point:
+            ts = time.time()
+            # Check if time since last stimulation is long enough
+            if ts - self.last_detected_ts > self.wait_t:
+                res = True
+                if self.delayer is not None:
+                    # Notify the delayer that a detection has happened
+                    self.delayer.detected()
+                    # Send an LSL marker showing where stimulation would have been without a delayer
+                    # (NB: The actual stimulation will be sent later by self.delayer.step)
+                    self.send_stimulation("FAST_STIM", False)
+                else:
+                    # No delayer: send actual stimulation immediately
+                    self.send_stimulation("STIM", True)
+            self.last_detected_ts = ts
+        else:
+            self.delayer.not_detected()
+        return res
