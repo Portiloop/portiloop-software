@@ -132,7 +132,7 @@ class JupyterUI:
         options = [key for key in PIPELINES.keys()]
         self.b_pipeline = widgets.Dropdown(
             options=options,
-            value=PIPELINES.keys()[0],
+            value=DEFAULT_PIPELINE_KEY,
             description='Pipeline:',
             disabled=False,
             style={'description_width': 'initial'}
