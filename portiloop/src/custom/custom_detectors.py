@@ -65,7 +65,6 @@ class SleepSpindleRealTimeDetector(Detector):
         datapoints is a list of lists of n channels: may contain several datapoints.
 
         The output signal is a list of tuples (is_spindle, is_train_of_spindles).
-
         """
         res = []
         for inp in datapoints:
@@ -200,7 +199,7 @@ class SlowOscillationDetector(Detector):
             results.append(result)
             if result and self.record:
                 self.so_results.append(self.count)
-        return results
+        return results, datapoints
 
     def detect_point(self, point):
         filtered_point, self.zi = signal.lfilter(
