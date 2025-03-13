@@ -471,7 +471,7 @@ class JupyterUI:
             # Remove all buttons and button lists from the metadata
             if "button" in key or "_b" in key:
                 continue
-            if isinstance(value, basic_types):
+            if isinstance(value, basic_types) or value is None:
                 output_dict[key] = value
 
         output_dict['filename'] = str(self.filename)
