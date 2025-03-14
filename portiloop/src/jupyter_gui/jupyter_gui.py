@@ -742,6 +742,7 @@ class JupyterUI:
             self.signal_input = "ADS"
         elif val == "File":
             self.signal_input = "File"
+        self.enable_buttons()
 
     def on_b_signal_sample(self, value):
         val = value['new']
