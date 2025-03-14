@@ -21,7 +21,7 @@ from portiloop.src.core.hardware.config_hardware import mod_config, BACKEND_CONF
 from portiloop.src.core.utils import Dummy, get_portiloop_version
 from portiloop.src.core.output import CSVRecorder, LiveDisplay, LSLStreamer
 from portiloop.src.core.capture_backend import ADSBackend, FileBackend
-from portiloop.src.core.constants import RECORDING_FOLDER
+from portiloop.src.core.constants import SIGNAL_SAMPLES_FOLDER
 
 from portiloop.src import ADS
 if ADS:
@@ -147,7 +147,7 @@ def start_capture(
         leds.led1(Color.PURPLE)
 
     # Initialize data backend
-    fake_filename = RECORDING_FOLDER / 'test_recording.csv'
+    signal_sample = SIGNAL_SAMPLES_FOLDER / config_dict["signal_sample"]  # 'test_spindles.csv'  # test_slow_oscillations.csv
     capture_backend = ADSBackend(
         duration=config_dict['duration'],
         frequency=config_dict['frequency'],
@@ -155,7 +155,7 @@ def start_capture(
         channel_states=config_dict['channel_states'],
         vref=config_dict['vref'],
         process=capture_process,
-    ) if config_dict['signal_input'] == "ADS" else FileBackend(fake_filename, config_dict['nb_channels'], config_dict['channel_detection'])
+    ) if config_dict['signal_input'] == "ADS" else FileBackend(signal_sample, config_dict['nb_channels'], config_dict['channel_detection'], config_dict['frequency'])
 
     # Initialize detector, LSL streamer and stimulatorif requested
     streams = {

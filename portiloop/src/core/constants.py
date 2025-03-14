@@ -16,7 +16,7 @@ finally:
 HOME_FOLDER = Path.home()
 
 # Portiloop repository:
-RECORDING_FOLDER = HOME_FOLDER / 'portiloop-software' / 'portiloop' / 'recordings'
+SIGNAL_SAMPLES_FOLDER = HOME_FOLDER / 'portiloop-software' / 'portiloop' / 'signal_samples'
 SOUNDS_FOLDER = HOME_FOLDER / 'portiloop-software' / 'portiloop' / 'sounds'
 DEFAULT_MODEL_PATH = HOME_FOLDER / 'portiloop-software' / 'portiloop' / 'models' / 'portiloop_model_quant.tflite'
 
@@ -67,6 +67,7 @@ DEFAULT_CONFIG_DICT = {
         ]
     },
     "width_display": 1250,
-    "filename": "/home/mendel/workspace/edf_recordings/recording_test1.csv",
+    "filename": str(CSV_PATH / "recording_test1.csv"),
+    "signal_sample": str(SIGNAL_SAMPLES_FOLDER / "test_spindles.csv"),
     "vref": 2.64  # FIXME: this value is a temporary fix for what seems to be a hardware bug
 }

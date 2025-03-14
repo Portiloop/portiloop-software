@@ -7,7 +7,7 @@ from portiloop.src import ADS
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.hardware.config_hardware import to_ads_frequency, LEADOFF_CONFIG
 from portiloop.src.core.utils import get_portiloop_version, DummyAlsaMixer
-from portiloop.src.core.constants import CSV_PATH
+from portiloop.src.core.constants import CSV_PATH, SIGNAL_SAMPLES_FOLDER
 
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_pipelines import PIPELINES
@@ -103,6 +103,7 @@ class JupyterUI:
             "filter_args": self.filter_args,
         }
         self.width_display = 5 * self.frequency
+        self.signal_sample = os.listdir(SIGNAL_SAMPLES_FOLDER)[0]
 
         if ADS:
             try:
@@ -218,6 +219,14 @@ class JupyterUI:
             button_style='',  # 'success', 'info', 'warning', 'danger' or ''
             tooltips=['Read data from ADS.',
                       'Read data from file.'],
+        )
+
+        self.b_signal_sample = widgets.Dropdown(
+            options=os.listdir(SIGNAL_SAMPLES_FOLDER),
+            value=self.signal_sample,
+            description='Input file',
+            disabled=True,
+            style={'description_width': 'initial'}
         )
 
         self.b_custom_fir = widgets.ToggleButtons(
@@ -501,6 +510,7 @@ class JupyterUI:
         self.b_capture.observe(self.on_b_capture, 'value')
         self.b_clock.observe(self.on_b_clock, 'value')
         self.b_signal_input.observe(self.on_b_signal_input, 'value')
+        self.b_signal_sample.observe(self.on_b_signal_sample, 'value')
         self.b_frequency.observe(self.on_b_frequency, 'value')
         self.b_threshold.observe(self.on_b_threshold, 'value')
         self.b_duration.observe(self.on_b_duration, 'value')
@@ -519,7 +529,6 @@ class JupyterUI:
         self.b_spindle_mode.observe(self.on_b_spindle_mode, 'value')
         self.b_spindle_freq.observe(self.on_b_spindle_freq, 'value')
         self.b_power_line.observe(self.on_b_power_line, 'value')
-        self.b_signal_input.observe(self.on_b_power_line, 'value')
         self.b_custom_fir.observe(self.on_b_custom_fir, 'value')
         self.b_custom_fir_order.observe(self.on_b_custom_fir_order, 'value')
         self.b_custom_fir_cutoff.observe(self.on_b_custom_fir_cutoff, 'value')
@@ -546,6 +555,7 @@ class JupyterUI:
                               self.b_duration,
                               self.b_filename,
                               self.b_signal_input,
+                              self.b_signal_sample,
                               self.b_power_line,
                               self.b_clock,
                               widgets.HBox([self.b_filter, self.b_detect, self.b_stimulate, self.b_record, self.b_lsl,
@@ -574,6 +584,7 @@ class JupyterUI:
             self.chann_buttons[i].disabled = False
         self.b_power_line.disabled = False
         self.b_signal_input.disabled = False
+        self.b_signal_sample.disabled = self.signal_input == 'ADS'
         self.b_channel_detect.disabled = False
         self.b_spindle_freq.disabled = False
         self.b_spindle_mode.disabled = False
@@ -615,6 +626,7 @@ class JupyterUI:
         self.b_spindle_freq.disabled = True
         self.b_spindle_mode.disabled = True
         self.b_signal_input.disabled = True
+        self.b_signal_sample.disabled = True
         self.b_power_line.disabled = True
         self.b_polyak_mean.disabled = True
         self.b_polyak_std.disabled = True
@@ -730,6 +742,10 @@ class JupyterUI:
             self.signal_input = "ADS"
         elif val == "File":
             self.signal_input = "File"
+
+    def on_b_signal_sample(self, value):
+        val = value['new']
+        self.signal_sample = val
 
     def on_b_power_line(self, value):
         val = value['new']

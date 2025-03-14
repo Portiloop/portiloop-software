@@ -118,7 +118,7 @@ class ADSBackend(CaptureBackend):
 
 
 class FileBackend(CaptureBackend):
-    def __init__(self, filename, num_channels, channel_detect):
+    def __init__(self, filename, num_channels, channel_detect, frequency):
         """
         Backend that reads from a csv file. Mostly used for debugging.
         """
@@ -127,6 +127,7 @@ class FileBackend(CaptureBackend):
         self.stop_msg = False
         self.num_channels = num_channels
         self.channel_detect = channel_detect
+        self.frequency = frequency
 
         self.file = None
         self.csv_reader = None
@@ -140,7 +141,7 @@ class FileBackend(CaptureBackend):
         """
         self.file = open(self.filename, 'r')
         self.csv_reader = csv.reader(self.file, delimiter=',')
-        self.wait_time = 1/250.0
+        self.wait_time = 1.0 / self.frequency
         self.index = -1
         self.last_time = time.time()
 
