@@ -3,6 +3,7 @@ import time
 import os
 import socket
 from datetime import datetime
+from pathlib import Path
 
 import alsaaudio
 from alsaaudio import ALSAAudioError
@@ -11,7 +12,7 @@ from nicegui import ui
 
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.utils import DummyAlsaMixer
-from portiloop.src.core.constants import WORKSPACE_DIR_SD, WORKSPACE_DIR_IN
+from portiloop.src.core.constants import HOME_FOLDER
 from portiloop.src.custom.custom_processors import FilterPipeline
 
 from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
@@ -19,6 +20,8 @@ from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulat
 from portiloop.src.custom.config import RUN_SETTINGS
 
 
+RECORDINGS_DIR_SD = Path("/media/sd_card/workspace/recordings/")
+RECORDINGS_DIR_IN = HOME_FOLDER / 'workspace' / 'recordings'
 portiloop_ID = socket.gethostname()
 
 
@@ -108,9 +111,9 @@ class ExperimentState:
             self.run_dict['record'] = False
 
         if self.sd_card:
-            workspace_dir = WORKSPACE_DIR_SD
+            workspace_dir = RECORDINGS_DIR_SD
         else:
-            workspace_dir = WORKSPACE_DIR_IN
+            workspace_dir = RECORDINGS_DIR_IN
 
         self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name)
 
@@ -137,7 +140,7 @@ class ExperimentState:
         self.stim_on = not self.stim_on
 
     def check_sd_card(self):
-        self.sd_card = os.path.exists("/media/sd_card/workspace/edf_recordings")
+        self.sd_card = os.path.exists(str(RECORDINGS_DIR_SD))
         if self.sd_card:
             self.disk_str = f"Disk Usage: {psutil.disk_usage(os.path.abspath('/media/sd_card/')).percent}%"
         else:

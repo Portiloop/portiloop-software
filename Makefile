@@ -44,7 +44,7 @@ step5.temp: step4.temp
 	echo "Activating the widgets for the jupyter notebook..."
 	~/miniforge3/envs/portiloop/bin/jupyter nbextension enable --py widgetsnbextension
 	echo "Creating workspace directory..."
-	cd ~ && mkdir workspace && mkdir workspace/edf_recordings
+	cd ~ && mkdir workspace && mkdir workspace/recordings
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp create_login_folder.service /etc/systemd/system/create_login_folder.service
@@ -127,7 +127,7 @@ vstep5.temp: vstep4.temp
 	echo "Activating the widgets for the jupyter notebook..."
 	jupyter nbextension enable --py widgetsnbextension
 	echo "Creating workspace directory..."
-	cd ~ && mkdir workspace && mkdir workspace/edf_recordings
+	cd ~ && mkdir workspace && mkdir workspace/recordings
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp create_login_folder.service /etc/systemd/system/create_login_folder.service

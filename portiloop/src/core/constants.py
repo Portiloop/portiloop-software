@@ -20,11 +20,25 @@ SIGNAL_SAMPLES_FOLDER = HOME_FOLDER / 'portiloop-software' / 'portiloop' / 'sign
 SOUNDS_FOLDER = HOME_FOLDER / 'portiloop-software' / 'portiloop' / 'sounds'
 DEFAULT_MODEL_PATH = HOME_FOLDER / 'portiloop-software' / 'portiloop' / 'models' / 'portiloop_model_quant.tflite'
 
+if not (SIGNAL_SAMPLES_FOLDER.exists() and SOUNDS_FOLDER.exists() and DEFAULT_MODEL_PATH.exists()):
+    raise RuntimeError("The current version of the library must be installed locally in the home folder.")
+
+# SD card:
+SD_CARD = Path("/media/sd_card/")
+SD_CARD_DETECTED = SD_CARD.exists()
+
 # Workspace:
-CSV_PATH = HOME_FOLDER / 'workspace' / 'edf_recordings'
-WORKSPACE_DIR_SD = Path("/media/sd_card/workspace") / 'edf_recordings'
-WORKSPACE_DIR_IN = HOME_FOLDER / 'workspace' / 'edf_recordings'
-# TODO: remove all mentions of EDF format
+if SD_CARD_DETECTED:
+    WORKSPACE = SD_CARD / 'workspace'
+else:
+    WORKSPACE = HOME_FOLDER / 'workspace'
+
+# Recording path:
+CSV_PATH = WORKSPACE / 'recordings'
+
+# Create folders if they don't exist:
+CSV_PATH.mkdir(parents=True, exist_ok=True)
+
 
 # This dictionary contains the default options that are relevant to core functions
 # It can be copied and extended by custom modules
