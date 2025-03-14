@@ -170,6 +170,7 @@ def start_capture(
     # Initialize display if requested
     live_disp_activated = config_dict['display']
     live_disp = LiveDisplay(channel_names=config_dict['signal_labels'], window_len=config_dict['width_display']) if live_disp_activated else Dummy()
+    display_filtered = not config_dict['display_raw']
 
     create_processor = config_dict['filter'] and processor_cls is not None
     create_detector = config_dict['detect'] and detector_cls is not None
@@ -360,12 +361,10 @@ def start_capture(
             perf["buffers"][1] += 1
 
         if len(raw_signal_buffer) >= 50:  # TODO: make this an argument
-            # TODO: give the option to display either raw or filtered signal in live_disp
-            live_disp.add_datapoints(raw_signal_buffer)
-            # if processor is not None:
-            #     live_disp.add_datapoints(filtered_signal_buffer)
-            # else:
-            #     live_disp.add_datapoints(raw_signal_buffer)
+            if display_filtered and processor is not None:
+                live_disp.add_datapoints(filtered_signal_buffer)
+            else:
+                live_disp.add_datapoints(raw_signal_buffer)
 
             if PROFILE:
                 t9 = time.perf_counter()

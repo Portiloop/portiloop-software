@@ -104,6 +104,7 @@ class JupyterUI:
         }
         self.width_display = 5 * self.frequency
         self.signal_sample = os.listdir(SIGNAL_SAMPLES_FOLDER)[0]
+        self.display_raw = True
 
         if ADS:
             try:
@@ -389,6 +390,14 @@ class JupyterUI:
             indent=False
         )
 
+        self.b_disp_type = widgets.ToggleButtons(
+            options=['Raw', 'Filtered'],
+            description='Signal to display:',
+            disabled=True,
+            button_style='',  # 'success', 'info', 'warning', 'danger' or ''
+            tooltips=['Display raw signal', 'Display processed signal'],
+        )
+
         self.b_volume = widgets.IntSlider(
             value=self.volume,
             min=0,
@@ -523,6 +532,7 @@ class JupyterUI:
         self.b_record.observe(self.on_b_record, 'value')
         self.b_lsl.observe(self.on_b_lsl, 'value')
         self.b_display.observe(self.on_b_display, 'value')
+        self.b_disp_type.observe(self.on_b_disp_type, 'value')
         self.b_filename.observe(self.on_b_filename, 'value')
         self.b_channel_detect.observe(self.on_b_channel_detect, 'value')
         self.b_sound_detect.observe(self.on_b_sound_detect, 'value')
@@ -566,6 +576,7 @@ class JupyterUI:
                               self.b_accordion_delaying,
                               self.b_accordion_filter,
                               self.b_accordion_calibration,
+                              self.b_disp_type,
                               self.b_capture,
                               self.b_pause]))
 
@@ -579,6 +590,7 @@ class JupyterUI:
         self.b_record.disabled = False
         self.b_lsl.disabled = False
         self.b_display.disabled = False
+        self.b_disp_type.disabled = not self.display
         self.b_clock.disabled = False
         for i in range(self.nb_channels):
             self.chann_buttons[i].disabled = False
@@ -619,6 +631,7 @@ class JupyterUI:
         self.b_record.disabled = True
         self.b_lsl.disabled = True
         self.b_display.disabled = True
+        self.b_disp_type.disabled = True
         self.b_clock.disabled = True
         for i in range(self.nb_channels):
             self.chann_buttons[i].disabled = True
@@ -858,6 +871,14 @@ class JupyterUI:
     def on_b_display(self, value):
         val = value['new']
         self.display = val
+        self.enable_buttons()
+
+    def on_b_disp_type(self, value):
+        val = value['new']
+        if val == 'Raw':
+            self.display_raw = True
+        else:
+            self.display_raw = False
 
     def on_b_volume(self, value):
         val = value['new']

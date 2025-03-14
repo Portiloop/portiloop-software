@@ -39,6 +39,7 @@ DEFAULT_CONFIG_DICT = {
     "stimulate": False,
     "lsl": False,
     "display": False,
+    "display_raw": True,
     "threshold": 0.75,
     "signal_input": "ADS",
     "python_clock": True,
