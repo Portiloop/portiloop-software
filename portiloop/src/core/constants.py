@@ -25,7 +25,15 @@ if not (SIGNAL_SAMPLES_FOLDER.exists() and SOUNDS_FOLDER.exists() and DEFAULT_MO
 
 # SD card:
 SD_CARD = Path("/media/sd_card/")
-SD_CARD_DETECTED = SD_CARD.exists()
+
+try:
+    SD_CARD_TEST_FILE = SD_CARD / "test.tmp"
+    SD_CARD_TEST_FILE.write_text("test")
+    SD_CARD_TEST_FILE.unlink()
+    SD_CARD_DETECTED = True
+except Exception as e:
+    print(f"DEV: caught exception {e}")
+    SD_CARD_DETECTED = False
 
 # Workspace:
 if SD_CARD_DETECTED:
