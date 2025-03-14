@@ -778,6 +778,6 @@ class SlowOscillationStimulator(SleepSpindleRealTimeStimulator):
                     # No delayer: send actual stimulation immediately
                     self.send_stimulation("STIM", True)
             self.last_detected_ts = ts
-        else:
+        elif self.delayer is not None:
             self.delayer.not_detected()
         return res
