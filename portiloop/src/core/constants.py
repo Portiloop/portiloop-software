@@ -90,6 +90,8 @@ DEFAULT_CONFIG_DICT = {
     },
     "width_display": 1250,
     "filename": str(CSV_PATH / "recording_test1.csv"),
+    "record_raw": True,
+    "record_processed": False,
     "signal_sample": str(SIGNAL_SAMPLES_FOLDER / "test_spindles.csv"),
     "vref": 2.64  # FIXME: this value is a temporary fix for what seems to be a hardware bug
 }

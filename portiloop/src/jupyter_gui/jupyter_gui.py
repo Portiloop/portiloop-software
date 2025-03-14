@@ -30,6 +30,8 @@ class JupyterUI:
 
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
         self.filename = CSV_PATH / 'recording.csv'
+        self.record_raw = True
+        self.record_processed = False
 
         self.version = get_portiloop_version()
 
@@ -376,6 +378,20 @@ class JupyterUI:
             indent=False
         )
 
+        self.b_record_raw = widgets.Checkbox(
+            value=self.record_raw,
+            description='Record raw signal',
+            disabled=True,
+            indent=False
+        )
+
+        self.b_record_processed = widgets.Checkbox(
+            value=self.record_processed,
+            description='Record filtered signal',
+            disabled=True,
+            indent=False
+        )
+
         self.b_lsl = widgets.Checkbox(
             value=self.lsl,
             description='Stream LSL',
@@ -530,6 +546,8 @@ class JupyterUI:
         self.b_detect.observe(self.on_b_detect, 'value')
         self.b_stimulate.observe(self.on_b_stimulate, 'value')
         self.b_record.observe(self.on_b_record, 'value')
+        self.b_record_raw.observe(self.on_b_record_raw, 'value')
+        self.b_record_processed.observe(self.on_b_record_processed, 'value')
         self.b_lsl.observe(self.on_b_lsl, 'value')
         self.b_display.observe(self.on_b_display, 'value')
         self.b_disp_type.observe(self.on_b_disp_type, 'value')
@@ -568,8 +586,8 @@ class JupyterUI:
                               self.b_signal_sample,
                               self.b_power_line,
                               self.b_clock,
-                              widgets.HBox([self.b_filter, self.b_detect, self.b_stimulate, self.b_record, self.b_lsl,
-                                            self.b_display]),
+                              widgets.HBox([self.b_filter, self.b_detect, self.b_stimulate, self.b_record, self.b_lsl, self.b_display]),
+                              widgets.HBox([self.b_record_raw, self.b_record_processed]),
                               widgets.HBox([self.b_threshold, self.b_test_stimulus]),
                               self.b_volume,
                               #   self.b_test_impedance,
@@ -588,6 +606,8 @@ class JupyterUI:
         self.b_filter.disabled = False
         self.b_detect.disabled = False
         self.b_record.disabled = False
+        self.b_record_raw.disabled = not self.record
+        self.b_record_processed.disabled = not self.record
         self.b_lsl.disabled = False
         self.b_display.disabled = False
         self.b_disp_type.disabled = not self.display
@@ -629,6 +649,8 @@ class JupyterUI:
         self.b_filter.disabled = True
         self.b_detect.disabled = True
         self.b_record.disabled = True
+        self.b_record_raw.disabled = True
+        self.b_record_processed.disabled = True
         self.b_lsl.disabled = True
         self.b_display.disabled = True
         self.b_disp_type.disabled = True
@@ -863,6 +885,15 @@ class JupyterUI:
     def on_b_record(self, value):
         val = value['new']
         self.record = val
+        self.enable_buttons()
+
+    def on_b_record_raw(self, value):
+        val = value['new']
+        self.record_raw = val
+
+    def on_b_record_processed(self, value):
+        val = value['new']
+        self.record_processed = val
 
     def on_b_lsl(self, value):
         val = value['new']

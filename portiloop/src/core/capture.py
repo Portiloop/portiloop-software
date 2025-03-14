@@ -179,8 +179,8 @@ def start_capture(
     # Initialize recording if requested
     if config_dict['record']:
         csv_recorder = CSVRecorder(config_dict['filename'],
-                                   raw_signal=True,
-                                   filtered_signal=create_processor,  # set to False if you don't want to log the filtered signal
+                                   raw_signal=config_dict['record_raw'],
+                                   filtered_signal=config_dict['record_processed'] and create_processor,  # set to False if you don't want to log the filtered signal
                                    detection_signal=create_detector,
                                    stimulation_signal=create_stimulator,
                                    detection_activated=False,  # stimulation activated is enough
