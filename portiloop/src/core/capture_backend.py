@@ -135,12 +135,18 @@ class FileBackend(CaptureBackend):
         self.index = None
         self.last_time = None
 
+    def reset_csv_reader(self):
+        if self.file is not None:
+            self.file.close()
+            self.file = None
+        self.file = open(self.filename, 'r')
+        self.csv_reader = csv.reader(self.file, delimiter=',')
+
     def init_capture(self):
         """
         Initialize the file reader
         """
-        self.file = open(self.filename, 'r')
-        self.csv_reader = csv.reader(self.file, delimiter=',')
+        self.reset_csv_reader()
         self.wait_time = 1.0 / self.frequency
         self.index = -1
         self.last_time = time.time()
@@ -174,8 +180,9 @@ class FileBackend(CaptureBackend):
             n_array_raw = np.reshape(n_array_raw, (1, self.num_channels))
             return n_array_raw
         except StopIteration:
-            print("Reached end of file, stopping...")
-            self.stop_msg = True
+            self.reset_csv_reader()
+            # print("Reached end of file, stopping...")
+            # self.stop_msg = True
 
     def close(self):
         self.file.close()
