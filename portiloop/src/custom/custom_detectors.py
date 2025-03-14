@@ -20,7 +20,7 @@ class SleepSpindleRealTimeDetector(Detector):
 
         self.threshold = config_dict['threshold']
         self.channel = config_dict['channel_detection']
-        self.record_csv = not isinstance(self.csv_recorder, Dummy)
+        self.record_csv = not isinstance(self.csv_recorder, Dummy) and csv_recorder is not None
 
         # threshold = 0.5,
         num_models_parallel = 8
@@ -146,6 +146,8 @@ class SlowOscillationDetector(Detector):
     def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
+        self.record_csv = not isinstance(self.csv_recorder, Dummy) and csv_recorder is not None
+
         fs = config_dict["frequency"]
         numtaps = 17
         verbose = False
@@ -199,6 +201,8 @@ class SlowOscillationDetector(Detector):
             results.append(result)
             if result and self.record:
                 self.so_results.append(self.count)
+        if self.record_csv:
+            self.csv_recorder.append_detection_signal_buffer([int(r) for r in results])
         return results, datapoints
 
     def detect_point(self, point):
