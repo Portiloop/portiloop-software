@@ -254,7 +254,7 @@ with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
         ui.separator()
         ############# Display Control ###############
         with ui.column().classes('w-full items-center'):
-            available_channels = [f"Channel {i+1}" for i in range(nb_channels)]
+            available_channels = [f"Channel {i+1}" for i in range(RUN_SETTINGS['nb_channels'])]
             select_channel_display = ui.select(available_channels, value=available_channels[1], label="Display Channel")
             select_channel_display.bind_value_to(exp_state, 'selected_channel').classes('w-1/2')
 
