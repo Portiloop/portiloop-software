@@ -596,8 +596,8 @@ class JupyterUI:
                               self.b_accordion_channels,
                               self.b_signal_input,
                               widgets.HBox([self.b_signal_sample, self.b_offline_speed]),
-                              self.b_power_line,
                               self.b_filter,
+                              self.b_power_line,
                               self.b_accordion_filter,
                               self.b_detect,
                               widgets.HBox([self.b_channel_detect, self.b_threshold]),
@@ -881,6 +881,7 @@ class JupyterUI:
     def on_b_filter(self, value):
         val = value['new']
         self.filter = val
+        self.enable_buttons()
 
     def on_b_use_fir(self, value):
         val = value['new']
