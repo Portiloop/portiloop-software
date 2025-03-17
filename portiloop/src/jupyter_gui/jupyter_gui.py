@@ -235,7 +235,7 @@ class JupyterUI:
 
         self.b_offline_speed = widgets.FloatText(
             value=self.threshold,
-            description='Speed multiplier',
+            description='Speed multiplier (0: full speed)',
             disabled=True
         )
 
@@ -804,6 +804,7 @@ class JupyterUI:
         if val > 0:
             self.offline_speed = val
         else:
+            self.offline_speed = 0.0
             self.b_offline_speed.value = self.offline_speed
 
     def on_b_power_line(self, value):

@@ -148,7 +148,7 @@ class FileBackend(CaptureBackend):
         Initialize the file reader
         """
         self.reset_csv_reader()
-        self.wait_time = 1.0 / self.frequency
+        self.wait_time = 1.0 / self.frequency if self.frequency > 0 else 0.0  # 0.0 for full speed mode
         self.index = -1
         now = time.time()
         self.next_time = now + self.wait_time
@@ -179,8 +179,8 @@ class FileBackend(CaptureBackend):
                 time.sleep(self.next_time - now)
                 self.next_time += self.wait_time
             else:
-                # time-step timed out
-                self.next_time = time.time() + self.wait_time
+                # time-step timed out (intentional in full speed mode)
+                self.next_time = now + self.wait_time
             n_array_raw = np.zeros(self.num_channels)
             n_array_raw[self.channel_detect-1] = float(point[0])
             n_array_raw = np.reshape(n_array_raw, (1, self.num_channels))
