@@ -106,6 +106,7 @@ class JupyterUI:
         }
         self.width_display = 5 * self.frequency
         self.signal_sample = os.listdir(SIGNAL_SAMPLES_FOLDER)[0]
+        self.offline_speed = 1.0
         self.display_raw = True
 
         if ADS:
@@ -230,6 +231,12 @@ class JupyterUI:
             description='Input file',
             disabled=True,
             style={'description_width': 'initial'}
+        )
+
+        self.b_offline_speed = widgets.FloatText(
+            value=self.threshold,
+            description='Speed multiplier',
+            disabled=True
         )
 
         self.b_custom_fir = widgets.ToggleButtons(
@@ -541,6 +548,7 @@ class JupyterUI:
         self.b_clock.observe(self.on_b_clock, 'value')
         self.b_signal_input.observe(self.on_b_signal_input, 'value')
         self.b_signal_sample.observe(self.on_b_signal_sample, 'value')
+        self.b_offline_speed.observe(self.on_b_offline_speed, 'value')
         self.b_frequency.observe(self.on_b_frequency, 'value')
         self.b_threshold.observe(self.on_b_threshold, 'value')
         self.b_duration.observe(self.on_b_duration, 'value')
@@ -589,6 +597,7 @@ class JupyterUI:
                               self.b_filename,
                               self.b_signal_input,
                               self.b_signal_sample,
+                              self.b_offline_speed,
                               self.b_power_line,
                               self.b_clock,
                               widgets.HBox([self.b_filter, self.b_detect, self.b_stimulate, self.b_record, self.b_lsl, self.b_display]),
@@ -622,6 +631,7 @@ class JupyterUI:
         self.b_power_line.disabled = False
         self.b_signal_input.disabled = False
         self.b_signal_sample.disabled = self.signal_input == 'ADS'
+        self.b_offline_speed.disabled = self.signal_input == 'ADS'
         self.b_channel_detect.disabled = False
         self.b_spindle_freq.disabled = False
         self.b_spindle_mode.disabled = False
@@ -667,6 +677,7 @@ class JupyterUI:
         self.b_spindle_mode.disabled = True
         self.b_signal_input.disabled = True
         self.b_signal_sample.disabled = True
+        self.b_offline_speed.disabled = True
         self.b_power_line.disabled = True
         self.b_polyak_mean.disabled = True
         self.b_polyak_std.disabled = True
@@ -788,6 +799,13 @@ class JupyterUI:
         val = value['new']
         self.signal_sample = val
 
+    def on_b_offline_speed(self, value):
+        val = value['new']
+        if val > 0:
+            self.offline_speed = val
+        else:
+            self.b_offline_speed.value = self.offline_speed
+
     def on_b_power_line(self, value):
         val = value['new']
         if val == '60 Hz':
@@ -804,7 +822,7 @@ class JupyterUI:
 
     def on_b_threshold(self, value):
         val = value['new']
-        if val >= 0 and val <= 1:
+        if 0 <= val <= 1:
             self.threshold = val
         else:
             self.b_threshold.value = self.threshold

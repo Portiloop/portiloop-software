@@ -155,7 +155,7 @@ def start_capture(
         channel_states=config_dict['channel_states'],
         vref=config_dict['vref'],
         process=capture_process,
-    ) if config_dict['signal_input'] == "ADS" else FileBackend(signal_sample, config_dict['nb_channels'], config_dict['channel_detection'], config_dict['frequency'])
+    ) if config_dict['signal_input'] == "ADS" else FileBackend(signal_sample, config_dict['nb_channels'], config_dict['channel_detection'], config_dict['frequency'] * config_dict['offline_speed'])
 
     # Initialize detector, LSL streamer and stimulatorif requested
     streams = {

@@ -134,6 +134,7 @@ class FileBackend(CaptureBackend):
         self.wait_time = None
         self.index = None
         self.last_time = None
+        self.next_time = None
 
     def reset_csv_reader(self):
         if self.file is not None:
@@ -149,7 +150,8 @@ class FileBackend(CaptureBackend):
         self.reset_csv_reader()
         self.wait_time = 1.0 / self.frequency
         self.index = -1
-        self.last_time = time.time()
+        now = time.time()
+        self.next_time = now + self.wait_time
 
     def send_msg(self, msg):
         """
@@ -172,17 +174,19 @@ class FileBackend(CaptureBackend):
         try:
             point = next(self.csv_reader)
             self.index += 1
-            while time.time() - self.last_time < self.wait_time:
-                continue
-            self.last_time = time.time()
+            now = time.time()
+            if now <= self.next_time:
+                time.sleep(self.next_time - now)
+                self.next_time += self.wait_time
+            else:
+                # time-step timed out
+                self.next_time = time.time() + self.wait_time
             n_array_raw = np.zeros(self.num_channels)
             n_array_raw[self.channel_detect-1] = float(point[0])
             n_array_raw = np.reshape(n_array_raw, (1, self.num_channels))
             return n_array_raw
         except StopIteration:
             self.reset_csv_reader()
-            # print("Reached end of file, stopping...")
-            # self.stop_msg = True
 
     def close(self):
         self.file.close()

@@ -93,5 +93,6 @@ DEFAULT_CONFIG_DICT = {
     "record_raw": True,
     "record_filtered": False,
     "signal_sample": str(SIGNAL_SAMPLES_FOLDER / "test_spindles.csv"),
+    "offline_speed": 1.0,
     "vref": 2.64  # FIXME: this value is a temporary fix for what seems to be a hardware bug
 }
