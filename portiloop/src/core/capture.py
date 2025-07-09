@@ -96,13 +96,16 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
                 if p_msg_io.poll():
                     message = p_msg_io.recv()
                     if message == 'STOP':
+                        # p_msg_io.send(("PRT", f"msg from parent process: {message}"))
                         c = False
             it += 1
         t = time.time()
         tot = (t - t_start) / it        
 
         p_msg_io.send(("PRT", f"Average frequency: {1 / tot} Hz for {it} samples"))
-
+    except Exception as e:
+        p_msg_io.send(("PRT", f"Exception: {e}"))
+        raise e
     finally:
         p_msg_io.send('STOP')
         p_msg_io.close()
@@ -261,6 +264,7 @@ def start_capture(
         if msg is None:
             pass
         elif msg == 'STOP':
+            # print(f"msg from child process: {msg}")
             break
         elif msg[0] == 'PRT':
             print(msg[1])

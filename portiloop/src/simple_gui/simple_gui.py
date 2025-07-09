@@ -13,26 +13,34 @@ from nicegui import ui
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.utils import DummyAlsaMixer
 from portiloop.src.core.constants import HOME_FOLDER
-from portiloop.src.custom.custom_processors import FilterPipeline
 
-from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
-from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator, AlternatingStimulator
+# from portiloop.src.custom.custom_processors import FilterPipeline
+# from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
+# from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator, AlternatingStimulator
+
 from portiloop.src.custom.config import RUN_SETTINGS
-
+from portiloop.src.custom.custom_pipelines import PIPELINES
 
 RECORDINGS_DIR_SD = Path("/media/sd_card/workspace/recordings/")
 RECORDINGS_DIR_IN = HOME_FOLDER / 'workspace' / 'recordings'
 portiloop_ID = socket.gethostname()
 
+DEFAULT_PIPELINE_KEY = "Sleep spindles"
+
 
 class ExperimentState:
     def __init__(self):
+        pipeline = PIPELINES[DEFAULT_PIPELINE_KEY]
+        self.processor_cls = pipeline["processor"]
+        self.detector_cls = pipeline["detector"]
+        self.stimulator_cls = pipeline["stimulator"]
+
         self.started = False
         self.time_started = datetime.now()
         self.q_msg = Queue()
-        self.processor_cls = FilterPipeline
-        self.detector_cls = SleepSpindleRealTimeDetector
-        self.stimulator_cls = SleepSpindleRealTimeStimulator
+        # self.processor_cls = FilterPipeline
+        # self.detector_cls = SleepSpindleRealTimeDetector
+        # self.stimulator_cls = SleepSpindleRealTimeStimulator
         self.run_dict = RUN_SETTINGS
         self.pause_value = Value('b', False)
         self._t_capture = None
@@ -284,11 +292,11 @@ with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
             lsl_checker = ui.checkbox('Stream LSL').bind_value_to(exp_state, 'lsl')
             save_checker = ui.checkbox('Save Recording Locally', value=True).bind_value_to(exp_state, 'save_local')
             stim_delay = ui.number(value=0, label='Stimulation Delay (in ms)').bind_value_to(exp_state, 'stim_delay')
-            select_stimulator = ui.select(['Spindle', 'Interval'], value='Spindle', on_change=disable_stim_toggle_callback, label="Stimulator").bind_value_to(exp_state, 'stimulator_type')
-            select_stimulator.classes('w-1/2')
+            select_pipeline = ui.select(['Spindle', 'Interval'], value='Spindle', on_change=disable_stim_toggle_callback, label="Stimulator").bind_value_to(exp_state, 'stimulator_type')
+            select_pipeline.classes('w-1/2')
             start_button.bind_enabled_to(lsl_checker)
             start_button.bind_enabled_to(save_checker)
-            start_button.bind_enabled_to(select_stimulator)
+            start_button.bind_enabled_to(select_pipeline)
             start_button.bind_enabled_to(stim_delay)
             start_button.bind_enabled_to(select_freq)
             start_button.bind_enabled_to(sleep_timeout)

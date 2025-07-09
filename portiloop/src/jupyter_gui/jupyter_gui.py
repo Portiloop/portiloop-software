@@ -748,6 +748,9 @@ class JupyterUI:
             }
             self.width_display = 5 * self.frequency  # Display 5 seconds of signal
 
+            while not self.q_msg.empty():
+                self.q_msg.get()
+
             self._t_capture = Process(target=start_capture,
                                       args=(processor_cls,
                                             detector_cls,

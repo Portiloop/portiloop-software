@@ -17,7 +17,9 @@ class CSVRecorder:
                  default_stimulation_value=0):
 
         if not (raw_signal or filtered_signal):
-            raise RuntimeError("At least raw_signal or filtered_signal need to be activated.")
+            err_str = "At least raw_signal or filtered_signal need to be activated."
+            print(err_str)
+            raise RuntimeError(err_str)
         self.raw_signal_buffer = [] if raw_signal else None
         self.filtered_signal_buffer = [] if filtered_signal else None
         self.detection_signal_buffer = [] if detection_signal else None
@@ -30,10 +32,18 @@ class CSVRecorder:
         # create/open CSV:
 
         self.filename = filename
-        self.header_written = Path(filename).exists()
+
+        print(f"INFO: Writing data to {self.filename}")
+
+        self.header_written = False
+        file_exists = Path(filename).exists()
+        if file_exists:
+            print(f"INFO: {self.filename} already exists. The writer will append new data.")
+            with open(self.filename, 'r') as f:
+                if f.readline():
+                    self.header_written = True
         self.file = open(self.filename, 'a')
         self.writer = csv.writer(self.file)
-        print(f"Saving file to {self.filename}")
 
         self.writing_buffer = []
         self.max_write = 1
@@ -132,7 +142,9 @@ class CSVRecorder:
             len_data = len(self.raw_signal_buffer)
             nb_channels = len(self.raw_signal_buffer[0])
             if self.filtered_signal_buffer is not None and len(self.filtered_signal_buffer) != len_data:
-                raise RuntimeError(f"raw and filtered buffer sizes mismatch: {len_data} != {len(self.filtered_signal_buffer)}")
+                err_str = f"raw and filtered buffer sizes mismatch: {len_data} != {len(self.filtered_signal_buffer)}"
+                print(err_str)
+                raise RuntimeError(err_str)
         else:
             len_data = len(self.filtered_signal_buffer)
             nb_channels = len(self.filtered_signal_buffer[0])
@@ -158,12 +170,22 @@ class CSVRecorder:
                 self.stimulation_signal_buffer = [self.default_stimulation_value] * diff + self.stimulation_signal_buffer
 
         if self.detection_activated_buffer is not None:
-            if len(self.detection_activated_buffer) != len_data:
-                raise RuntimeError(f"detection activated size mismatch: {len(self.detection_activated_buffer)} != {len_data}")
+            len_buf = len(self.detection_activated_buffer)
+            if len_buf == 0:
+                self.detection_activated_buffer = [0] * len_data
+            elif len_buf != len_data:
+                err_str = f"stimulation activated size mismatch: {len_buf} != {len_data}"
+                print(err_str)
+                raise RuntimeError(err_str)
 
         if self.stimulation_activated_buffer is not None:
-            if len(self.stimulation_activated_buffer) != len_data:
-                raise RuntimeError(f"stimulation activated size mismatch: {len(self.stimulation_activated_buffer)} != {len_data}")
+            len_buf = len(self.stimulation_activated_buffer)
+            if len_buf == 0:
+                self.stimulation_activated_buffer = [0] * len_data
+            elif len_buf != len_data:
+                err_str = f"stimulation activated size mismatch: {len_buf} != {len_data}"
+                print(err_str)
+                raise RuntimeError(err_str)
 
         # generate lines:
 
