@@ -71,7 +71,7 @@ step7.temp: step6.temp
 
 step8.temp: step7.temp
 	echo "Editing FSTAB"
-	echo "/dev/mmcblk2p1 /media/sd_card auto rw,user,exec,umask=000 0 2" | sudo tee -a /etc/fstab
+	echo "/dev/mmcblk2p1 /media/sd_card auto nofail,rw,user,exec,umask=000 0 2" | sudo tee -a /etc/fstab
 	touch step8.temp
 
 miniforge: step8.temp
@@ -158,7 +158,7 @@ vstep7.temp: vstep6.temp
 
 vstep8.temp: vstep7.temp
 	echo "Editing FSTAB"
-	echo "/dev/mmcblk2p1 /media/sd_card auto rw,user,exec,umask=000 0 2" | sudo tee -a /etc/fstab
+	echo "/dev/mmcblk2p1 /media/sd_card auto nofail,rw,user,exec,umask=000 0 2" | sudo tee -a /etc/fstab
 	touch vstep8.temp
 
 vanilla: vstep8.temp
