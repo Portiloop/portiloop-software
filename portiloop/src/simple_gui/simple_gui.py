@@ -12,7 +12,7 @@ from nicegui import ui
 
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.utils import DummyAlsaMixer
-from portiloop.src.core.constants import HOME_FOLDER
+from portiloop.src.core.constants import HOME_FOLDER, CSV_PATH, SD_CARD_DETECTED
 
 # from portiloop.src.custom.custom_processors import FilterPipeline
 # from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
@@ -21,19 +21,17 @@ from portiloop.src.core.constants import HOME_FOLDER
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_pipelines import PIPELINES
 
-RECORDINGS_DIR_SD = Path("/media/sd_card/workspace/recordings/")
-RECORDINGS_DIR_IN = HOME_FOLDER / 'workspace' / 'recordings'
 portiloop_ID = socket.gethostname()
-
-DEFAULT_PIPELINE_KEY = "Sleep spindles"
 
 
 class ExperimentState:
     def __init__(self):
-        pipeline = PIPELINES[DEFAULT_PIPELINE_KEY]
-        self.processor_cls = pipeline["processor"]
-        self.detector_cls = pipeline["detector"]
-        self.stimulator_cls = pipeline["stimulator"]
+        self.pipeline_keys = list(PIPELINES.keys())
+        self.pipeline_key = self.pipeline_keys[0]
+        self.pipeline = PIPELINES[self.pipeline_keys[0]]
+        # self.processor_cls = pipeline["processor"]
+        # self.detector_cls = pipeline["detector"]
+        # self.stimulator_cls = pipeline["stimulator"]
 
         self.started = False
         self.time_started = datetime.now()
@@ -42,15 +40,17 @@ class ExperimentState:
         # self.detector_cls = SleepSpindleRealTimeDetector
         # self.stimulator_cls = SleepSpindleRealTimeStimulator
         self.run_dict = RUN_SETTINGS
+        # enable all channels:
+        self.run_dict["channel_states"] = ["simple"] * self.run_dict["nb_channels"]
         self.pause_value = Value('b', False)
         self._t_capture = None
         self.stim_on = False
         self.exp_name = ""
         self.display_q = Queue()
+        self.sd_card = False
         self.check_sd_card()
         self.lsl = False
         self.save_local = True
-        self.stimulator_type = 'Spindle'
         self.display_rate = 0
         self.last_time_display = 0.0
         self.selected_channel = 'Channel 2'
@@ -69,7 +69,7 @@ class ExperimentState:
         self.exp_name = f"{portiloop_ID}_{time_str}_{stim_str}.csv"
         print(f"Starting recording {self.exp_name.split('.')[0]}")
 
-        print(f"STIMON = {self.stim_on}, STIMTYPE = {self.stimulator_type}")
+        print(f"STIMON = {self.stim_on}")
 
         self.run_dict['frequency'] = self.select_freq
 
@@ -99,14 +99,17 @@ class ExperimentState:
             self.run_dict['stimulate'] = True
         else:
             self.run_dict['stimulate'] = False
+        
+        if self.stim_delay != 0:
+            self.run_dict['stim_delay'] = int(self.stim_delay) / 1000
 
-        if self.stimulator_type == 'Spindle':
-            self.stimulator_cls = SleepSpindleRealTimeStimulator
-            if self.stim_delay != 0:
-                self.run_dict['stim_delay'] = int(self.stim_delay) / 1000
-        elif self.stimulator_type == 'Interval':
-            self.stimulator_cls = AlternatingStimulator
-            self.run_dict['detect'] = False
+        # if self.stimulator_type == 'Spindle':
+        #     self.stimulator_cls = SleepSpindleRealTimeStimulator
+        #     if self.stim_delay != 0:
+        #         self.run_dict['stim_delay'] = int(self.stim_delay) / 1000
+        # elif self.stimulator_type == 'Interval':
+        #     self.stimulator_cls = AlternatingStimulator
+        #     self.run_dict['detect'] = False
 
         if self.lsl:
             self.run_dict['lsl'] = True
@@ -118,17 +121,13 @@ class ExperimentState:
         else:
             self.run_dict['record'] = False
 
-        if self.sd_card:
-            workspace_dir = RECORDINGS_DIR_SD
-        else:
-            workspace_dir = RECORDINGS_DIR_IN
-
-        self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name)
+        workspace_dir = CSV_PATH
+        self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name.split('.')[0], self.exp_name)
 
         self._t_capture = Process(target=start_capture,
-                                  args=(self.processor_cls,
-                                        self.detector_cls,
-                                        self.stimulator_cls,
+                                  args=(self.pipeline["processor"],
+                                        self.pipeline["detector"],
+                                        self.pipeline["stimulator"],
                                         self.run_dict,
                                         self.q_msg,
                                         self.display_q,
@@ -148,10 +147,11 @@ class ExperimentState:
         self.stim_on = not self.stim_on
 
     def check_sd_card(self):
-        self.sd_card = os.path.exists(str(RECORDINGS_DIR_SD))
-        if self.sd_card:
+        if SD_CARD_DETECTED:
+            self.sd_card = True
             self.disk_str = f"Disk Usage: {psutil.disk_usage(os.path.abspath('/media/sd_card/')).percent}%"
         else:
+            self.sd_card = False
             self.disk_str = f"Disk Usage: {psutil.disk_usage(os.getcwd()).percent}%"
         
     def check_sleep_timeout(self):
@@ -171,7 +171,7 @@ def stop():
     start_button.enabled = True
 
 def test_sound():
-    stimulator = exp_state.stimulator_cls(RUN_SETTINGS)
+    stimulator = exp_state.pipeline["stimulator"](RUN_SETTINGS)
     stimulator.test_stimulus()
     del stimulator
 
@@ -194,19 +194,20 @@ def update_line_plot():
             else:
                 point = 0.0
             y.append(point)
-    except Exception:
-        print("AAAAAAAAAAAAAAAAAAH")
+    except Exception as e:
+        print(f"Caught exception: {e}")
 
     if len(x) > 0 and len(y) > 0:
         line_plot.push(x, [y])
 
 def disable_stim_toggle_callback(caller):
-    if caller.value == 'Interval':
-        stim_toggle.disable()
-        stim_toggle.value = 'Stim On'
-        exp_state.stim_on = True
-    else:
-        stim_toggle.enable()
+    stim_toggle.enable()
+    # if caller.value == 'Interval':
+    #     stim_toggle.disable()
+    #     stim_toggle.value = 'Stim On'
+    #     exp_state.stim_on = True
+    # else:
+    #     stim_toggle.enable()
 
 ui.label('Portiloop 🧠').classes('text-4xl font-mono')
 ui.label('Control Center').classes('text-2xl font-mono')
@@ -292,7 +293,7 @@ with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
             lsl_checker = ui.checkbox('Stream LSL').bind_value_to(exp_state, 'lsl')
             save_checker = ui.checkbox('Save Recording Locally', value=True).bind_value_to(exp_state, 'save_local')
             stim_delay = ui.number(value=0, label='Stimulation Delay (in ms)').bind_value_to(exp_state, 'stim_delay')
-            select_pipeline = ui.select(['Spindle', 'Interval'], value='Spindle', on_change=disable_stim_toggle_callback, label="Stimulator").bind_value_to(exp_state, 'stimulator_type')
+            select_pipeline = ui.select(exp_state.pipeline_keys, value=exp_state.pipeline_key, on_change=disable_stim_toggle_callback, label="Pipeline").bind_value_to(exp_state, 'pipeline_key')
             select_pipeline.classes('w-1/2')
             start_button.bind_enabled_to(lsl_checker)
             start_button.bind_enabled_to(save_checker)

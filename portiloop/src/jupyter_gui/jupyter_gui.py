@@ -29,7 +29,7 @@ class JupyterUI:
     def __init__(self):
 
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
-        self.filename = CSV_PATH / 'recording.csv'
+        self.filename = CSV_PATH / 'recording' / 'recording.csv'
         self.record_raw = True
         self.record_filtered = False
 
@@ -837,9 +837,9 @@ class JupyterUI:
         if val != '':
             if not val.endswith('.csv'):
                 val += '.csv'
-            self.filename = CSV_PATH / val
         else:
-            self.filename = CSV_PATH / 'recording.csv'
+            val = 'recording.csv'
+        self.filename = CSV_PATH / val.split('.')[0] / val
 
     def on_b_duration(self, value):
         val = value['new']

@@ -31,12 +31,14 @@ class CSVRecorder:
 
         # create/open CSV:
 
-        self.filename = filename
+        self.filename = Path(filename)
+        parent_dir = self.filename.parent
+        parent_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"INFO: Writing data to {self.filename}")
 
         self.header_written = False
-        file_exists = Path(filename).exists()
+        file_exists = self.filename.exists()
         if file_exists:
             print(f"INFO: {self.filename} already exists. The writer will append new data.")
             with open(self.filename, 'r') as f:
@@ -44,7 +46,6 @@ class CSVRecorder:
                     self.header_written = True
         self.file = open(self.filename, 'a')
         self.writer = csv.writer(self.file)
-
         self.writing_buffer = []
         self.max_write = 1
 
