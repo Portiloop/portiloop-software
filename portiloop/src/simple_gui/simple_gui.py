@@ -28,7 +28,6 @@ class ExperimentState:
     def __init__(self):
         self.pipeline_keys = list(PIPELINES.keys())
         self.pipeline_key = self.pipeline_keys[0]
-        self.pipeline = PIPELINES[self.pipeline_keys[0]]
         # self.processor_cls = pipeline["processor"]
         # self.detector_cls = pipeline["detector"]
         # self.stimulator_cls = pipeline["stimulator"]
@@ -125,9 +124,9 @@ class ExperimentState:
         self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name.split('.')[0], self.exp_name)
 
         self._t_capture = Process(target=start_capture,
-                                  args=(self.pipeline["processor"],
-                                        self.pipeline["detector"],
-                                        self.pipeline["stimulator"],
+                                  args=(PIPELINES[self.pipeline_key]["processor"],
+                                        PIPELINES[self.pipeline_key]["detector"],
+                                        PIPELINES[self.pipeline_key]["stimulator"],
                                         self.run_dict,
                                         self.q_msg,
                                         self.display_q,
@@ -171,7 +170,7 @@ def stop():
     start_button.enabled = True
 
 def test_sound():
-    stimulator = exp_state.pipeline["stimulator"](RUN_SETTINGS)
+    stimulator = PIPELINES[exp_state.pipeline_key]["stimulator"](RUN_SETTINGS)
     stimulator.test_stimulus()
     del stimulator
 
