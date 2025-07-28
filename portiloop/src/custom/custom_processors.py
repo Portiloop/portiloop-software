@@ -177,9 +177,15 @@ class SlowOscillationFilter(Filter):
         # Initialize filter states for each channel
         self.dc_states = [signal.lfilter_zi(self.dc_b, self.dc_a) for _ in range(self.nb_channels)]
         # self.bp_states = [np.zeros(len(self.bp_b) - 1) for _ in range(self.nb_channels)]
+        self.dc_estimate = np.zeros(self.nb_channels)
+        self.alpha = 0.01
 
         if verbose:
             print("SOOnlineFiltering initialized")
+
+    def apply_dc(self, x):
+        self.dc_estimate = (1 - self.alpha) * self.dc_estimate + self.alpha * x
+        return x - self.dc_estimate
 
 
     def filter(self, value):
@@ -188,16 +194,15 @@ class SlowOscillationFilter(Filter):
         """
 
         for i, x in enumerate(value):
-            # Apply notch filter
             x = self.apply_notch(x)
 
-            # Apply FIR bandpass filter
             x = self.apply_fir(x)
 
             # Remove DC offset
-            filtered, self.dc_states[i] = signal.lfilter(
-                 self.dc_b, self.dc_a, bandpassed, zi=self.dc_states[i]
-            )
+            x = self.apply_dc(x)
+
+            x = self.apply_standardization(x)
+
             value[i] = x
 
         return value
