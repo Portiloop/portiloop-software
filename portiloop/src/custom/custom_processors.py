@@ -187,8 +187,6 @@ class SlowOscillationFilter(Filter):
         """
         value: a numpy array of shape (data series, channels)
         """
-        if self.verbose:
-            print(f"SO Filtering shape {value.shape}")
 
         for i, x in enumerate(value):
             # Apply notch filter
