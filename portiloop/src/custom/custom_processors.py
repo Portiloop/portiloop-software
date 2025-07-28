@@ -33,7 +33,7 @@ class FIR:
         return filtered
 
 class Filter(Processor):
-    def __init__(self, config_dict, lsl_streamer, csv_recorder):
+    def __init__(self, config_dict, lsl_streamer, csv_recorder): 
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
         nb_channels = config_dict['nb_channels']
@@ -175,8 +175,7 @@ class SlowOscillationFilter(Filter):
         self.fir = FIR(self.nb_channels, self.fir_coef)
 
         # Initialize filter states for each channel
-        # self.dc_states = [signal.lfilter_zi(self.dc_b, self.dc_a) for _ in range(self.nb_channels)]
-        # self.notch_states = [signal.lfilter_zi(self.notch_b, self.notch_a) for _ in range(self.nb_channels)]
+        self.dc_states = [signal.lfilter_zi(self.dc_b, self.dc_a) for _ in range(self.nb_channels)]
         # self.bp_states = [np.zeros(len(self.bp_b) - 1) for _ in range(self.nb_channels)]
 
         if verbose:
@@ -190,15 +189,15 @@ class SlowOscillationFilter(Filter):
 
         for i, x in enumerate(value):
             # Apply notch filter
-            #x = self.apply_notch(x)
+            x = self.apply_notch(x)
 
             # Apply FIR bandpass filter
-            #x = self.apply_fir(x)
+            x = self.apply_fir(x)
 
             # Remove DC offset
-            # filtered, self.dc_states[i] = signal.lfilter(
-            #     self.dc_b, self.dc_a, bandpassed, zi=self.dc_states[i]
-            # )
+            filtered, self.dc_states[i] = signal.lfilter(
+                 self.dc_b, self.dc_a, bandpassed, zi=self.dc_states[i]
+            )
             value[i] = x
 
         return value
