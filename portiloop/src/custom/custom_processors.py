@@ -202,5 +202,4 @@ class SlowOscillationFilter(Filter):
             x = self.apply_standardization(x)
 
             value[i] = x
-
         return value
