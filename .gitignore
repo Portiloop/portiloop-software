@@ -131,3 +131,5 @@ venv.bak/
 dmypy.json
 
 config_files.txt
+
+main_test.py

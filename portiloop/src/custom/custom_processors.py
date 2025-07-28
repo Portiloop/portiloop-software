@@ -161,7 +161,7 @@ class SlowOscillationFilter(Filter):
     def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
-        verbose = true
+        verbose = True
         self.verbose = verbose
 
         # DC offset removal filter (high-pass filter)
@@ -187,8 +187,6 @@ class SlowOscillationFilter(Filter):
         """
         value: a numpy array of shape (data series, channels)
         """
-        if self.verbose:
-            print(f"SO Filtering shape {value.shape}")
 
         for i, x in enumerate(value):
             # Apply notch filter
