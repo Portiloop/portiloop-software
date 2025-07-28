@@ -175,8 +175,6 @@ class SlowOscillationFilter(Filter):
         self.fir = FIR(self.nb_channels, self.fir_coef)
 
         # Initialize filter states for each channel
-        self.dc_states = [signal.lfilter_zi(self.dc_b, self.dc_a) for _ in range(self.nb_channels)]
-        # self.bp_states = [np.zeros(len(self.bp_b) - 1) for _ in range(self.nb_channels)]
         self.dc_estimate = np.zeros(self.nb_channels)
         self.alpha = 0.01
 
