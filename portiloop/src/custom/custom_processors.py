@@ -161,7 +161,7 @@ class SlowOscillationFilter(Filter):
     def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
-        verbose = true
+        verbose = True
         self.verbose = verbose
 
         # DC offset removal filter (high-pass filter)
