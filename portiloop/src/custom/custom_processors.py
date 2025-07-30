@@ -41,7 +41,7 @@ class FilterPart(ABC):
 
     @staticmethod
     @abstractmethod
-    def get_name(self)->str:
+    def get_name()->str:
         raise NotImplementedError
 
     def is_used(self):
@@ -64,7 +64,7 @@ class FIR(FilterPart):
         return filtered
 
     @staticmethod
-    def get_name(self)->str:
+    def get_name()->str:
         return "FIR"
 
 class Notch(FilterPart):
@@ -94,7 +94,7 @@ class Notch(FilterPart):
         return x
 
     @staticmethod
-    def get_name(self):
+    def get_name():
         return "Notch"
 
 class Standardization(FilterPart):
@@ -120,7 +120,7 @@ class Standardization(FilterPart):
         return x
 
     @staticmethod
-    def get_name(self):
+    def get_name():
         return "Standardization"
 
 class DC(FilterPart):
