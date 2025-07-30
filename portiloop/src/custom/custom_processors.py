@@ -121,7 +121,7 @@ class Standardization(FilterPart):
 
     @staticmethod
     def get_name():
-        return "Standardization"
+        return "Standardizations"
 
 class DC(FilterPart):
     def __init__(self, dc_estimate, alpha):
