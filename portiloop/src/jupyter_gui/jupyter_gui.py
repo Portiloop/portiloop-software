@@ -60,7 +60,6 @@ class JupyterUI:
 
         # Experiment options
         self.filter = True
-        self.filter_args = [True, True, True]
         self.record = False
         self.detect = False
         self.stimulate = False
@@ -93,6 +92,7 @@ class JupyterUI:
         self.detector_cls = pipeline["detector"]
         self.stimulator_cls = pipeline["stimulator"]
 
+
         # Other
         self.filter_settings = {
             "power_line": self.power_line,
@@ -102,7 +102,6 @@ class JupyterUI:
             "polyak_mean": self.polyak_mean,
             "polyak_std": self.polyak_std,
             "epsilon": self.epsilon,
-            "filter_args": self.filter_args,
         }
         self.width_display = 5 * self.frequency
         self.signal_sample = os.listdir(SIGNAL_SAMPLES_FOLDER)[0]
@@ -296,26 +295,16 @@ class JupyterUI:
             disabled=True
         )
 
-        self.b_use_fir = widgets.Checkbox(
-            value=self.filter_args[0],
-            description='Use FIR',
-            disabled=False,
-            indent=False
-        )
-
-        self.b_use_notch = widgets.Checkbox(
-            value=self.filter_args[1],
-            description='Use notch',
-            disabled=False,
-            indent=False
-        )
-
-        self.b_use_std = widgets.Checkbox(
-            value=self.filter_args[2],
-            description='Use standardization',
-            disabled=False,
-            indent=False
-        )
+        self.b_filter_parts:list[widgets.Checkbox] = []
+        for filter_part in self.processor_cls.get_filter_parts():
+            self.b_filter_parts.append(
+                widgets.Checkbox(
+                    value=filter_part.is_used(),
+                    description=filter_part.get_name(),
+                    disabled=False,
+                    indent=False
+                )
+            )
 
         self.b_accordion_filter = widgets.Accordion(
             children=[
@@ -326,11 +315,7 @@ class JupyterUI:
                     self.b_polyak_mean,
                     self.b_polyak_std,
                     self.b_epsilon,
-                    widgets.HBox([
-                        self.b_use_fir,
-                        self.b_use_notch,
-                        self.b_use_std
-                    ])
+                    widgets.HBox(self.b_filter_parts)
                 ])
             ])
 
@@ -553,9 +538,8 @@ class JupyterUI:
         self.b_threshold.observe(self.on_b_threshold, 'value')
         self.b_duration.observe(self.on_b_duration, 'value')
         self.b_filter.observe(self.on_b_filter, 'value')
-        self.b_use_fir.observe(self.on_b_use_fir, 'value')
-        self.b_use_notch.observe(self.on_b_use_notch, 'value')
-        self.b_use_std.observe(self.on_b_use_std, 'value')
+        for i, b_filter_part in enumerate(self.b_filter_parts):
+            b_filter_part.observe(self.processor_cls.get_filter_parts()[i].toggle(), 'value')
         self.b_detect.observe(self.on_b_detect, 'value')
         self.b_stimulate.observe(self.on_b_stimulate, 'value')
         self.b_record.observe(self.on_b_record, 'value')
@@ -639,9 +623,8 @@ class JupyterUI:
         self.b_polyak_mean.disabled = False
         self.b_polyak_std.disabled = False
         self.b_epsilon.disabled = False
-        self.b_use_fir.disabled = False
-        self.b_use_notch.disabled = False
-        self.b_use_std.disabled = False
+        for b_filter_part in self.b_filter_parts:
+            b_filter_part.disabled = False
         self.b_custom_fir.disabled = False
         self.b_custom_fir_order.disabled = not self.custom_fir
         self.b_custom_fir_cutoff.disabled = not self.custom_fir
@@ -683,9 +666,8 @@ class JupyterUI:
         self.b_polyak_mean.disabled = True
         self.b_polyak_std.disabled = True
         self.b_epsilon.disabled = True
-        self.b_use_fir.disabled = True
-        self.b_use_notch.disabled = True
-        self.b_use_std.disabled = True
+        for b_filter_part in self.b_filter_parts:
+            b_filter_part.disabled = True
         self.b_custom_fir.disabled = True
         self.b_custom_fir_order.disabled = True
         self.b_custom_fir_cutoff.disabled = True
@@ -703,6 +685,19 @@ class JupyterUI:
         self.processor_cls = pipeline["processor"]
         self.detector_cls = pipeline["detector"]
         self.stimulator_cls = pipeline["stimulator"]
+        self.b_filter_parts = []
+        for filter_part in self.processor_cls.get_filter_parts():
+            self.b_filter_parts.append(
+                widgets.Checkbox(
+                    value=filter_part.is_used(),
+                    description=filter_part.get_name(),
+                    disabled=False,
+                    indent=False
+                )
+            )
+        for i, b_filter_part in enumerate(self.b_filter_parts):
+            b_filter_part.observe(self.processor_cls.get_filter_parts()[i].toggle(), 'value')
+
 
     def on_b_sound_detect(self, value):
         self.detection_sound = value['new']
@@ -744,7 +739,6 @@ class JupyterUI:
                 "polyak_mean": self.polyak_mean,
                 "polyak_std": self.polyak_std,
                 "epsilon": self.epsilon,
-                "filter_args": self.filter_args,
             }
             self.width_display = 5 * self.frequency  # Display 5 seconds of signal
 
@@ -885,18 +879,6 @@ class JupyterUI:
         val = value['new']
         self.filter = val
         self.enable_buttons()
-
-    def on_b_use_fir(self, value):
-        val = value['new']
-        self.filter_args[0] = val
-
-    def on_b_use_notch(self, value):
-        val = value['new']
-        self.filter_args[1] = val
-
-    def on_b_use_std(self, value):
-        val = value['new']
-        self.filter_args[2] = val
 
     def on_b_vref(self, value):
         val = value['new']
