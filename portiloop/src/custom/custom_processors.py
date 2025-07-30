@@ -143,8 +143,8 @@ class DC(FilterPart):
 class Filter(Processor):
     @property
     @abstractmethod
-    def FILTER_PARTS_CLASS(cls):
-        """This abstract property ensures subclasses define NUMBER_OF_FILTER_PARTS."""
+    def FILTER_PARTS_CLASS(self):
+        """This abstract property ensures subclasses define FILTER_PART_CLASS."""
         pass
 
     def __init__(self, config_dict, lsl_streamer, csv_recorder): 
