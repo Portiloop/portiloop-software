@@ -121,7 +121,7 @@ class Standardization(FilterPart):
 
     @staticmethod
     def get_name():
-        return "Standardizations"
+        return "Standardization"
 
 class DC(FilterPart):
     def __init__(self, dc_estimate, alpha):
@@ -156,6 +156,8 @@ class Filter(Processor):
         alpha_std = config_dict['filter_settings']['polyak_std']
         epsilon = config_dict['filter_settings']['epsilon']
         filter_args = config_dict['filter_settings']['filter_args']
+
+        print(filter_args)
 
         self.nb_channels = nb_channels
         self.sampling_rate = sampling_rate
@@ -223,9 +225,9 @@ class FilterPipeline(Filter):
         fir = FIR(self.nb_channels, self.fir_coef)
         notch = Notch(self.power_line_fq, self.nb_channels)
         std = Standardization(self.nb_channels, self.ALPHA_AVG, self.ALPHA_STD, self.EPSILON)
-        self.filter_parts.append(fir)
-        self.filter_parts.append(notch)
-        self.filter_parts.append(std)
+        self.add_filter_part(fir)
+        self.add_filter_part(notch)
+        self.add_filter_part(std)
 
 
 class SlowOscillationFilter(Filter):
@@ -255,9 +257,9 @@ class SlowOscillationFilter(Filter):
         notch = Notch(self.power_line_fq, self.nb_channels)
         dc = DC(self.dc_estimate, self.alpha)
 
-        self.filter_parts.append(fir)
-        self.filter_parts.append(notch)
-        self.filter_parts.append(dc)
+        self.add_filter_part(fir)
+        self.add_filter_part(notch)
+        self.add_filter_part(dc)
 
         if verbose:
             print("SOOnlineFiltering initialized")
