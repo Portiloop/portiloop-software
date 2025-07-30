@@ -25,18 +25,26 @@ class FilterPart(ABC):
         self.use_part = True
 
     def enable(self):
+        print("Enabled " + self.get_name())
         self.use_part = True
 
     def disable(self):
+        print("Disabled " + self.get_name())
         self.use_part = False
+
+    def toggle(self):
+        self.use_part = not self.use_part
 
     @abstractmethod
     def filter(self, x):
         raise NotImplementedError
 
     @abstractmethod
-    def getName(self)->str:
+    def get_name(self)->str:
         raise NotImplementedError
+
+    def is_used(self):
+        return self.use_part
 
 class FIR(FilterPart):
     def __init__(self, nb_channels, coefficients, buffer=None):
@@ -54,7 +62,7 @@ class FIR(FilterPart):
         filtered = np.sum(self.buffer * self.coefficients, axis=0)
         return filtered
 
-    def getName(self)->str:
+    def get_name(self)->str:
         return "FIR"
 
 class Notch(FilterPart):
@@ -83,7 +91,7 @@ class Notch(FilterPart):
         self.dfs[0] = denAccum
         return x
 
-    def getName(self):
+    def get_name(self):
         return "Notch"
 
 class Standardization(FilterPart):
@@ -108,7 +116,7 @@ class Standardization(FilterPart):
             self.moving_average = x
         return x
 
-    def getName(self):
+    def get_name(self):
         return "Standardization"
 
 class DC(FilterPart):
@@ -123,7 +131,7 @@ class DC(FilterPart):
         self.dc_estimate = (1 - self.alpha) * self.dc_estimate + self.alpha * x
         return x - self.dc_estimate
 
-    def getName(self):
+    def get_name(self):
         return "DC"
 
 ##Filters
@@ -198,6 +206,9 @@ class Filter(Processor):
                 x = part.filter(x)
             value[i] = x
         return value
+
+    def get_filter_parts(self):
+        return self.filter_parts
 
 class FilterPipeline(Filter):
     def __init__(self, config_dict, lsl_streamer, csv_recorder):
