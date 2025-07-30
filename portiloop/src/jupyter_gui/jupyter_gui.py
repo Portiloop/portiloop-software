@@ -480,31 +480,38 @@ class JupyterUI:
         # Get all the metadata from this recording:
 
     def get_config_dict(self):
-        input_dict = RUN_SETTINGS
-        # input_dict = vars(self)
+        input_dict = RUN_SETTINGS.copy()
+
+        # Copy only non-widget attributes
         for k, v in vars(self).items():
+            if isinstance(v, widgets.Widget):
+                continue
             input_dict[k] = v
+
         basic_types = (int, float, bool, str, list, dict, tuple, set)
         output_dict = {}
-        for key, value in vars(self).items():
-            if isinstance(value, widgets.Widget):
-                continue  # Skip all ipywidgets
+
+        for key, value in input_dict.items():
+            # Skip known widget keys or unserializable types
+            if "button" in key or "_b" in key:
+                continue
             if isinstance(value, basic_types) or value is None:
                 output_dict[key] = value
 
         output_dict['filename'] = str(self.filename)
 
-        # Make sure we don't have the filter settings in duplicates
-        for key, value in output_dict['filter_settings'].items():
-            if key in output_dict:
-                output_dict.pop(key)
+        # Clean up duplicated filter settings
+        if 'filter_settings' in output_dict:
+            for key in output_dict['filter_settings']:
+                output_dict.pop(key, None)
 
-        # Sanitize invalid combinations:
-        if not output_dict['filter']:
+        # Sanitize invalid filter combinations
+        if not output_dict.get('filter', False):
             output_dict['record_filtered'] = False
             output_dict['record_raw'] = True
 
         return output_dict
+
 
     def on_b_channel_state(self, value, i):
         self.channel_states[i] = value['new']
