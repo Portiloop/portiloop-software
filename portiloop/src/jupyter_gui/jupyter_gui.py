@@ -92,7 +92,7 @@ class JupyterUI:
         self.detector_cls = pipeline["detector"]
         self.stimulator_cls = pipeline["stimulator"]
 
-        self.filter_args = [True for _ in range(self.processor_cls.NUMBER_OF_FILTER_PARTS)]
+        self.filter_args = [True for _ in range(self.processor_cls.FILTER_PARTS_CLASS)]
 
         # Other
         self.filter_settings = {
