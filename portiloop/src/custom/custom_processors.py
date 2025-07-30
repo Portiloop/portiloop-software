@@ -141,11 +141,7 @@ class DC(FilterPart):
 ##Filters
 
 class Filter(Processor):
-    @property
-    @abstractmethod
-    def FILTER_PARTS_CLASS(self):
-        """This abstract property ensures subclasses define FILTER_PART_CLASS."""
-        pass
+    FILTER_PARTS_CLASS = []
 
     def __init__(self, config_dict, lsl_streamer, csv_recorder): 
         super().__init__(config_dict, lsl_streamer, csv_recorder)
@@ -220,11 +216,7 @@ class Filter(Processor):
         return self.filter_parts
 
 class FilterPipeline(Filter):
-    _FILTER_PARTS_CLASS = [FIR,Notch,Standardization]
-
-    @property
-    def FILTER_PARTS_CLASS(self):
-        return self._FILTER_PARTS_CLASS
+    FILTER_PARTS_CLASS = [FIR,Notch,Standardization]
 
     def __init__(self, config_dict, lsl_streamer, csv_recorder):
         super().__init__(config_dict,lsl_streamer,csv_recorder)
@@ -237,11 +229,7 @@ class FilterPipeline(Filter):
 
 
 class SlowOscillationFilter(Filter):
-    _FILTER_PART_CLASS = [FIR,Notch,DC]
-
-    @property
-    def FILTER_PARTS_CLASS(self):
-        return self._FILTER_PART_CLASS
+    FILTER_PARTS_CLASS = [FIR,Notch,DC]
 
     def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
