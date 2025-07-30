@@ -118,6 +118,8 @@ class DC(FilterPart):
         self.alpha = alpha
 
     def filter(self, x):
+        if not self.use_part:
+            return x
         self.dc_estimate = (1 - self.alpha) * self.dc_estimate + self.alpha * x
         return x - self.dc_estimate
 
@@ -215,7 +217,7 @@ class SlowOscillationFilter(Filter):
         verbose = True
         self.verbose = verbose
 
-        # DC offset removal filter (high-pass filter)
+        # DC offset removlal filter (high-pass filter)
         self.dc_b, self.dc_a = signal.butter(1, 0.5 / (self.sampling_rate / 2), "high")
 
 
