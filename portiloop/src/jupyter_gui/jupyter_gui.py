@@ -486,10 +486,9 @@ class JupyterUI:
             input_dict[k] = v
         basic_types = (int, float, bool, str, list, dict, tuple, set)
         output_dict = {}
-        for key, value in input_dict.items():
-            # Remove all buttons and button lists from the metadata
-            if "button" in key or "_b" in key:
-                continue
+        for key, value in vars(self).items():
+            if isinstance(value, widgets.Widget):
+                continue  # Skip all ipywidgets
             if isinstance(value, basic_types) or value is None:
                 output_dict[key] = value
 
