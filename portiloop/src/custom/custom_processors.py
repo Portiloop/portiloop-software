@@ -143,7 +143,7 @@ class DC(FilterPart):
 class Filter(Processor):
     @property
     @abstractmethod
-    def FILTER_PARTS_CLASS(cls)->list[type[FilterPart]]:
+    def FILTER_PARTS_CLASS(cls):
         """This abstract property ensures subclasses define NUMBER_OF_FILTER_PARTS."""
         pass
 
