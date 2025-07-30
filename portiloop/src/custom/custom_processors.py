@@ -140,6 +140,16 @@ class SlowOscillationFilter(Processor):
         nb_channels = config_dict["nb_channels"]
         sampling_rate = config_dict["frequency"]
         verbose = False
+        filter_args = config_dict['filter_settings']['filter_args']
+        if len(filter_args) > 0:
+            use_fir, use_notch, use_std = filter_args
+        else:
+            use_fir = True
+            use_notch = True
+            use_std = True
+        self.use_fir = use_fir
+        self.use_notch = use_notch
+        self.use_std = use_std
 
         if verbose:
             print("SOOnlineFiltering initialized")
@@ -174,24 +184,30 @@ class SlowOscillationFilter(Processor):
 
         filtered_value = np.zeros_like(value)
 
+
         for i in range(self.nb_channels):
-            channel_data = value[:, i]
+            x = value[:, i]
+
 
             # Apply notch filter
-            notched, self.notch_states[i] = signal.lfilter(
-                self.notch_b, self.notch_a, channel_data, zi=self.notch_states[i]
-            )
+            if self.use_notch:
+                x, self.notch_states[i] = signal.lfilter(
+                    self.notch_b, self.notch_a, x, zi=self.notch_states[i]
+                )
 
             # Apply FIR bandpass filter
-            bandpassed, self.bp_states[i] = signal.lfilter(
-                self.bp_b, 1, notched, zi=self.bp_states[i]
-            )
+            if self.use_fir:
+                x, self.bp_states[i] = signal.lfilter(
+                    self.bp_b, 1, x, zi=self.bp_states[i]
+                )
 
             # Remove DC offset
-            filtered, self.dc_states[i] = signal.lfilter(
-                self.dc_b, self.dc_a, bandpassed, zi=self.dc_states[i]
-            )
+            if self.use_std:
+                x, self.dc_states[i] = signal.lfilter(
+                    self.dc_b, self.dc_a, x, zi=self.dc_states[i]
+                )
+            
 
-            filtered_value[:, i] = filtered
+            filtered_value[:, i] = x
 
         return filtered_value
