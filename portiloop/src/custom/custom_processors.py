@@ -135,7 +135,7 @@ class DC(FilterPart):
         self.dc_estimate = (1 - self.alpha) * self.dc_estimate + self.alpha * x
         return x - self.dc_estimate
 
-    def get_name(self):
+    def get_name():
         return "DC"
 
 ##Filters
