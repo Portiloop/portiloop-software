@@ -228,7 +228,7 @@ class SlowOscillationFilter(Filter):
         verbose = True
         self.verbose = verbose
 
-        # DC offset removlal filter (high-pass filter)
+        # DC offset removal filter (high-pass filter)
         self.dc_b, self.dc_a = signal.butter(1, 0.5 / (self.sampling_rate / 2), "high")
 
 
