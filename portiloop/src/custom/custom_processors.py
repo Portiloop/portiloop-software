@@ -176,7 +176,7 @@ class SlowOscillationFilter(Filter):
 
         # Initialize filter states for each channel
         self.dc_estimate = np.zeros(self.nb_channels)
-        self.alpha = 0.01
+        self.alpha = 0.005
 
         if verbose:
             print("SOOnlineFiltering initialized")
