@@ -158,7 +158,6 @@ class Filter(Processor):
         epsilon = config_dict['filter_settings']['epsilon']
         filter_args = config_dict['filter_settings']['filter_args']
 
-        print(filter_args)
 
         self.nb_channels = nb_channels
         self.sampling_rate = sampling_rate
@@ -198,21 +197,17 @@ class Filter(Processor):
                 0.001623780150148094927192721215192250384]
         self.filter_parts:list[FilterPart] = []
 
-        print("finished init of abstract class")
-
     def add_filter_part(self, filter_part:FilterPart):
         idx = len(self.filter_parts)
         assert idx <= len(self.filter_args), f"Too many filter parts. Expected {len(self.filter_args)}, received {idx}"
         if not self.filter_args[idx]:
             filter_part.disable()
         self.filter_parts.append(filter_part)
-        print("added filter part " + filter_part.get_name())
 
     def filter(self, value):
         """
         value: a numpy array of shape (data series, channels)
         """
-        print("filtering")
         for i, x in enumerate(value):
             for part in self.filter_parts:
                 x = part.filter(x)
@@ -233,10 +228,7 @@ class FilterPipeline(Filter):
         self.add_filter_part(fir)
         self.add_filter_part(notch)
         self.add_filter_part(std)
-        print("finished init of class")
 
-    def filter(self, value):
-        return super.filter(value)
 
 
 class SlowOscillationFilter(Filter):
