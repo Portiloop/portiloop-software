@@ -92,6 +92,7 @@ class JupyterUI:
         self.detector_cls = pipeline["detector"]
         self.stimulator_cls = pipeline["stimulator"]
 
+        self.filter_args = [True for _ in range(self.processor_cls.NUMBER_OF_FILTER_PARTS)]
 
         # Other
         self.filter_settings = {
@@ -102,6 +103,7 @@ class JupyterUI:
             "polyak_mean": self.polyak_mean,
             "polyak_std": self.polyak_std,
             "epsilon": self.epsilon,
+            "filter_args": self.filter_args,
         }
         self.width_display = 5 * self.frequency
         self.signal_sample = os.listdir(SIGNAL_SAMPLES_FOLDER)[0]
@@ -295,16 +297,7 @@ class JupyterUI:
             disabled=True
         )
 
-        self.b_filter_parts:list[widgets.Checkbox] = []
-        for filter_part in self.processor_cls.get_filter_parts():
-            self.b_filter_parts.append(
-                widgets.Checkbox(
-                    value=filter_part.is_used(),
-                    description=filter_part.get_name(),
-                    disabled=False,
-                    indent=False
-                )
-            )
+        self.set_b_filter_parts()
 
         self.b_accordion_filter = widgets.Accordion(
             children=[
@@ -538,8 +531,7 @@ class JupyterUI:
         self.b_threshold.observe(self.on_b_threshold, 'value')
         self.b_duration.observe(self.on_b_duration, 'value')
         self.b_filter.observe(self.on_b_filter, 'value')
-        for i, b_filter_part in enumerate(self.b_filter_parts):
-            b_filter_part.observe(self.processor_cls.get_filter_parts()[i].toggle(), 'value')
+        self.set_b_filter_parts_observe()
         self.b_detect.observe(self.on_b_detect, 'value')
         self.b_stimulate.observe(self.on_b_stimulate, 'value')
         self.b_record.observe(self.on_b_record, 'value')
@@ -685,19 +677,29 @@ class JupyterUI:
         self.processor_cls = pipeline["processor"]
         self.detector_cls = pipeline["detector"]
         self.stimulator_cls = pipeline["stimulator"]
-        self.b_filter_parts = []
-        for filter_part in self.processor_cls.get_filter_parts():
+        self.set_filter_args()
+        self.set_b_filter_parts()
+        self.set_b_filter_parts_observe()
+
+    def set_filter_args(self):
+        self.filter_args = [True for _ in range(len(self.processor_cls.FILTER_PARTS_CLASS))]
+        self.filter_settings["filter_args"] = self.filter_args
+
+    def set_b_filter_parts_observe(self):
+        for i, b_filter_part in enumerate(self.b_filter_parts):
+            b_filter_part.observe(self.on_b_filter_part_toggle(i), 'value')
+
+    def set_b_filter_parts(self):
+        self.b_filter_parts:list[widgets.Checkbox] = []
+        for i, filter_part in enumerate(self.processor_cls.FILTER_PARTS_CLASS):
             self.b_filter_parts.append(
                 widgets.Checkbox(
-                    value=filter_part.is_used(),
+                    value=self.filter_settings["filter_args"][i],
                     description=filter_part.get_name(),
                     disabled=False,
                     indent=False
                 )
             )
-        for i, b_filter_part in enumerate(self.b_filter_parts):
-            b_filter_part.observe(self.processor_cls.get_filter_parts()[i].toggle(), 'value')
-
 
     def on_b_sound_detect(self, value):
         self.detection_sound = value['new']
@@ -714,6 +716,12 @@ class JupyterUI:
 
     def on_b_spindle_mode(self, value):
         self.spindle_detection_mode = value['new']
+
+    def on_b_filter_part_toggle(self, idx):
+        def handler(value):
+            self.filter_args[idx] = value['new']
+            self.filter_settings["filter_args"] = self.filter_args
+        return handler
 
     def on_b_capture(self, value):
         val = value['new']

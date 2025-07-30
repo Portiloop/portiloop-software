@@ -39,6 +39,7 @@ class FilterPart(ABC):
     def filter(self, x):
         raise NotImplementedError
 
+    @staticmethod
     @abstractmethod
     def get_name(self)->str:
         raise NotImplementedError
@@ -62,6 +63,7 @@ class FIR(FilterPart):
         filtered = np.sum(self.buffer * self.coefficients, axis=0)
         return filtered
 
+    @staticmethod
     def get_name(self)->str:
         return "FIR"
 
@@ -91,6 +93,7 @@ class Notch(FilterPart):
         self.dfs[0] = denAccum
         return x
 
+    @staticmethod
     def get_name(self):
         return "Notch"
 
@@ -116,6 +119,7 @@ class Standardization(FilterPart):
             self.moving_average = x
         return x
 
+    @staticmethod
     def get_name(self):
         return "Standardization"
 
@@ -137,6 +141,12 @@ class DC(FilterPart):
 ##Filters
 
 class Filter(Processor):
+    @property
+    @abstractmethod
+    def FILTER_PARTS_CLASS(cls)->list[type[FilterPart]]:
+        """This abstract property ensures subclasses define NUMBER_OF_FILTER_PARTS."""
+        pass
+
     def __init__(self, config_dict, lsl_streamer, csv_recorder): 
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
@@ -151,17 +161,9 @@ class Filter(Processor):
         epsilon = config_dict['filter_settings']['epsilon']
         filter_args = config_dict['filter_settings']['filter_args']
 
-        if len(filter_args) > 0:
-            use_fir, use_notch, use_std = filter_args
-        else:
-            use_fir = True,
-            use_notch = True,
-            use_std = True
-        self.use_fir = use_fir
-        self.use_notch = use_notch
-        self.use_std = use_std
         self.nb_channels = nb_channels
         self.sampling_rate = sampling_rate
+        self.filter_args = filter_args
         assert power_line_fq in [50, 60], f"The only supported power line frequencies are 50 Hz and 60 Hz. Received {power_line_fq}"
 
         self.power_line_fq = power_line_fq
@@ -197,6 +199,13 @@ class Filter(Processor):
                 0.001623780150148094927192721215192250384]
         self.filter_parts:list[FilterPart] = []
 
+    def add_filter_part(self, filter_part:FilterPart):
+        idx = len(self.filter_parts)
+        assert idx <= len(self.filter_args), f"Too many filter parts. Expected {len(self.filter_args)}, received {idx}"
+        if not self.filter_args[idx]:
+            filter_part.disable()
+        self.filter_parts.append(filter_part)
+
     def filter(self, value):
         """
         value: a numpy array of shape (data series, channels)
@@ -211,6 +220,12 @@ class Filter(Processor):
         return self.filter_parts
 
 class FilterPipeline(Filter):
+    _FILTER_PARTS_CLASS = [FIR,Notch,Standardization]
+
+    @property
+    def FILTER_PARTS_CLASS(self):
+        return self._FILTER_PARTS_CLASS
+
     def __init__(self, config_dict, lsl_streamer, csv_recorder):
         super().__init__(config_dict,lsl_streamer,csv_recorder)
         fir = FIR(self.nb_channels, self.fir_coef)
@@ -222,6 +237,12 @@ class FilterPipeline(Filter):
 
 
 class SlowOscillationFilter(Filter):
+    _FILTER_PART_CLASS = [FIR,Notch,DC]
+
+    @property
+    def FILTER_PARTS_CLASS(self):
+        return self._FILTER_PART_CLASS
+
     def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
