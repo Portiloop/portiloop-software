@@ -308,7 +308,7 @@ class JupyterUI:
                     self.b_polyak_mean,
                     self.b_polyak_std,
                     self.b_epsilon,
-                    widgets.HBox(self.b_filter_parts)
+                    widgets.HBox(self._b_filter_parts)
                 ])
             ])
 
@@ -335,7 +335,7 @@ class JupyterUI:
             disabled=False
         )
 
-        self.b_filter = widgets.Checkbox(
+        self._b_filter = widgets.Checkbox(
             value=self.filter,
             description='Filter',
             disabled=False,
@@ -536,7 +536,7 @@ class JupyterUI:
         self.b_frequency.observe(self.on_b_frequency, 'value')
         self.b_threshold.observe(self.on_b_threshold, 'value')
         self.b_duration.observe(self.on_b_duration, 'value')
-        self.b_filter.observe(self.on_b_filter, 'value')
+        self._b_filter.observe(self.on_b_filter, 'value')
         self.set_b_filter_parts_observe()
         self.b_detect.observe(self.on_b_detect, 'value')
         self.b_stimulate.observe(self.on_b_stimulate, 'value')
@@ -578,7 +578,7 @@ class JupyterUI:
                               self.b_accordion_channels,
                               self.b_signal_input,
                               widgets.HBox([self.b_signal_sample, self.b_offline_speed]),
-                              self.b_filter,
+                              self._b_filter,
                               self.b_power_line,
                               self.b_accordion_filter,
                               self.b_detect,
@@ -600,7 +600,7 @@ class JupyterUI:
         self.b_frequency.disabled = False
         self.b_duration.disabled = False
         self.b_filename.disabled = False
-        self.b_filter.disabled = False
+        self._b_filter.disabled = False
         self.b_detect.disabled = False
         self.b_record.disabled = False
         self.b_record_raw.disabled = not self.record
@@ -621,7 +621,7 @@ class JupyterUI:
         self.b_polyak_mean.disabled = False
         self.b_polyak_std.disabled = False
         self.b_epsilon.disabled = False
-        for b_filter_part in self.b_filter_parts:
+        for b_filter_part in self._b_filter_parts:
             b_filter_part.disabled = False
         self.b_custom_fir.disabled = False
         self.b_custom_fir_order.disabled = not self.custom_fir
@@ -641,9 +641,9 @@ class JupyterUI:
         self.b_frequency.disabled = True
         self.b_duration.disabled = True
         self.b_filename.disabled = True
-        self.b_filter.disabled = True
+        self._b_filter.disabled = True
         self.b_stimulate.disabled = True
-        self.b_filter.disabled = True
+        self._b_filter.disabled = True
         self.b_detect.disabled = True
         self.b_record.disabled = True
         self.b_record_raw.disabled = True
@@ -664,7 +664,7 @@ class JupyterUI:
         self.b_polyak_mean.disabled = True
         self.b_polyak_std.disabled = True
         self.b_epsilon.disabled = True
-        for b_filter_part in self.b_filter_parts:
+        for b_filter_part in self._b_filter_parts:
             b_filter_part.disabled = True
         self.b_custom_fir.disabled = True
         self.b_custom_fir_order.disabled = True
@@ -694,7 +694,7 @@ class JupyterUI:
                 self.b_polyak_mean,
                 self.b_polyak_std,
                 self.b_epsilon,
-                widgets.HBox(self.b_filter_parts)  # update visible part
+                widgets.HBox(self._b_filter_parts)  # update visible part
             ])
         ]
 
@@ -703,13 +703,13 @@ class JupyterUI:
         self.filter_settings["filter_args"] = self.filter_args
 
     def set_b_filter_parts_observe(self):
-        for i, b_filter_part in enumerate(self.b_filter_parts):
+        for i, b_filter_part in enumerate(self._b_filter_parts):
             b_filter_part.observe(self.on_b_filter_part_toggle(i), 'value')
 
     def set_b_filter_parts(self):
-        self.b_filter_parts:list[widgets.Checkbox] = []
+        self._b_filter_parts:list[widgets.Checkbox] = []
         for i, filter_part in enumerate(self.processor_cls.FILTER_PARTS_CLASS):
-            self.b_filter_parts.append(
+            self._b_filter_parts.append(
                 widgets.Checkbox(
                     value=self.filter_settings["filter_args"][i],
                     description=filter_part.get_name(),
