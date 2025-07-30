@@ -157,8 +157,6 @@ class Filter(Processor):
         epsilon = config_dict['filter_settings']['epsilon']
         filter_args = config_dict['filter_settings']['filter_args']
 
-        print(filter_args)
-
         self.nb_channels = nb_channels
         self.sampling_rate = sampling_rate
         self.filter_args = filter_args
