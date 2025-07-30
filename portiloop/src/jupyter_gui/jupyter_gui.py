@@ -680,6 +680,17 @@ class JupyterUI:
         self.set_filter_args()
         self.set_b_filter_parts()
         self.set_b_filter_parts_observe()
+        self.b_accordion_filter.children = [
+            widgets.VBox([
+                self.b_custom_fir,
+                self.b_custom_fir_order,
+                self.b_custom_fir_cutoff,
+                self.b_polyak_mean,
+                self.b_polyak_std,
+                self.b_epsilon,
+                widgets.HBox(self.b_filter_parts)  # update visible part
+            ])
+        ]
 
     def set_filter_args(self):
         self.filter_args = [True for _ in range(len(self.processor_cls.FILTER_PARTS_CLASS))]
@@ -747,6 +758,7 @@ class JupyterUI:
                 "polyak_mean": self.polyak_mean,
                 "polyak_std": self.polyak_std,
                 "epsilon": self.epsilon,
+                "filter_args": self.filter_args,
             }
             self.width_display = 5 * self.frequency  # Display 5 seconds of signal
 
