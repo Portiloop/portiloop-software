@@ -15,6 +15,7 @@ import time
 import numpy as np
 from copy import deepcopy
 import socket
+from pathlib import Path
 
 from portiloop.src.core.hardware.leds import Color, LEDs
 from portiloop.src.core.hardware.config_hardware import mod_config, BACKEND_CONFIG
