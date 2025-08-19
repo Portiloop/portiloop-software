@@ -15,6 +15,7 @@ import time
 import numpy as np
 from copy import deepcopy
 import socket
+from pathlib import Path
 
 from portiloop.src.core.hardware.leds import Color, LEDs
 from portiloop.src.core.hardware.config_hardware import mod_config, BACKEND_CONFIG
@@ -212,6 +213,8 @@ def start_capture(
     metadata = config_dict
     # Split the original path into its components
     dirname, basename = os.path.split(config_dict['filename'])
+    # Create dir if it doesn't exist
+    Path(dirname).mkdir(parents=True, exist_ok=True)
     # Split the file name into its name and extension components
     name, _ = os.path.splitext(basename)
     # Define the new file name
