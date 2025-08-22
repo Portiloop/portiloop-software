@@ -61,10 +61,6 @@ _When the jupyter notebook is created:_
 
 You can open the notebook and simply execute the cell.
 
-The GUI now looks like this:
-
-![gui](figures/gui.png)
-
 ### Channels:
 
 The `Channels` pannel enables you to configure each electrode:
@@ -95,12 +91,6 @@ The `Filtering` section lets you customize the filtering pipeline from the GUI.
 
 - The `FIR filter` switch lets you select between the default low-pass FIR filter (used in the Portiloop [paper](https://arxiv.org/abs/2107.13473)), or customize this filter according to your needs (`FIR order` and `FIR cutoff`)
 - `Polyak mean`, `Polyak std` and `Epsilon` let you customize the online standardization pipeline, which also acts as a high-pass filter
-
-### JupyterUI
-
-The `JupyterUI` switch lets you start and stop the experiment at any point in time
-
-_Note: once the experiment is started, all widgets are deactivated until you stop the experiment._
 
 ## Installation (Portiloop V3):
 
@@ -141,3 +131,30 @@ Next time you turn the Coral board on, you should be able to ssh into it, using 
 
 That's it! Your Jupyter server should now be up and running, listening on IP address `192.168.4.1` and port `8080`, and automatically starting whenever the system boots up. You can now access it by typing `192.168.4.1:8080` in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arise, try with a different web browser.
 Similarly, the `Simple UI` can be accessed by typing `192.168.4.1:8081` in your browser. 
+
+### Developer guide
+
+The core Portiloop software is written in `portiloop.src.core`.
+It defines the three interfaces that developers of custom pipelines must implement:
+- `processing.py` defines the `Processor` interface, in charge of all signal processing.
+- `detection.py` defines the `Detector` interface, in charge of all detection algorithms/models.
+- `stimulation.py` defines the `Stimulator` interface, in charge of all response to the detector output.
+
+Developers of Portiloop pipelines must work entirely under the `portiloop.custom` package, where these interfaces are implemented for tasks such as Sleep Spindle or Sleep Slow Oscillations detection and stimulation.
+Please abide only to these interfaces and do not make additional assumptions, otherwise you will break the Portiloop GUIs, which rely on these interfaces.
+
+The `portiloop.custom.custom_pipelines` file defines the `PIPELINES` dictionary, where you can define you custom Portiloop pipeline: just add an entry following the template, i.e.:
+
+```python
+"Your_Pipeline_Name": {  # This name will appear in te Portiloop GUIs.
+    "processor": Your_Processor_Class,  # class, not instance.
+    "detector": Your_Detector_Class,  # class, not instance.
+    "stimulator": Your_Stimulator_Class,  # class, not instance.
+    "config_modifiers": {}  # This is a placeholder at the moment.
+},
+```
+
+The GUI will then detect your custom pipeline and propose it to the end user.
+
+:warning: Non-core developers must not modify the `portiloop.core` package, nor `jupyter_gui` and `simple_gui`.
+If you feel you need to do any of these things, please ask for assistance, as are you are probably doing something wrong.
