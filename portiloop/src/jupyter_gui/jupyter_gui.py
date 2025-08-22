@@ -241,7 +241,7 @@ class JupyterUI:
 
         self.b_custom_fir = widgets.ToggleButtons(
             options=['Default', 'Custom'],
-            description='FIR filter:',
+            description='Custom filter:',
             disabled=False,
             button_style='',  # 'success', 'info', 'warning', 'danger' or ''
             tooltips=['Use the default 30Hz low-pass FIR from the Portiloop paper',

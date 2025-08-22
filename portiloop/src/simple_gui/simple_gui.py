@@ -14,7 +14,7 @@ from portiloop.src.core.capture import start_capture
 from portiloop.src.core.utils import DummyAlsaMixer
 from portiloop.src.core.constants import HOME_FOLDER, CSV_PATH, SD_CARD_DETECTED
 
-# from portiloop.src.custom.custom_processors import FilterPipeline
+# from portiloop.src.custom.custom_processors import SpindleFilter
 # from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
 # from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator, AlternatingStimulator
 
@@ -35,7 +35,7 @@ class ExperimentState:
         self.started = False
         self.time_started = datetime.now()
         self.q_msg = Queue()
-        # self.processor_cls = FilterPipeline
+        # self.processor_cls = SpindleFilter
         # self.detector_cls = SleepSpindleRealTimeDetector
         # self.stimulator_cls = SleepSpindleRealTimeStimulator
         self.run_dict = RUN_SETTINGS

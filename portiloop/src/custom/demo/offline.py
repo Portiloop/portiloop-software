@@ -1,7 +1,7 @@
 import numpy as np
 from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
 from portiloop.src.custom.custom_stimulators import UpStateDelayer
-from portiloop.src.custom.custom_processors import FilterPipeline
+from portiloop.src.custom.custom_processors import SpindleFilter
 from portiloop.src.custom.demo.utils import OfflineIsolatedSpindleRealTimeStimulator, OfflineSpindleTrainRealTimeStimulator, compute_output_table, sleep_stage, xdf2array, offline_detect, offline_filter, OfflineSleepSpindleRealTimeStimulator
 import gradio as gr
 
@@ -71,7 +71,7 @@ def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq, dete
     
     # Create the online filtering pipeline
     if online_filtering:
-        filter = FilterPipeline(nb_channels=1, sampling_rate=freq)
+        filter = SpindleFilter(nb_channels=1, sampling_rate=freq)
 
     # Create the detector
     if online_detection:

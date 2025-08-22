@@ -32,7 +32,77 @@ class FIR:
         return filtered
 
 
-class FilterPipeline(Processor):
+class Notch:
+    def __init__(self, power_line_fq, nb_channels):
+        if power_line_fq == 60:
+            self.notch_coeff1 = -0.12478308884588535
+            self.notch_coeff2 = 0.98729186796473023
+            self.notch_coeff3 = 0.99364593398236511
+            self.notch_coeff4 = -0.12478308884588535
+            self.notch_coeff5 = 0.99364593398236511
+        else:
+            self.notch_coeff1 = -0.61410695998423581
+            self.notch_coeff2 =  0.98729186796473023
+            self.notch_coeff3 = 0.99364593398236511
+            self.notch_coeff4 = -0.61410695998423581
+            self.notch_coeff5 = 0.99364593398236511
+        self.dfs = [np.zeros(nb_channels), np.zeros(nb_channels)]
+
+    def filter(self, x):
+        denAccum = (x - self.notch_coeff1 * self.dfs[0]) - self.notch_coeff2 * self.dfs[1]
+        x = (self.notch_coeff3 * denAccum + self.notch_coeff4 * self.dfs[0]) + self.notch_coeff5 * self.dfs[1]
+        self.dfs[1] = self.dfs[0]
+        self.dfs[0] = denAccum
+        return x
+
+
+class Standardization:
+    def __init__(self, nb_channels, alpha_avg, alpha_std, epsilon):
+        self.moving_average = None
+        self.moving_variance = np.zeros(nb_channels)
+        self.ALPHA_AVG = alpha_avg
+        self.ALPHA_STD = alpha_std
+        self.EPSILON = epsilon
+
+    def filter(self, x):
+        if self.moving_average is not None:
+            delta = x - self.moving_average
+            self.moving_average = self.moving_average + self.ALPHA_AVG * delta
+            self.moving_variance = (1 - self.ALPHA_STD) * (self.moving_variance + self.ALPHA_STD * delta ** 2)
+            moving_std = np.sqrt(self.moving_variance)
+            x = (x - self.moving_average) / (moving_std + self.EPSILON)
+        else:
+            self.moving_average = x
+        return x
+
+
+class DC:
+    def __init__(self, dc_estimate, alpha):
+        self.dc_estimate = dc_estimate
+        self.alpha = alpha
+
+    def filter(self, x):
+        self.dc_estimate = (1 - self.alpha) * self.dc_estimate + self.alpha * x
+        return x - self.dc_estimate
+
+
+class Filter(Processor):
+    def __init__(self, config_dict, lsl_streamer, csv_recorder): 
+        super().__init__(config_dict, lsl_streamer, csv_recorder)
+        self.filter_parts = []
+    
+    def filter(self, value):
+        """
+        value: a numpy array of shape (data series, channels)
+        """
+        for i, x in enumerate(value):
+            for part in self.filter_parts:
+                x = part.filter(x)
+            value[i] = x
+        return value
+
+
+class SpindleFilter(Filter):
     def __init__(self, config_dict, lsl_streamer, csv_recorder):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
@@ -58,30 +128,11 @@ class FilterPipeline(Processor):
         self.use_std = use_std
         self.nb_channels = nb_channels
         assert power_line_fq in [50, 60], f"The only supported power line frequencies are 50 Hz and 60 Hz. Received {power_line_fq}"
-        if power_line_fq == 60:
-            self.notch_coeff1 = -0.12478308884588535
-            self.notch_coeff2 = 0.98729186796473023
-            self.notch_coeff3 = 0.99364593398236511
-            self.notch_coeff4 = -0.12478308884588535
-            self.notch_coeff5 = 0.99364593398236511
-        else:
-            self.notch_coeff1 = -0.61410695998423581
-            self.notch_coeff2 =  0.98729186796473023
-            self.notch_coeff3 = 0.99364593398236511
-            self.notch_coeff4 = -0.61410695998423581
-            self.notch_coeff5 = 0.99364593398236511
-        self.dfs = [np.zeros(self.nb_channels), np.zeros(self.nb_channels)]
-
-        self.moving_average = None
-        self.moving_variance = np.zeros(self.nb_channels)
-        self.ALPHA_AVG = alpha_avg
-        self.ALPHA_STD = alpha_std
-        self.EPSILON = epsilon
 
         if use_custom_fir:
-            self.fir_coef = firwin(numtaps=custom_fir_order+1, cutoff=custom_fir_cutoff, fs=sampling_rate)
+            fir_coef = firwin(numtaps=custom_fir_order+1, cutoff=custom_fir_cutoff, fs=sampling_rate)
         else:
-            self.fir_coef = [
+            fir_coef = [
                 0.001623780150148094927192721215192250384,
                 0.014988684599373741992978104065059596905,
                 0.021287595318265635502275046064823982306,
@@ -103,111 +154,45 @@ class FilterPipeline(Processor):
                 0.021287595318265635502275046064823982306,
                 0.014988684599373741992978104065059596905,
                 0.001623780150148094927192721215192250384]
-        self.fir = FIR(self.nb_channels, self.fir_coef)
 
-    def filter(self, value):
-        """
-        value: a numpy array of shape (data series, channels)
-        """
-        for i, x in enumerate(value):  # loop over the data series
-            # FIR:
-            if self.use_fir:
-                x = self.fir.filter(x)
-            # notch:
-            if self.use_notch:
-                denAccum = (x - self.notch_coeff1 * self.dfs[0]) - self.notch_coeff2 * self.dfs[1]
-                x = (self.notch_coeff3 * denAccum + self.notch_coeff4 * self.dfs[0]) + self.notch_coeff5 * self.dfs[1]
-                self.dfs[1] = self.dfs[0]
-                self.dfs[0] = denAccum
-            # standardization:
-            if self.use_std:
-                if self.moving_average is not None:
-                    delta = x - self.moving_average
-                    self.moving_average = self.moving_average + self.ALPHA_AVG * delta
-                    self.moving_variance = (1 - self.ALPHA_STD) * (self.moving_variance + self.ALPHA_STD * delta**2)
-                    moving_std = np.sqrt(self.moving_variance)
-                    x = (x - self.moving_average) / (moving_std + self.EPSILON)
-                else:
-                    self.moving_average = x
-            value[i] = x
-        return value
+        if self.use_fir:
+            self.filter_parts.append(FIR(nb_channels, fir_coef))
+        if self.use_notch:
+            self.filter_parts.append(Notch(power_line_fq, nb_channels))
+        if self.use_std:
+            self.filter_parts.append(Standardization(nb_channels, alpha_avg, alpha_std, epsilon))
 
 
-class SlowOscillationFilter(Processor):
+class SlowOscillationFilter(Filter):
     def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
-        nb_channels = config_dict["nb_channels"]
-        sampling_rate = config_dict["frequency"]
-        verbose = False
-        filter_args = config_dict['filter_settings']['filter_args']
-        if len(filter_args) > 0:
-            use_fir, use_notch, use_std = filter_args
-        else:
-            use_fir = True
-            use_notch = True
-            use_std = True
-        self.use_fir = use_fir
-        self.use_notch = use_notch
-        self.use_std = use_std
+        nb_channels = config_dict['nb_channels']
+        sampling_rate = config_dict['frequency']
+        power_line_fq = config_dict['filter_settings']['power_line']
+        use_custom_fir = config_dict['filter_settings']['custom_fir']
+        custom_fir_order = config_dict['filter_settings']['custom_fir_order']
+        custom_fir_cutoff = config_dict['filter_settings']['custom_fir_cutoff']
 
-        if verbose:
-            print("SOOnlineFiltering initialized")
-        self.fs = sampling_rate
-        self.nb_channels = nb_channels
-        self.verbose = verbose
+        assert power_line_fq in [50, 60], f"The only supported power line frequencies are 50 Hz and 60 Hz. Received {power_line_fq}"
 
         # DC offset removal filter (high-pass filter)
-        self.dc_b, self.dc_a = signal.butter(1, 0.5 / (self.fs / 2), "high")
-
-        # 60 Hz notch filter
-        f0 = 60.0  # Notch frequency
-        Q = 100.0  # Quality factor
-        self.notch_b, self.notch_a = signal.iirnotch(f0, Q, self.fs)
+        self.dc_b, self.dc_a = signal.butter(1, 0.5 / (sampling_rate / 2), "high")
 
         # FIR Bandpass filter (0.5 - 30 Hz)
-        low = 0.5
-        high = 30.0
-        # TODO Change to use FIR class
-        self.bp_b = signal.firwin(20, [low, high], pass_zero=False, window="hamming", fs=self.fs)
+        if use_custom_fir:
+            fir_coef = firwin(numtaps=custom_fir_order+1, cutoff=custom_fir_cutoff, fs=sampling_rate)
+        else:
+            low = 0.5
+            high = 30.0
+            fir_coef = signal.firwin(20, [low, high], pass_zero=False, window="hamming", fs=sampling_rate)
+
         # Initialize filter states for each channel
-        self.dc_states = [signal.lfilter_zi(self.dc_b, self.dc_a) for _ in range(self.nb_channels)]
-        self.notch_states = [signal.lfilter_zi(self.notch_b, self.notch_a) for _ in range(self.nb_channels)]
-        self.bp_states = [np.zeros(len(self.bp_b) - 1) for _ in range(self.nb_channels)]
+        dc_estimate = np.zeros(nb_channels)
+        alpha = 0.005
 
-    def filter(self, value):
-        """
-        value: a numpy array of shape (data series, channels)
-        """
-        if self.verbose:
-            print(f"SO Filtering shape {value.shape}")
+        fir = FIR(nb_channels, fir_coef)
+        notch = Notch(power_line_fq, nb_channels)
+        dc = DC(dc_estimate, alpha)
 
-        filtered_value = np.zeros_like(value)
-
-
-        for i in range(self.nb_channels):
-            x = value[:, i]
-
-
-            # Apply notch filter
-            if self.use_notch:
-                x, self.notch_states[i] = signal.lfilter(
-                    self.notch_b, self.notch_a, x, zi=self.notch_states[i]
-                )
-
-            # Apply FIR bandpass filter
-            if self.use_fir:
-                x, self.bp_states[i] = signal.lfilter(
-                    self.bp_b, 1, x, zi=self.bp_states[i]
-                )
-
-            # Remove DC offset
-            if self.use_std:
-                x, self.dc_states[i] = signal.lfilter(
-                    self.dc_b, self.dc_a, x, zi=self.dc_states[i]
-                )
-            
-
-            filtered_value[:, i] = x
-
-        return filtered_value
+        self.filter_parts = [fir, notch, dc]
