@@ -13,11 +13,12 @@ pinned: false
 
 This software works with the [Coral implementation](https://github.com/Portiloop/portiloop-hardware) of the `Portiloop` EEG closed-loop stimulation device.
 
-It enables controlling the `Portiloop` from a simple Graphical User Interface (GUI).
+It enables controlling the `Portiloop` from a Graphical User Interface (GUI).
 
 ## Quick links
-- [Installation on the Portiloop](#installation-portiloop-v2)
+- [Installation on the Portiloop](#installation-portiloop-v3)
 - [GUI usage](#usage)
+- [Developer guide](#developer-guide)
 
 ## Usage:
 
@@ -57,11 +58,7 @@ from portiloop.capture import JupyterUI
 cap = JupyterUI()
 ```
 
-_When the jupyter notebook is created:_
-
-You can open the notebook and simply execute the cell.
-
-### Channels:
+#### Channels:
 
 The `Channels` pannel enables you to configure each electrode:
 - `simple`: the electrode is used to measure signal
@@ -69,7 +66,7 @@ The `Channels` pannel enables you to configure each electrode:
 - `test`: the electrode is used to output a test signal
 - `temp`: the electrode is used to output a signal corresponding to the ADS temperature (conversion required)
 
-### General controls:
+#### General controls:
 
 - `Freq` is the desired sampling rate
 - `Time` is the maximum duration of the experiment (you can also stop the experiment manually)
@@ -85,16 +82,16 @@ The `Channels` pannel enables you to configure each electrode:
   - `Coral` sets the `ADS1299` sampling rate to twice your target sampling rate, and uses the Coral Real-Time clock to stick to your target sampling rate
   - `ADS` sets the `ADS1299` sampling rate to the closest compatible to your target sampling rate and uses the ADS interrupts
 
-### Custom Filtering
+#### Custom Filtering
 
 The `Filtering` section lets you customize the filtering pipeline from the GUI.
 
 - The `FIR filter` switch lets you select between the default low-pass FIR filter (used in the Portiloop [paper](https://arxiv.org/abs/2107.13473)), or customize this filter according to your needs (`FIR order` and `FIR cutoff`)
-- `Polyak mean`, `Polyak std` and `Epsilon` let you customize the online standardization pipeline, which also acts as a high-pass filter
+- `Polyak mean`, `Polyak std` and `Epsilon` let you customize the online standardization pipeline, which also acts as a high-pass filter (only available in the `Sleep Spindles` pipeline)
 
 ## Installation (Portiloop V3):
 
-You've just got your hands on the hardware for the Portiloop V3 (A Google Coral Mini and a Portiloop board). Here are the steps you need to follow to get started using the EEG capture, the Spindle detection software, and the TPU processing.
+You've just got your hands on the hardware for the Portiloop V3 (A Google Coral Dev Board Mini and a Portiloop board). Here are the steps you need to follow to get started using the EEG capture, the Spindle detection software, and the TPU processing.
 
 ### Flashing the Google Coral
 Find the instructions to update your Coral Dev Board Mini to the last OS version [here](https://coral.ai/docs/dev-board-mini/reflash/).
@@ -132,7 +129,7 @@ Next time you turn the Coral board on, you should be able to ssh into it, using 
 That's it! Your Jupyter server should now be up and running, listening on IP address `192.168.4.1` and port `8080`, and automatically starting whenever the system boots up. You can now access it by typing `192.168.4.1:8080` in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arise, try with a different web browser.
 Similarly, the `Simple UI` can be accessed by typing `192.168.4.1:8081` in your browser. 
 
-### Developer guide
+## Developer guide
 
 The core Portiloop software is written in `portiloop.src.core`.
 It defines the three interfaces that developers of custom pipelines must implement:
