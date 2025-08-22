@@ -11,6 +11,7 @@ from portiloop.src.core.constants import CSV_PATH, SIGNAL_SAMPLES_FOLDER
 
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_pipelines import PIPELINES
+from portiloop.src.custom.custom_processors import SpindleFilter
 
 from IPython.display import clear_output, display
 import ipywidgets as widgets
@@ -636,12 +637,12 @@ class JupyterUI:
         self.b_channel_detect.disabled = False
         self.b_spindle_freq.disabled = False
         self.b_spindle_mode.disabled = False
-        self.b_polyak_mean.disabled = False
-        self.b_polyak_std.disabled = False
-        self.b_epsilon.disabled = False
-        self.b_use_fir.disabled = False
-        self.b_use_notch.disabled = False
-        self.b_use_std.disabled = False
+        self.b_polyak_mean.disabled = not self.processor_cls == SpindleFilter
+        self.b_polyak_std.disabled = not self.processor_cls == SpindleFilter
+        self.b_epsilon.disabled = not self.processor_cls == SpindleFilter
+        self.b_use_fir.disabled = not self.processor_cls == SpindleFilter
+        self.b_use_notch.disabled = not self.processor_cls == SpindleFilter
+        self.b_use_std.disabled = not self.processor_cls == SpindleFilter
         self.b_custom_fir.disabled = False
         self.b_custom_fir_order.disabled = not self.custom_fir
         self.b_custom_fir_cutoff.disabled = not self.custom_fir
@@ -703,6 +704,7 @@ class JupyterUI:
         self.processor_cls = pipeline["processor"]
         self.detector_cls = pipeline["detector"]
         self.stimulator_cls = pipeline["stimulator"]
+        self.enable_buttons()
 
     def on_b_sound_detect(self, value):
         self.detection_sound = value['new']
