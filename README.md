@@ -68,8 +68,8 @@ If using an SD card to record your EEG signal in CSV format, plug the SD card to
 Your CSV will then be recorded in the SD card under the `workspace` folder.
 Otherwise, your CSV will be recorded in internal memory under `/home/mendel/workspace`
 
-_( :warning: Recording large CSV files in internal memory will quickly make your `Portiloop` unusable: the internal memory is quite small and recording CSVs in internal memory should not be done, except for quick testing.
-In case you inadvertently fill up you `Portiloop` internal memory, it will refuse to boot and you will have to reflash and reinstall the entire system)._
+_:warning: Recording large CSV files in internal memory will quickly make your `Portiloop` unusable: the internal memory is quite small and recording CSVs in internal memory should not be done, except for quick testing.
+In case you inadvertently fill up you `Portiloop` internal memory, it will refuse to boot and you will have to reflash and reinstall the entire system._
 
 ### Power up
 
