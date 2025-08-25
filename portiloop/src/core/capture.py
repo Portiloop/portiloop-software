@@ -209,20 +209,21 @@ def start_capture(
     # detection_signal_buffer = []
     stimulation_activated_buffer = []
 
-    # Get the metadata and save it to a file
-    metadata = config_dict
-    # Split the original path into its components
-    dirname, basename = os.path.split(config_dict['filename'])
-    # Create dir if it doesn't exist
-    Path(dirname).mkdir(parents=True, exist_ok=True)
-    # Split the file name into its name and extension components
-    name, _ = os.path.splitext(basename)
-    # Define the new file name
-    new_name = f"{name}_metadata.json"
-    # Join the components back together into the new file path
-    metadata_path = os.path.join(dirname, new_name)
-    with open(metadata_path, "w") as f:
-        json.dump(metadata, f, indent=4)
+    if config_dict['record']:
+        # Get the metadata and save it to a file
+        metadata = config_dict
+        # Split the original path into its components
+        dirname, basename = os.path.split(config_dict['filename'])
+        # Create dir if it doesn't exist
+        Path(dirname).mkdir(parents=True, exist_ok=True)
+        # Split the file name into its name and extension components
+        name, _ = os.path.splitext(basename)
+        # Define the new file name
+        new_name = f"{name}_metadata.json"
+        # Join the components back together into the new file path
+        metadata_path = os.path.join(dirname, new_name)
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=4)
  
     # Initialize the variable to keep track of whether we are in a detection state or not for the markers
     prev_pause = pause_value.value
