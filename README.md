@@ -13,81 +13,16 @@ pinned: false
 
 This software works with the [Coral implementation](https://github.com/Portiloop/portiloop-hardware) of the `Portiloop` EEG closed-loop stimulation device.
 
-It enables controlling the `Portiloop` from a simple Graphical User Interface (GUI).
+It enables controlling the `Portiloop` from a Graphical User Interface (GUI).
 
 ## Quick links
-- [Installation on the Portiloop](#installation-portiloop-v2)
+- [Installation on the Portiloop](#installation-portiloop-v3)
 - [GUI usage](#usage)
+- [Developer guide](#developer-guide)
 
-## Usage:
+## Installation (Portiloop V3):
 
-The `Portiloop` GUI is a web-based interface running as a `jupyter` server.
-
-- Connect to the `Portiloop` WiFi network.
-- Open your favorite web browser
-- Enter the following address: `192.168.0.1:9000`
-
-You should now be connected to the `jupyter` server.
-
-_If the jupyter notebook is not yet created:_
-- Hit `New` and select `Python 3`.
-
-This creates a `jupyter` notebook, in which you can simply paste and execute te following:
-
-```python
-from portiloop.capture import Capture
-
-cap = Capture()
-```
-
-_When the jupyter notebook is created:_
-
-You can open the notebook and simply execute the cell.
-
-The GUI now looks like this:
-
-![gui](figures/gui.png)
-
-### Channels:
-
-The `Channels` pannel enables you to configure each electrode:
-- `disabled`: the electrode is not used
-- `simple`: the electrode is simply used to measure signal (not recommended)
-- `with bias`: the electrode is used to measure signal and to compute a bias ("ground") signal
-- `bias out`: the electrode is used to output the bias ("ground") signal
-
-### General controls:
-
-- `Freq` is the desired sampling rate
-- `Time` is the maximum duration of the experiment (you can also stop the experiment manually)
-- `Recording` is the name of the `.edf` output file if you wish to record the signal locally
-- Tick `Filter` to enable the online filtering pipeline
-- Tick `Detect` to enable the online detection pipeline
-- Tick `Stimulate` to enable the online stimulation pipeline
-- Tick `Record EDF` to record the signal in the file designated in `Recording`
-- Tick `Stream LSL` to broadcast the signal on the local network via [LSL](https://labstreaminglayer.readthedocs.io/info/intro.html)
-- Tick `Display` to display the signal in the GUI
-- `Threshold` enables customizing the optional detection threshold from the GUI (e.g., for classifiers)
-- The `Clock` widget lets you select the sampling method:
-  - `Coral` sets the `ADS1299` sampling rate to twice your target sampling rate, and uses the Coral Real-Time clock to stick to your target sampling rate
-  - `ADS` sets the `ADS1299` sampling rate to the closest compatible to your target sampling rate and uses the ADS interrupts
-
-### Custom Filtering
-
-The `Filtering` section lets you customize the filtering pipeline from the GUI.
-
-- The `FIR filter` switch lets you select between the default low-pass FIR filter (used in the Portiloop [paper](https://arxiv.org/abs/2107.13473)), or customize this filter according to your needs (`FIR order` and `FIR cutoff`)
-- `Polyak mean`, `Polyak std` and `Epsilon` let you customize the online standardization pipeline, which also acts as a high-pass filter
-
-### Capture
-
-The `Capture` switch lets you start and stop the experiment at any point in time
-
-_Note: once the experiment is started, all widgets are deactivated until you stop the experiment._
-
-## Installation (Portiloop V2):
-
-You've just got your hands on the hardware for the Portiloop V2 (A Google Coral Mini and a PiEEG board). Here are the steps you need to follow to get started using the EEG capture, the Spindle detection software, and the TPU processing.
+You have just got your hands on the hardware for the Portiloop V3 (A Google Coral Dev Board Mini and a Portiloop board). Here are the steps you need to follow to get started using the EEG capture, the Spindle detection software, and the TPU processing.
 
 ### Flashing the Google Coral
 Find the instructions to update your Coral Dev Board Mini to the last OS version [here](https://coral.ai/docs/dev-board-mini/reflash/).
@@ -122,4 +57,128 @@ Next time you turn the Coral board on, you should be able to ssh into it, using 
   - Don't forget to reboot the device afterward
 - Note that `make` may fail at several points during installation. Whenever it does, just call `make` again.
 
-That's it! Your Jupyter server should now be up and running, listening on IP address 192.168.4.1 and port 8080, and automatically starting whenever the system boots up. You can now access it by typing 192.168.4.1:8080 in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arise, try with a different web browser.
+That's it! Your Jupyter server should now be up and running, listening on IP address `192.168.4.1` and port `8080`, and automatically starting whenever the system boots up. You can now access it by typing `192.168.4.1:8080` in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arise, try with a different web browser.
+Similarly, the `Simple UI` can be accessed by typing `192.168.4.1:8081` in your browser. 
+
+## Usage:
+
+### SD card
+
+If using an SD card to record your EEG signal in CSV format, plug the SD card to your `Portiloop` before powering the `Portiloop`.
+Your CSV will then be recorded in the SD card under the `workspace` folder.
+Otherwise, your CSV will be recorded in internal memory under `/home/mendel/workspace`
+
+_( :warning: Recording large CSV files in internal memory will quickly make your `Portiloop` unusable: the internal memory is quite small and recording CSVs in internal memory should not be done, except for quick testing.
+In case you inadvertently fill up you `Portiloop` internal memory, it will refuse to boot and you will have to reflash and reinstall the entire system)._
+
+### Power up
+
+To power the `Portiloop`, plug your USB-C battery to `USB-C Power` and press the `Power` button for 3 seconds.
+Then, wait for the light next to `USB-C Power` to turn green (the green color indicates that boot was successful).
+
+### Power down
+
+To power the `Portiloop` down, press the `Power` button for 3 second again and wait for a couple more seconds for the light close to `USB-C Power` to turn off.
+You can then unplug the `USB-C Power` cable.
+
+When everything goes smoothly, the light close to `USB-C Power` turns off.
+However, it may happen that this light refuses to turn off due to some internal issue.
+In that case, just wait for a couple more seconds before unplugging.
+
+_:warning: Failing to follow these instructions may brick your `Portiloop`, in which case you will have to reflash and reinstall the entire system._
+
+### Connect
+
+Connect your computer (or smartphone) to the WiFi access point of the `Portiloop` that you want to use.
+
+The `Portiloop` has two web-based Graphical User Interfaces that you can access via any web browser:
+- A user-friendly `Simple UI`
+  - _accessible via `192.168.4.1:8081`_
+- An advanced UI in the form of a `jupyter` notebook
+  - _accessible via `192.168.4.1:8080`_
+
+### Simple UI
+To access the `Simple UI`, open your favourite browser and enter the following address: `192.168.4.1:8081`.
+
+This UI is pretty self-explanatory.
+It has several options including:
+- Detecting patterns of interest in real-time (e.g., Sleep Spindles)
+- Performing closed-loop stimulation based on this detection
+- Recording raw EEG along with the above detections in a CSV file
+
+### Jupyter UI
+
+The `Portiloop` advanced UI is a web-based interface running as a `jupyter` server.
+To access this UI, open your favourite browser and enter the following address: `192.168.4.1:8080`.
+
+You should now be connected to the `jupyter` server.
+
+_If the jupyter notebook is not yet created:_
+- Hit `New` and select `Python 3`.
+
+This creates a `jupyter` notebook, in which you can simply paste and execute te following:
+
+```python
+from portiloop.capture import JupyterUI
+
+cap = JupyterUI()
+```
+
+#### Channels:
+
+The `Channels` pannel enables you to configure each electrode:
+- `simple`: the electrode is used to measure signal
+- `bias`: the electrode is used to output the measured bias ("ground") signal
+- `test`: the electrode is used to output a test signal
+- `temp`: the electrode is used to output a signal corresponding to the ADS temperature (conversion required)
+
+#### General controls:
+
+- `Freq` is the desired sampling rate
+- `Time` is the maximum duration of the experiment (you can also stop the experiment manually)
+- `Recording` is the name of the `.csv` output file if you wish to record the signal locally
+- Tick `Filter` to enable the online filtering pipeline
+- Tick `Detect` to enable the online detection pipeline
+- Tick `Stimulate` to enable the online stimulation pipeline
+- Tick `Record CSV` to record the signal in the file designated in `Recording`
+- Tick `Stream LSL` to broadcast the signal on the local network via [LSL](https://labstreaminglayer.readthedocs.io/info/intro.html)
+- Tick `Display` to display the signal in the GUI
+- `Threshold` enables customizing the optional detection threshold from the GUI (e.g., for classifiers)
+- The `Clock` widget lets you select the sampling method:
+  - `Coral` sets the `ADS1299` sampling rate to twice your target sampling rate, and uses the Coral Real-Time clock to stick to your target sampling rate
+  - `ADS` sets the `ADS1299` sampling rate to the closest compatible to your target sampling rate and uses the ADS interrupts
+
+#### Custom Filtering
+
+The `Filtering` section lets you customize the filtering pipeline from the GUI.
+
+- The `FIR filter` switch lets you select between the default low-pass FIR filter (used in the Portiloop [paper](https://arxiv.org/abs/2107.13473)), or customize this filter according to your needs (`FIR order` and `FIR cutoff`)
+- `Polyak mean`, `Polyak std` and `Epsilon` let you customize the online standardization pipeline, which also acts as a high-pass filter (only available in the `Sleep Spindles` pipeline)
+
+
+## Developer guide
+
+The core Portiloop software architecture is defined in `portiloop.src.core`.
+It defines the three interfaces that developers of custom pipelines must implement:
+- `processing.py` defines the `Processor` interface, in charge of all signal processing.
+- `detection.py` defines the `Detector` interface, in charge of all detection algorithms/models.
+- `stimulation.py` defines the `Stimulator` interface, in charge of all response to the detector output.
+
+Developers of Portiloop pipelines must work entirely under the `portiloop.custom` package, where these interfaces are implemented for tasks such as Sleep Spindle or Sleep Slow Oscillations detection and stimulation.
+Abide only to these interfaces and do not make additional assumptions, otherwise your custom pipeline will break the Portiloop GUIs, since they rely exclusively on these interfaces.
+
+The `portiloop.custom.custom_pipelines` module defines the `PIPELINES` dictionary, where you can define you custom Portiloop pipeline: just add an entry following the existing template, i.e.:
+
+```python
+"Your_Pipeline_Name": {  # This name will appear in te Portiloop GUIs.
+    "processor": Your_Processor_Class,  # class of your Processor implementation (not instance).
+    "detector": Your_Detector_Class,  # class of your Detector implementation (not instance).
+    "stimulator": Your_Stimulator_Class,  # class of your Stimulator implementation (not instance).
+    "config_modifiers": {}  # This is a placeholder at the moment.
+},
+```
+
+The GUIs will then automatically detect your custom pipeline.
+
+:warning: Non-core developers should not modify the `portiloop.core` package, nor the `jupyter_gui` and `simple_gui` packages.
+If you feel you need to do any of these things, please ask for assistance, as are you are probably doing something wrong.

@@ -1,9 +1,6 @@
-
 import numpy as np
 import pyxdf
-import os
-import matplotlib.pyplot as plt
-import pandas as pd
+
 
 STREAM_NAMES = {
     'filtered_data': 'Portiloop Filtered',
@@ -62,13 +59,6 @@ def read_xdf_file(xdf_file, channel):
     array = np.array(points)
 
     return array, columns
-
-
-def read_edf_file(edf_file):
-    """
-    Read a single edf file and return the data as a dictionary.
-    """
-    pass
 
 
 if __name__ == "__main__": 

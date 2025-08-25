@@ -1,4 +1,5 @@
 import io
+import os
 
 
 def is_coral():
@@ -11,3 +12,6 @@ def is_coral():
 
 
 ADS = is_coral()
+
+# This line is to start something which seems to be necessary to make sure the sound works properly. Not sure why
+os.system('aplay /home/mendel/portiloop-software/portiloop/sounds/sample1.wav')

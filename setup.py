@@ -11,7 +11,6 @@ def is_coral():
     return False
 
 requirements_list = ['wheel',
-                     'pyEDFLib',
                      'numpy',
                      'portilooplot',
                      'ipywidgets',
@@ -34,7 +33,7 @@ else:
 
 setup(
     name='portiloop',
-    version='0.0.1',
+    version='0.1.0',
     packages=[package for package in find_packages()],
     description='Portiloop software library',
     install_requires=requirements_list,

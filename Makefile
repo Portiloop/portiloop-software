@@ -44,18 +44,23 @@ step5.temp: step4.temp
 	echo "Activating the widgets for the jupyter notebook..."
 	~/miniforge3/envs/portiloop/bin/jupyter nbextension enable --py widgetsnbextension
 	echo "Creating workspace directory..."
-	cd ~ && mkdir workspace && mkdir workspace/edf_recordings
+	cd ~ && mkdir workspace && mkdir workspace/recordings
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp create_login_folder.service /etc/systemd/system/create_login_folder.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp miniforge_jupyter.service /etc/systemd/system/jupyter.service
-	cd ~/portiloop-software/portiloop/setup_files && sudo cp 99-auto-mount.rules /etc/udev/rules.d/99-auto-mount.rules
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp simplegui.service /etc/systemd/system/simplegui.service
 	touch step5.temp
 
 step6.temp: step5.temp
 	echo "Reloading systemctl daemon..."
 	sudo systemctl daemon-reload
+	echo "Enabling manual login service..."
+	sudo systemctl enable create_login_folder.service
 	echo "Enabling jupyter service..."
 	sudo systemctl enable jupyter.service
+	echo "Enabling simple GUI service..."
+	sudo systemctl enable simplegui.service
 	touch step6.temp
 
 step7.temp: step6.temp
@@ -64,41 +69,12 @@ step7.temp: step6.temp
 	cd ~/portiloop-software/portiloop/sounds && aplay -Dplug:softvol stimulus.wav
 	touch step7.temp
 
-miniforge: step7.temp
-	echo "Launching jupyter notebook password manager..."
-	~/miniforge3/envs/portiloop/bin/jupyter notebook password
-	rm *.temp
-	echo "All done! Please reboot the device."
+step8.temp: step7.temp
+	echo "Editing FSTAB"
+	echo "/dev/mmcblk2p1 /media/sd_card auto nofail,rw,user,exec,umask=000 0 2" | sudo tee -a /etc/fstab
+	touch step8.temp
 
-# === Miniforge simple GUI Pipeline ===
-
-step5_simple.temp: step4.temp
-	echo "Installing the Portiloop software [This may take a while]"
-	cd ~/portiloop-software && sudo apt-get install git-lfs && git lfs pull && ~/miniforge3/envs/portiloop/bin/pip3 install notebook && ~/miniforge3/envs/portiloop/bin/pip3 install -e .
-	echo "Activating the widgets for the jupyter notebook..."
-	~/miniforge3/envs/portiloop/bin/jupyter nbextension enable --py widgetsnbextension
-	echo "Creating workspace directory..."
-	cd ~ && mkdir workspace && mkdir workspace/edf_recordings
-	echo "Copying files..."
-	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
-	cd ~/portiloop-software/portiloop/setup_files && sudo cp simplegui.service /etc/systemd/system/simplegui.service
-	cd ~/portiloop-software/portiloop/setup_files && sudo cp 99-auto-mount.rules /etc/udev/rules.d/99-auto-mount.rules
-	touch step5_simple.temp
-
-step6_simple.temp: step5_simple.temp
-	echo "Reloading systemctl daemon..."
-	sudo systemctl daemon-reload
-	echo "Enabling simple GUI service..."
-	sudo systemctl enable simplegui.service
-	touch step6_simple.temp
-
-step7_simple.temp: step6_simple.temp
-	echo "Playing test sound to update ALSA:"
-	echo "NOTE: This step may fail, just call make again when it does."
-	cd ~/portiloop-software/portiloop/sounds && aplay -Dplug:softvol stimulus.wav
-	touch step7_simple.temp
-
-miniforge_simplegui: step7_simple.temp
+miniforge: step8.temp
 	echo "Launching jupyter notebook password manager..."
 	~/miniforge3/envs/portiloop/bin/jupyter notebook password
 	rm *.temp
@@ -155,18 +131,23 @@ vstep5.temp: vstep4.temp
 	echo "Activating the widgets for the jupyter notebook..."
 	jupyter nbextension enable --py widgetsnbextension
 	echo "Creating workspace directory..."
-	cd ~ && mkdir workspace && mkdir workspace/edf_recordings
+	cd ~ && mkdir workspace && mkdir workspace/recordings
 	echo "Copying files..."
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp asound.conf /etc/asound.conf
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp create_login_folder.service /etc/systemd/system/create_login_folder.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp jupyter.service /etc/systemd/system/jupyter.service
-	cd ~/portiloop-software/portiloop/setup_files && sudo cp 99-auto-mount.rules /etc/udev/rules.d/99-auto-mount.rules
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp simplegui.service /etc/systemd/system/simplegui.service
 	touch vstep5.temp
 
 vstep6.temp: vstep5.temp
 	echo "Reloading systemctl daemon..."
 	sudo systemctl daemon-reload
+	echo "Enabling manual login service..."
+	sudo systemctl enable create_login_folder.service
 	echo "Enabling jupyter service..."
 	sudo systemctl enable jupyter.service
+	echo "Enabling simple GUI service..."
+	sudo systemctl enable simplegui.service
 	touch vstep6.temp
 
 vstep7.temp: vstep6.temp
@@ -175,7 +156,12 @@ vstep7.temp: vstep6.temp
 	cd ~/portiloop-software/portiloop/sounds && aplay -Dplug:softvol stimulus.wav
 	touch vstep7.temp
 
-vanilla: vstep7.temp
+vstep8.temp: vstep7.temp
+	echo "Editing FSTAB"
+	echo "/dev/mmcblk2p1 /media/sd_card auto nofail,rw,user,exec,umask=000 0 2" | sudo tee -a /etc/fstab
+	touch vstep8.temp
+
+vanilla: vstep8.temp
 	echo "Launching jupyter notebook password manager..."
 	jupyter notebook password
 	rm *.temp

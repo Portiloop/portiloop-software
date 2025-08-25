@@ -1,10 +1,8 @@
 import itertools
 import unittest
-from portiloop.src.demo.offline import run_offline
-from pathlib import Path
-import matplotlib.pyplot as plt
+from portiloop.src.core.constants import HOME_FOLDER
+from portiloop.src.custom.demo.offline import run_offline
 
-from portiloop.src.demo.utils import sleep_stage, xdf2array
 
 class TestOffline(unittest.TestCase):
 
@@ -23,8 +21,7 @@ class TestOffline(unittest.TestCase):
         all_options_iterator = itertools.product(*map(combinatorial_config.get, keys))
         all_options_dicts = [dict(zip(keys, values)) for values in all_options_iterator]
         self.filtered_options = [value for value in all_options_dicts if (value['online_detection'] and value['online_filtering']) or not value['online_detection']]
-        self.xdf_file = Path(__file__).parents[3] / "test_file.xdf"
-
+        self.xdf_file = HOME_FOLDER / "test_file.xdf"
 
     def test_all_options(self):
         for config in self.filtered_options:
@@ -49,6 +46,7 @@ class TestOffline(unittest.TestCase):
 
     def tearDown(self):
         pass
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -3,7 +3,7 @@ import pyxdf
 from wonambi.detect.spindle import DetectSpindle, detect_Lacourse2018, detect_Wamsley2012
 from scipy.signal import butter, filtfilt, iirnotch, detrend
 import time
-from portiloop.src.stimulation import Stimulator
+from portiloop.src.core.stimulation import Stimulator
 
 
 STREAM_NAMES = {
@@ -39,9 +39,8 @@ def sleep_stage(data, threshold=150, group_size=2):
     return unmasked_indices
 
 
-
 class OfflineSleepSpindleRealTimeStimulator(Stimulator):
-    def __init__(self):
+    def __init__(self, config_dict):
         self.last_detected_ts = time.time()
         self.wait_t = 0.4  # 400 ms
         self.wait_timesteps = int(self.wait_t * 250)
@@ -73,8 +72,8 @@ class OfflineSleepSpindleRealTimeStimulator(Stimulator):
 
 
 class OfflineSpindleTrainRealTimeStimulator(OfflineSleepSpindleRealTimeStimulator):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, config_dict):
+        super().__init__(config_dict)
         self.max_spindle_train_t = 6.0
     
     def stimulate(self, detection_signal):
@@ -96,7 +95,8 @@ class OfflineSpindleTrainRealTimeStimulator(OfflineSleepSpindleRealTimeStimulato
 
                 self.last_detected_ts = ts
         return stim
-    
+
+
 class OfflineIsolatedSpindleRealTimeStimulator(OfflineSpindleTrainRealTimeStimulator):
     def stimulate(self, detection_signal):
         self.index += 1
@@ -211,8 +211,8 @@ def offline_filter(signal, freq):
 
     return signal
 
-def compute_output_table(irl_online_stimulations, online_stimulation, lacourse_spindles, wamsley_spindles, time_overlap_s=2.0):
 
+def compute_output_table(irl_online_stimulations, online_stimulation, lacourse_spindles, wamsley_spindles, time_overlap_s=2.0):
 
     # Count the number of spindles in this run which overlap with spindles found IRL
     irl_spindles_count = sum(irl_online_stimulations)
@@ -241,4 +241,3 @@ def compute_output_table(irl_online_stimulations, online_stimulation, lacourse_s
     if wamsley_spindles is not None:
         table += f"| Wamsley | {wamsley_spindles_count} | {both_online_wamsley} |\n"
     return table
-    

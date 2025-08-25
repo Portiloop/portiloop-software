@@ -1,8 +1,8 @@
 import numpy as np
-from portiloop.src.detection import SleepSpindleRealTimeDetector
-from portiloop.src.stimulation import UpStateDelayer
-from portiloop.src.processing import FilterPipeline
-from portiloop.src.demo.utils import OfflineIsolatedSpindleRealTimeStimulator, OfflineSpindleTrainRealTimeStimulator, compute_output_table, sleep_stage, xdf2array, offline_detect, offline_filter, OfflineSleepSpindleRealTimeStimulator
+from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
+from portiloop.src.custom.custom_stimulators import UpStateDelayer
+from portiloop.src.custom.custom_processors import SpindleFilter
+from portiloop.src.custom.demo.utils import OfflineIsolatedSpindleRealTimeStimulator, OfflineSpindleTrainRealTimeStimulator, compute_output_table, sleep_stage, xdf2array, offline_detect, offline_filter, OfflineSleepSpindleRealTimeStimulator
 import gradio as gr
 
 
@@ -71,18 +71,19 @@ def run_offline(xdf_file, detect_filter_opts, threshold, channel_num, freq, dete
     
     # Create the online filtering pipeline
     if online_filtering:
-        filter = FilterPipeline(nb_channels=1, sampling_rate=freq)
+        filter = SpindleFilter(nb_channels=1, sampling_rate=freq)
 
     # Create the detector
     if online_detection:
-        detector = SleepSpindleRealTimeDetector(threshold=threshold, channel=1) # always 1 because we have only one channel
+        config_dict = {"threshold": threshold, "channel": 1}
+        detector = SleepSpindleRealTimeDetector(config_dict)  # always 1 because we have only one channel
 
         if detect_trains == "All Spindles":
-            stimulator = OfflineSleepSpindleRealTimeStimulator()
+            stimulator = OfflineSleepSpindleRealTimeStimulator(config_dict)
         elif detect_trains == "Trains":
-            stimulator = OfflineSpindleTrainRealTimeStimulator()
+            stimulator = OfflineSpindleTrainRealTimeStimulator(config_dict)
         elif detect_trains == "Isolated & First":
-            stimulator = OfflineIsolatedSpindleRealTimeStimulator()
+            stimulator = OfflineIsolatedSpindleRealTimeStimulator(config_dict)
 
         if stimulation_phase != "Fast":
             stimulation_delayer = UpStateDelayer(freq, stimulation_phase == 'Peak', time_to_buffer=buffer_time, stimulate=lambda: None)

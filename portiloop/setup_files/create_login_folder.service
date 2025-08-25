@@ -1,0 +1,14 @@
+[Unit]
+Description=Setup User Session Environment
+Before=jupyter.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mkdir -p /run/user/1000
+ExecStart=/bin/chown mendel:mendel /run/user/1000
+ExecStart=/bin/chmod 700 /run/user/1000
+
+[Install]
+WantedBy=multi-user.target

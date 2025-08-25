@@ -3,6 +3,7 @@ import plotly.subplots
 import numpy as np
 import time
 
+
 def plot_real_time_data_with_output():
     n_seconds = 5  # Display n seconds of data
     sample_rate = 250  # 250Hz sample rate
@@ -44,6 +45,5 @@ def plot_real_time_data_with_output():
 
         time.sleep(1 / sample_rate)  # Simulate real-time data
 
+
 plot_real_time_data_with_output()
-
-
