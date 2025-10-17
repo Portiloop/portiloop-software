@@ -4,11 +4,11 @@ set -e
 
 echo "--- PORTILOOP V2 ACCESS POINT SETUP ---"
 
-echo "Enter the desired access point wifi SSID:"
+echo "ACTION REQUIRED: Enter the desired access point wifi SSID (example: portiloop-wifi):"
 read portiloop_SSID
-echo "Enter the desired access point wifi password:"
+echo "ACTION REQUIRED: Enter the desired access point wifi password (example: portiloop):"
 read portiloop_password
-echo "Enter the desired access point wifi channel:"
+echo "ACTION REQUIRED: Enter the desired access point wifi channel (example: 8):"
 read portiloop_channel
 
 cd ~

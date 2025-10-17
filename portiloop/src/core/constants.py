@@ -31,7 +31,7 @@ try:
     SD_CARD_TEST_FILE.write_text("test")
     SD_CARD_TEST_FILE.unlink()
     SD_CARD_DETECTED = True
-except PermissionError as e:
+except Exception as e:
     SD_CARD_DETECTED = False
 
 # Workspace:

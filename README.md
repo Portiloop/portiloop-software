@@ -34,26 +34,27 @@ _(We recommend the force-fastboot method, as it works without `mdt`)_
 These first steps will help you set up an SSH connection to the device.
 
 - Power up the board through the USB power port.
-- Connect another USB cable to the OTG-port on the board and to your _linux_ host machine. Follow the following steps to connect to the board through serial:
-  - `ls /dev/ttyMC*`
-  - `screen /dev/ttyACM0`
-    If you see a message telling you that screen is busy, you can use `sudo lsof /dev/ttyMC0` and then retry the screen step.
+- Connect another USB cable to the OTG-port on the board and to your _Linux_ host machine. Then connect to the board through serial (or via `mdt`):
+  - `screen /dev/ttyACM0` (or `mdt shell`)
+    If you see a message telling you that screen is busy, you can use `sudo lsof /dev/ttyACM0` and then retry the screen step.
   - Login to the board using default username and password: mendel
 - Once you are logged in, you can now connect to you desired wifi network using `nmtui`.
-- Enable SSH access:
-  - Execute `sudo nano /etc/ssh/sshd_config`.
-  - Scroll down to the `PasswordAuthenticated` line and change the 'no' to a 'yes'.
-  - Press `CTRL` + `o` to save your changes, and `CTRL` + `x` to exit the nano editor.
+- Enable SSH access with password by executing `sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config`
+  - (if this fails, you can instead execute `sudo nano /etc/ssh/sshd_config`, find the `PasswordAuthentication no` line, replace 'no' by 'yes', and save by pressing `CTRL + o`, then `ENTER`, then `CTRL + x`)
+- Note your randomly-generated hostname (displayed as `mendel@your-hostname`) or define a custom hostname (`sudo hostnamectl set-hostname your-hostname`)
 - Shutdown the device (`sudo shutdown now`).
 - Pull the OTG-port cable off before the Coral board reboots (which happens automatically after a few seconds as long as this cable is plugged in)
 
-Next time you turn the Coral board on, you should be able to ssh into it, using either the ip address or the hostname. If some issues arise, make sure you are connected to the same network.
+Next time you turn the Coral board on, you should be able to ssh into it using the hostname (or the ip address of the device):
+- `ssh mendel@your-hostname.local`
+
+If some issues arise, make sure your PC is connected to the same network as the Coral Dev Board Mini.
 
 ### Software installation
 
-- Clone this repository in the home folder,
-- `cd` into the cloned repository,
-- Run `make` and follow the instructions
+- Clone this repository in the home folder: `cd ~ && git clone https://github.com/Portiloop/portiloop-software.git`
+- Go into the cloned repository: `cd ~/portiloop-software`,
+- Run `make` and follow the instructions when prompted
   - Don't forget to reboot the device afterward
 - Note that `make` may fail at several points during installation. Whenever it does, just call `make` again.
 
@@ -64,11 +65,11 @@ Similarly, the `Simple UI` can be accessed by typing `192.168.4.1:8081` in your 
 
 ### SD card
 
-If using an SD card to record your EEG signal in CSV format, plug the SD card to your `Portiloop` before powering the `Portiloop`.
+If using an SD card to record your EEG signal in CSV format, plug the SD card to your `Portiloop` before powering the `Portiloop` on.
 Your CSV will then be recorded in the SD card under the `workspace` folder.
 Otherwise, your CSV will be recorded in internal memory under `/home/mendel/workspace`
 
-_:warning: Recording large CSV files in internal memory will quickly make your `Portiloop` unusable: the internal memory is quite small and recording CSVs in internal memory should not be done, except for quick testing.
+_:warning: Recording large CSV files in internal memory will quickly make your `Portiloop` unusable: the internal memory is quite small and recording CSVs in internal memory should never be done, except for quick testing.
 In case you inadvertently fill up you `Portiloop` internal memory, it will refuse to boot and you will have to reflash and reinstall the entire system._
 
 ### Power up
@@ -86,6 +87,22 @@ However, it may happen that this light refuses to turn off due to some internal 
 In that case, just wait for a couple more seconds before unplugging.
 
 _:warning: Failing to follow these instructions may brick your `Portiloop`, in which case you will have to reflash and reinstall the entire system._
+
+### Indicator LEDs
+
+The Portiloop system has 3 indicator LEDs:
+- Coral board LED between the two USB-C connector:
+  - orange: boot in progress
+  - green: boot complete
+  - red: the Coral Dev Board Mini is in fastboot mode, ready to flash
+  - turned off when the Portiloop is off
+- Portiloop power LED
+  - green: power plugged
+  - turned off when the Portiloop is unplugged
+- Portiloop indicator LED
+  - purple: capture in progress
+  - blue: capture in progress with detection and stimulation pipeline enabled
+  - turned off otherwise
 
 ### Connect
 

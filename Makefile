@@ -2,17 +2,28 @@ all: miniforge
 
 # all can be either "vanilla" or "miniforge"
 
-# === AP creation ===
+# === Apt setup and AP creation ===
 
-step0.temp:
+step_pre.temp:
+	echo "--- PORTILOOP V3 PRE-INSTALLATION STEP ---"
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp security.list /etc/apt/sources.list.d/security.list
+	gpg --keyserver keyserver.ubuntu.com --recv-keys B53DC80D13EDEF05
+	gpg --export --armor B53DC80D13EDEF05 | sudo apt-key add -
+	gpg --keyserver keyserver.ubuntu.com --recv-keys C0BA5CE6DC6315A3
+	gpg --export --armor C0BA5CE6DC6315A3 | sudo apt-key add -
+	sudo apt-get --allow-releaseinfo-change update
+	sudo apt-get update
+	touch step_pre.temp
+
+step0.temp: step_pre.temp
+	echo "Creating acces point..."
 	cd ~/portiloop-software && bash create_ap.sh
 	touch step0.temp
 
 # === miniforge pipeline ===
 
 step1.temp: step0.temp
-	echo "--- PORTILOOP V2 INSTALLATION (Miniforge version) ---"
-	sudo apt-get update
+	echo "--- PORTILOOP V3 INSTALLATION (Miniforge version) ---"
 	sudo apt-get install -y python3-matplotlib python3-scipy python3-dev libasound2-dev
 	touch step1.temp
 
@@ -65,7 +76,7 @@ step6.temp: step5.temp
 
 step7.temp: step6.temp
 	echo "Playing test sound to update ALSA:"
-	echo "NOTE: This step may fail, just call make again when it does."
+	echo "NOTE: THIS STEP MAY FAIL, JUST EXECUTE make AGAIN IF YOU GET AN ERROR."
 	cd ~/portiloop-software/portiloop/sounds && aplay -Dplug:softvol stimulus.wav
 	touch step7.temp
 
@@ -83,15 +94,11 @@ miniforge: step8.temp
 # === vanilla pipeline ===
 
 vstep1.temp: step0.temp
-	echo "--- PORTILOOP V2 INSTALLATION (Vanilla version) ---"
+	echo "--- PORTILOOP V3 INSTALLATION (Vanilla version) ---"
 	echo "The script will now update your system."
 	echo "Preparing apt..."
 	export LC_ALL="en_US.UTF-8"
 	sudo apt remove -y reportbug python3-reportbug
-	gpg --keyserver keyserver.ubuntu.com --recv-keys B53DC80D13EDEF05
-	gpg --export --armor B53DC80D13EDEF05 | sudo apt-key add -
-	echo "Updating apt..."
-	sudo apt-get --allow-releaseinfo-change-suite update
 	touch vstep1.temp
 
 vstep2.temp: vstep1.temp
@@ -152,7 +159,7 @@ vstep6.temp: vstep5.temp
 
 vstep7.temp: vstep6.temp
 	echo "Playing test sound to update ALSA:"
-	echo "NOTE: This step may fail, just call make again when it does."
+	echo "NOTE: THIS STEP MAY FAIL, JUST EXECUTE make AGAIN IF YOU GET AN ERROR."
 	cd ~/portiloop-software/portiloop/sounds && aplay -Dplug:softvol stimulus.wav
 	touch vstep7.temp
 
@@ -162,7 +169,7 @@ vstep8.temp: vstep7.temp
 	touch vstep8.temp
 
 vanilla: vstep8.temp
-	echo "Launching jupyter notebook password manager..."
+	echo "ACTION REQUIRED: enter a password for the jupyter UI (example: portiloop)"
 	jupyter notebook password
 	rm *.temp
 	echo "All done! Please reboot the device."
