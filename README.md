@@ -29,21 +29,28 @@ Find the instructions to update your Coral Dev Board Mini to the last OS version
 
 _(We recommend the force-fastboot method, as it works without `mdt`)_
 
+:warning: : The portiloop software will not work if you ignore this step.
+The software is developped for version 5.0 Eagle (Dec 2020), downloadable [here](https://dl.google.com/coral/mendel/excelsior/excelsior-eagle-20201210233645.zip)
+
 ### Accessing the Google Coral
 
 These first steps will help you set up an SSH connection to the device.
 
 - Power up the board through the USB power port.
-- Connect another USB cable to the OTG-port on the board and to your _Linux_ host machine. Then connect to the board through serial (or via `mdt`):
-  - `screen /dev/ttyACM0` (or `mdt shell`)
-    If you see a message telling you that screen is busy, you can use `sudo lsof /dev/ttyACM0` and then retry the screen step.
-  - Login to the board using default username and password: mendel
+- Connect another USB cable to the OTG-port on the board and to your _Linux_ host machine. Then connect to the board through serial (or via `mdt`) by executing `screen /dev/ttyACM0` (or `mdt shell`)
+
+_If you see a message telling you that screen is busy, you can use `sudo lsof /dev/ttyACM0` and then retry the screen step._
+
+- Login to the board using default username and password: mendel
 - Once you are logged in, you can now connect to you desired wifi network using `nmtui`.
-- Enable SSH access with password by executing `sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config`
-  - (if this fails, you can instead execute `sudo nano /etc/ssh/sshd_config`, find the `PasswordAuthentication no` line, replace 'no' by 'yes', and save by pressing `CTRL + o`, then `ENTER`, then `CTRL + x`)
+- Enable SSH access with password by executing the following command:
+
+`sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config`
+
+_(if you get an error nessage, you can instead execute `sudo nano /etc/ssh/sshd_config`, find the `PasswordAuthentication no` line, replace 'no' by 'yes', and save by pressing `CTRL + o`, then `ENTER`, then `CTRL + x`)_
+
 - Note your randomly-generated hostname (displayed as `mendel@your-hostname`) or define a custom hostname (`sudo hostnamectl set-hostname your-hostname`)
-- Shutdown the device (`sudo shutdown now`).
-- Pull the OTG-port cable off before the Coral board reboots (which happens automatically after a few seconds as long as this cable is plugged in)
+- Shutdown the device (`sudo shutdown now` or press the `Power` button for 3 seconds) and pull out the OTG-port cable before the Coral board reboots (which otherwise happens automatically after a few seconds as long as this cable is plugged in).
 
 Next time you turn the Coral board on, you should be able to ssh into it using the hostname (or the ip address of the device):
 - `ssh mendel@your-hostname.local`
@@ -52,6 +59,8 @@ If some issues arise, make sure your PC is connected to the same network as the 
 
 ### Software installation
 
+- Plug the `USB-C Power` cable in and turn the portiloop on by pressing the `Power` button for 3 seconds.
+- SSH into the device
 - Clone this repository in the home folder: `cd ~ && git clone https://github.com/Portiloop/portiloop-software.git`
 - Go into the cloned repository: `cd ~/portiloop-software`,
 - Run `make` and follow the instructions when prompted
