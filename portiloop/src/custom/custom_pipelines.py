@@ -20,3 +20,5 @@ PIPELINES = {
         "config_modifiers": {}
     }
 }
+
+DEFAULT_PIPELINE_KEY = "Sleep spindles"

@@ -10,7 +10,7 @@ from portiloop.src.core.utils import get_portiloop_version, DummyAlsaMixer
 from portiloop.src.core.constants import CSV_PATH, SIGNAL_SAMPLES_FOLDER
 
 from portiloop.src.custom.config import RUN_SETTINGS
-from portiloop.src.custom.custom_pipelines import PIPELINES
+from portiloop.src.custom.custom_pipelines import PIPELINES, DEFAULT_PIPELINE_KEY
 from portiloop.src.custom.custom_processors import SpindleFilter
 
 from IPython.display import clear_output, display
@@ -23,11 +23,11 @@ if ADS:
     from portiloop.src.core.hardware.backend import Backend
 
 
-DEFAULT_PIPELINE_KEY = "Sleep spindles"
-
-
 class JupyterUI:
-    def __init__(self):
+    def __init__(self, pipelines = PIPELINES, default_pipeline_key=DEFAULT_PIPELINE_KEY):
+
+        self._pipelines = pipelines
+        self._default_pipeline_key = default_pipeline_key
 
         # {now.strftime('%m_%d_%Y_%H_%M_%S')}
         self.filename = CSV_PATH / 'recording' / 'recording.csv'
@@ -89,7 +89,7 @@ class JupyterUI:
         self.inter_stim_delay = 0.0
 
         # Pipeline
-        pipeline = PIPELINES[DEFAULT_PIPELINE_KEY]
+        pipeline = self._pipelines[self._default_pipeline_key]
         self.processor_cls = pipeline["processor"]
         self.detector_cls = pipeline["detector"]
         self.stimulator_cls = pipeline["stimulator"]
@@ -135,10 +135,10 @@ class JupyterUI:
 
         # PIPELINE ------------------------------
 
-        options = [key for key in PIPELINES.keys()]
+        options = [key for key in self._pipelines.keys()]
         self.b_pipeline = widgets.Dropdown(
             options=options,
-            value=DEFAULT_PIPELINE_KEY,
+            value=self._default_pipeline_key,
             description='Pipeline:',
             disabled=False,
             style={'description_width': 'initial'}
@@ -510,8 +510,8 @@ class JupyterUI:
         basic_types = (int, float, bool, str, list, dict, tuple, set)
         output_dict = {}
         for key, value in input_dict.items():
-            # Remove all buttons and button lists from the metadata
-            if "button" in key or "_b" in key:
+            # Remove all non-serializable objects from the metadata
+            if "button" in key or "_b" in key or "pipeline" in key:
                 continue
             if isinstance(value, basic_types) or value is None:
                 output_dict[key] = value
@@ -700,7 +700,7 @@ class JupyterUI:
 
     def on_b_pipeline(self, value):
         key = value['new']
-        pipeline = PIPELINES[key]
+        pipeline = self._pipelines[key]
         self.processor_cls = pipeline["processor"]
         self.detector_cls = pipeline["detector"]
         self.stimulator_cls = pipeline["stimulator"]

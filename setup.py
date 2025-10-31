@@ -2,6 +2,9 @@ from setuptools import setup, find_packages
 import io
 
 
+VERSION = '0.1.1'
+
+
 def is_coral():
     try:
         with io.open('/sys/firmware/devicetree/base/model', 'r') as m:
@@ -33,7 +36,7 @@ else:
 
 setup(
     name='portiloop',
-    version='0.1.0',
+    version=VERSION,
     packages=[package for package in find_packages()],
     description='Portiloop software library',
     install_requires=requirements_list,

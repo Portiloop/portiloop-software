@@ -25,34 +25,34 @@ It enables controlling the `Portiloop` from a Graphical User Interface (GUI).
 You have just got your hands on the hardware for the Portiloop V3 (A Google Coral Dev Board Mini and a Portiloop board). Here are the steps you need to follow to get started using the EEG capture, the Spindle detection software, and the TPU processing.
 
 ### Flashing the Google Coral
-Find the instructions to update your Coral Dev Board Mini to the last OS version [here](https://coral.ai/docs/dev-board-mini/reflash/).
+Find the instructions to update your Coral Dev Board Mini to the latest OS version [here](https://coral.ai/docs/dev-board-mini/reflash/).
 
 _(We recommend the force-fastboot method, as it works without `mdt`)_
 
 :warning: : The portiloop software will not work if you ignore this step.
-The software is developped for version 5.0 Eagle (Dec 2020), downloadable [here](https://dl.google.com/coral/mendel/excelsior/excelsior-eagle-20201210233645.zip)
+The software is developed for version 5.0 Eagle (Dec 2020), downloadable [here](https://dl.google.com/coral/mendel/excelsior/excelsior-eagle-20201210233645.zip)
 
 ### Accessing the Google Coral
 
 These first steps will help you set up an SSH connection to the device.
 
-- Power up the board through the USB power port.
+- Power up the board through the USB-C power port.
 - Connect another USB cable to the OTG-port on the board and to your _Linux_ host machine. Then connect to the board through serial (or via `mdt`) by executing `screen /dev/ttyACM0` (or `mdt shell`)
 
 _If you see a message telling you that screen is busy, you can use `sudo lsof /dev/ttyACM0` and then retry the screen step._
 
-- Login to the board using default username and password: mendel
-- Once you are logged in, you can now connect to you desired wifi network using `nmtui`.
+- Login to the board using the default username and password: mendel
+- Once you are logged in, you can now connect to your desired wifi network using `nmtui`.
 - Enable SSH access with password by executing the following command:
 
 `sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config`
 
-_(if you get an error nessage, you can instead execute `sudo nano /etc/ssh/sshd_config`, find the `PasswordAuthentication no` line, replace 'no' by 'yes', and save by pressing `CTRL + o`, then `ENTER`, then `CTRL + x`)_
+_(if you get an error message, you can instead execute `sudo nano /etc/ssh/sshd_config`, find the `PasswordAuthentication no` line, replace 'no' by 'yes', and save by pressing `CTRL + o`, then `ENTER`, then `CTRL + x`)_
 
 - Note your randomly-generated hostname (displayed as `mendel@your-hostname`) or define a custom hostname (`sudo hostnamectl set-hostname your-hostname`)
 - Shutdown the device (`sudo shutdown now` or press the `Power` button for 3 seconds) and pull out the OTG-port cable before the Coral board reboots (which otherwise happens automatically after a few seconds as long as this cable is plugged in).
 
-Next time you turn the Coral board on, you should be able to ssh into it using the hostname (or the ip address of the device):
+Next time you turn the Coral board on, you should be able to ssh into it using the hostname (or the IP address of the device):
 - `ssh mendel@your-hostname.local`
 
 If some issues arise, make sure your PC is connected to the same network as the Coral Dev Board Mini.
@@ -64,31 +64,31 @@ If some issues arise, make sure your PC is connected to the same network as the 
 - Clone this repository in the home folder: `cd ~ && git clone https://github.com/Portiloop/portiloop-software.git`
 - Go into the cloned repository: `cd ~/portiloop-software`,
 - Run `make` and follow the instructions when prompted
-  - Don't forget to reboot the device afterward
+  - Don't forget to reboot the device afterward
 - Note that `make` may fail at several points during installation. Whenever it does, just call `make` again.
 
-That's it! Your Jupyter server should now be up and running, listening on IP address `192.168.4.1` and port `8080`, and automatically starting whenever the system boots up. You can now access it by typing `192.168.4.1:8080` in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arise, try with a different web browser.
+That's it! Your Jupyter server should now be up and running, listening on IP address `192.168.4.1` and port `8080`, and automatically starting whenever the system boots up. You can now access it by typing `192.168.4.1:8080` in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arises, try with a different web browser.
 Similarly, the `Simple UI` can be accessed by typing `192.168.4.1:8081` in your browser. 
 
 ## Usage:
 
 ### SD card
 
-If using an SD card to record your EEG signal in CSV format, plug the SD card to your `Portiloop` before powering the `Portiloop` on.
+If using an SD card to record your EEG signal in CSV format, plug the SD card into your `Portiloop` before powering the `Portiloop` on.
 Your CSV will then be recorded in the SD card under the `workspace` folder.
 Otherwise, your CSV will be recorded in internal memory under `/home/mendel/workspace`
 
 _:warning: Recording large CSV files in internal memory will quickly make your `Portiloop` unusable: the internal memory is quite small and recording CSVs in internal memory should never be done, except for quick testing.
-In case you inadvertently fill up you `Portiloop` internal memory, it will refuse to boot and you will have to reflash and reinstall the entire system._
+In case you inadvertently fill up your `Portiloop` internal memory, it will refuse to boot and you will have to reflash and reinstall the entire system._
 
 ### Power up
 
-To power the `Portiloop`, plug your USB-C battery to `USB-C Power` and press the `Power` button for 3 seconds.
+To power the `Portiloop`, plug your USB-C battery into `USB-C Power` and press the `Power` button for 3 seconds.
 Then, wait for the light next to `USB-C Power` to turn green (the green color indicates that boot was successful).
 
 ### Power down
 
-To power the `Portiloop` down, press the `Power` button for 3 second again and wait for a couple more seconds for the light close to `USB-C Power` to turn off.
+To power the `Portiloop` down, press the `Power` button for 3 seconds again and wait for a couple more seconds for the light close to `USB-C Power` to turn off.
 You can then unplug the `USB-C Power` cable.
 
 When everything goes smoothly, the light close to `USB-C Power` turns off.
@@ -100,18 +100,18 @@ _:warning: Failing to follow these instructions may brick your `Portiloop`, in w
 ### Indicator LEDs
 
 The Portiloop system has 3 indicator LEDs:
-- Coral board LED between the two USB-C connector:
-  - orange: boot in progress
-  - green: boot complete
-  - red: the Coral Dev Board Mini is in fastboot mode, ready to flash
-  - turned off when the Portiloop is off
+- Coral board LED between the two USB-C connectors:
+  - orange: boot in progress
+  - green: boot complete
+  - red: the Coral Dev Board Mini is in fastboot mode, ready to flash
+  - turned off when the Portiloop is off
 - Portiloop power LED
-  - green: power plugged
-  - turned off when the Portiloop is unplugged
+  - green: power plugged
+  - turned off when the Portiloop is unplugged
 - Portiloop indicator LED
-  - purple: capture in progress
-  - blue: capture in progress with detection and stimulation pipeline enabled
-  - turned off otherwise
+  - purple: capture in progress
+  - blue: capture in progress with detection and stimulation pipeline enabled
+  - turned off otherwise
 
 ### Connect
 
@@ -119,15 +119,15 @@ Connect your computer (or smartphone) to the WiFi access point of the `Portiloop
 
 The `Portiloop` has two web-based Graphical User Interfaces that you can access via any web browser:
 - A user-friendly `Simple UI`
-  - _accessible via `192.168.4.1:8081`_
+  - _accessible via `192.168.4.1:8081`_
 - An advanced UI in the form of a `jupyter` notebook
-  - _accessible via `192.168.4.1:8080`_
+  - _accessible via `192.168.4.1:8080`_
 
 ### Simple UI
-To access the `Simple UI`, open your favourite browser and enter the following address: `192.168.4.1:8081`.
+To access the `Simple UI`, open your favorite browser and enter the following address: `192.168.4.1:8081`.
 
 This UI is pretty self-explanatory.
-It has several options including:
+It has several options, including:
 - Detecting patterns of interest in real-time (e.g., Sleep Spindles)
 - Performing closed-loop stimulation based on this detection
 - Recording raw EEG along with the above detections in a CSV file
@@ -135,14 +135,14 @@ It has several options including:
 ### Jupyter UI
 
 The `Portiloop` advanced UI is a web-based interface running as a `jupyter` server.
-To access this UI, open your favourite browser and enter the following address: `192.168.4.1:8080`.
+To access this UI, open your favorite browser and enter the following address: `192.168.4.1:8080`.
 
 You should now be connected to the `jupyter` server.
 
 _If the jupyter notebook is not yet created:_
 - Hit `New` and select `Python 3`.
 
-This creates a `jupyter` notebook, in which you can simply paste and execute te following:
+This creates a `jupyter` notebook, in which you can simply paste and execute the following:
 
 ```python
 from portiloop.capture import JupyterUI
@@ -152,7 +152,7 @@ cap = JupyterUI()
 
 #### Channels:
 
-The `Channels` pannel enables you to configure each electrode:
+The `Channels` panel enables you to configure each electrode:
 - `simple`: the electrode is used to measure signal
 - `bias`: the electrode is used to output the measured bias ("ground") signal
 - `test`: the electrode is used to output a test signal
@@ -171,8 +171,8 @@ The `Channels` pannel enables you to configure each electrode:
 - Tick `Display` to display the signal in the GUI
 - `Threshold` enables customizing the optional detection threshold from the GUI (e.g., for classifiers)
 - The `Clock` widget lets you select the sampling method:
-  - `Coral` sets the `ADS1299` sampling rate to twice your target sampling rate, and uses the Coral Real-Time clock to stick to your target sampling rate
-  - `ADS` sets the `ADS1299` sampling rate to the closest compatible to your target sampling rate and uses the ADS interrupts
+  - `Coral` sets the `ADS1299` sampling rate to twice your target sampling rate, and uses the Coral Real-Time clock to stick to your target sampling rate
+  - `ADS` sets the `ADS1299` sampling rate to the closest compatible to your target sampling rate and uses the ADS interrupts
 
 #### Custom Filtering
 
@@ -182,7 +182,7 @@ The `Filtering` section lets you customize the filtering pipeline from the GUI.
 - `Polyak mean`, `Polyak std` and `Epsilon` let you customize the online standardization pipeline, which also acts as a high-pass filter (only available in the `Sleep Spindles` pipeline)
 
 
-## Developer guide
+## Developer guide:
 
 The core Portiloop software architecture is defined in `portiloop.src.core`.
 It defines the three interfaces that developers of custom pipelines must implement:
@@ -190,21 +190,26 @@ It defines the three interfaces that developers of custom pipelines must impleme
 - `detection.py` defines the `Detector` interface, in charge of all detection algorithms/models.
 - `stimulation.py` defines the `Stimulator` interface, in charge of all response to the detector output.
 
-Developers of Portiloop pipelines must work entirely under the `portiloop.custom` package, where these interfaces are implemented for tasks such as Sleep Spindle or Sleep Slow Oscillations detection and stimulation.
-Abide only to these interfaces and do not make additional assumptions, otherwise your custom pipeline will break the Portiloop GUIs, since they rely exclusively on these interfaces.
-
-The `portiloop.custom.custom_pipelines` module defines the `PIPELINES` dictionary, where you can define you custom Portiloop pipeline: just add an entry following the existing template, i.e.:
+The Portiloop software is a Python library.
+You may implement the aforementioned interfaces, put these in a `pipeline` dictionary.
+The `portiloop.custom.custom_pipelines` module defines the `PIPELINES` dictionary, which you can modify to define your custom Portiloop pipeline: just add an entry following the existing template, i.e.:
 
 ```python
-"Your_Pipeline_Name": {  # This name will appear in te Portiloop GUIs.
-    "processor": Your_Processor_Class,  # class of your Processor implementation (not instance).
-    "detector": Your_Detector_Class,  # class of your Detector implementation (not instance).
-    "stimulator": Your_Stimulator_Class,  # class of your Stimulator implementation (not instance).
-    "config_modifiers": {}  # This is a placeholder at the moment.
+from portiloop.src.custom.custom_pipelines import PIPELINES
+
+PIPELINES["Your_Pipeline_Name"] = {  # This name will appear in the Portiloop GUIs.
+    "processor": Your_Processor_Class,  # class of your Processor implementation (not instance).
+    "detector": Your_Detector_Class,  # class of your Detector implementation (not instance).
+    "stimulator": Your_Stimulator_Class,  # class of your Stimulator implementation (not instance).
+    "config_modifiers": {}
 },
 ```
+You can then feed this dictionary as argument to the Portiloop GUIs.
 
-The GUIs will then automatically detect your custom pipeline.
+## Contribute:
 
-:warning: Non-core developers should not modify the `portiloop.core` package, nor the `jupyter_gui` and `simple_gui` packages.
-If you feel you need to do any of these things, please ask for assistance, as are you are probably doing something wrong.
+Developers of new Portiloop pipelines that are to be merged with the repo must work entirely under the `portiloop.custom` package, where abstract interfaces are implemented for tasks such as Sleep Spindle or Sleep Slow Oscillations detection and stimulation.
+Abide only to these interfaces and do not make additional assumptions, otherwise your custom pipeline will break the Portiloop GUIs, which rely exclusively on these interfaces.
+
+:warning: Non-core internal developers should not modify the `portiloop.core` package, nor the `jupyter_gui` and `simple_gui` packages.
+If you feel you need to do any of these things, please ask for assistance, as you are probably doing something wrong.

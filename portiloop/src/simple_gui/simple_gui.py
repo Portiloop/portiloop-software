@@ -25,8 +25,9 @@ portiloop_ID = socket.gethostname()
 
 
 class ExperimentState:
-    def __init__(self):
-        self.pipeline_keys = list(PIPELINES.keys())
+    def __init__(self, pipelines = PIPELINES):
+        self._pipelines = pipelines
+        self.pipeline_keys = list(self._pipelines.keys())
         self.pipeline_key = self.pipeline_keys[0]
         # self.processor_cls = pipeline["processor"]
         # self.detector_cls = pipeline["detector"]
@@ -124,9 +125,9 @@ class ExperimentState:
         self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name.split('.')[0], self.exp_name)
 
         self._t_capture = Process(target=start_capture,
-                                  args=(PIPELINES[self.pipeline_key]["processor"],
-                                        PIPELINES[self.pipeline_key]["detector"],
-                                        PIPELINES[self.pipeline_key]["stimulator"],
+                                  args=(self._pipelines[self.pipeline_key]["processor"],
+                                        self._pipelines[self.pipeline_key]["detector"],
+                                        self._pipelines[self.pipeline_key]["stimulator"],
                                         self.run_dict,
                                         self.q_msg,
                                         self.display_q,
@@ -159,156 +160,173 @@ class ExperimentState:
             if current_time > self.time_unpause:
                 self.pause_value.value = False
 
-exp_state = ExperimentState()
 
-def start():
-    exp_state.start()
-    start_button.enabled = False
+class SimpleUI:
+    def __init__(self, pipelines=PIPELINES):
+        self._pipelines = pipelines
+    
+    def run(self,
+            host='192.168.4.1', 
+            port=8081,
+            title='Portiloop Control Center',
+            dark=True,
+            favicon='🧠',
+            reload=False):
 
-def stop():
-    exp_state.stop()
-    start_button.enabled = True
+        exp_state = ExperimentState(pipelines=self._pipelines)
 
-def test_sound():
-    stimulator = PIPELINES[exp_state.pipeline_key]["stimulator"](RUN_SETTINGS)
-    stimulator.test_stimulus()
-    del stimulator
+        def start():
+            exp_state.start()
+            start_button.enabled = False
 
-def update_line_plot():
-    now = datetime.now()
-    x = now.timestamp()
-    try:
-        # empty the queue
-        x = []
-        y = []
-        while not exp_state.display_q.empty():
-            channel = int(exp_state.selected_channel[-1]) - 1
-            point = exp_state.display_q.get(block=False)
-            time, raw_point, filtered_point = point
-            x.append(time)
-            if exp_state.display_data == 'Raw':
-                point = raw_point[0][channel] 
-            elif exp_state.display_data == 'Filter': 
-                point = filtered_point[0][channel]
-            else:
-                point = 0.0
-            y.append(point)
-    except Exception as e:
-        print(f"Caught exception: {e}")
+        def stop():
+            exp_state.stop()
+            start_button.enabled = True
 
-    if len(x) > 0 and len(y) > 0:
-        line_plot.push(x, [y])
+        def test_sound():
+            stimulator = self._pipelines[exp_state.pipeline_key]["stimulator"](RUN_SETTINGS)
+            stimulator.test_stimulus()
+            del stimulator
 
-def disable_stim_toggle_callback(caller):
-    stim_toggle.enable()
-    # if caller.value == 'Interval':
-    #     stim_toggle.disable()
-    #     stim_toggle.value = 'Stim On'
-    #     exp_state.stim_on = True
-    # else:
-    #     stim_toggle.enable()
+        def update_line_plot():
+            now = datetime.now()
+            x = now.timestamp()
+            try:
+                # empty the queue
+                x = []
+                y = []
+                while not exp_state.display_q.empty():
+                    channel = int(exp_state.selected_channel[-1]) - 1
+                    point = exp_state.display_q.get(block=False)
+                    time, raw_point, filtered_point = point
+                    x.append(time)
+                    if exp_state.display_data == 'Raw':
+                        point = raw_point[0][channel] 
+                    elif exp_state.display_data == 'Filter': 
+                        point = filtered_point[0][channel]
+                    else:
+                        point = 0.0
+                    y.append(point)
+            except Exception as e:
+                print(f"Caught exception: {e}")
 
-ui.label('Portiloop 🧠').classes('text-4xl font-mono')
-ui.label('Control Center').classes('text-2xl font-mono')
+            if len(x) > 0 and len(y) > 0:
+                line_plot.push(x, [y])
 
-ui.html(f"Connected to: <strong>{portiloop_ID}</strong> (v{RUN_SETTINGS['version']} - {RUN_SETTINGS['nb_channels']} channels)")
-ui.separator()
+        def disable_stim_toggle_callback(caller):
+            stim_toggle.enable()
+            # if caller.value == 'Interval':
+            #     stim_toggle.disable()
+            #     stim_toggle.value = 'Stim On'
+            #     exp_state.stim_on = True
+            # else:
+            #     stim_toggle.enable()
 
-with ui.tabs().classes('w-full') as tabs:
-    control_tab = ui.tab('Control', icon='home')
-    output_tab = ui.tab('Output', icon='timeline')
-    advanced_tab = ui.tab('Advanced', icon='settings')
+        ui.label('Portiloop 🧠').classes('text-4xl font-mono')
+        ui.label('Control Center').classes('text-2xl font-mono')
 
-with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
-    ############### First Tab ##################
-    with ui.tab_panel(control_tab).classes('w-full items-center'):
-        ################ Simple Options ################
-        with ui.column().classes('w-full items-center'):
-            sd_card_checker = ui.checkbox('SD Card').bind_value_from(
-                exp_state,
-                'sd_card'
-            ).disable()
-
-            test_sound_button = ui.button('Test Sound 🔊', on_click=test_sound)
-
-            stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off', on_change=lambda: exp_state.toggle_stim())
-
-            ui.separator()
-
-            ################ Recording Controls ##################
-            with ui.row():
-                start_button = ui.button('Start ▶', on_click=start, color='green').classes('text-2xl')
-                stop_button = ui.button('Stop', on_click=stop, color='orange').classes('text-2xl')
-            start_button.bind_enabled_to(stop_button, forward=lambda x: not x)
-            start_button.bind_enabled_to(stim_toggle)
-
-            ################# Control Display ##################
-            time_label = ui.label().classes('text-2xl')
-            save_file_label = ui.label().bind_text_from(
-                exp_state, 
-                "exp_name", 
-                backward=lambda x: f"Current experiment {x.split('.')[0]}")
-            timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() - exp_state.time_started).split(".")[0]}'))
-            sd_card_timer = ui.timer(0.5, exp_state.check_sd_card)
-            start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
-
-    ############### Output Tab ####################
-    with ui.tab_panel(output_tab).classes('w-full items-center'):
-        ############# Line Plot stuff ################
-        line_timer = ui.timer(1/25, update_line_plot, active=False)
-        start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
-        line_plot = ui.line_plot(n=1, limit=250 * 5, update_every=25, figsize=(3, 2), layout='tight')
-
+        ui.html(f"Connected to: <strong>{portiloop_ID}</strong> (v{RUN_SETTINGS['version']} - {RUN_SETTINGS['nb_channels']} channels)")
         ui.separator()
-        ############# Display Control ###############
-        with ui.column().classes('w-full items-center'):
-            available_channels = [f"Channel {i+1}" for i in range(RUN_SETTINGS['nb_channels'])]
-            select_channel_display = ui.select(available_channels, value=available_channels[1], label="Display Channel")
-            select_channel_display.bind_value_to(exp_state, 'selected_channel').classes('w-1/2')
 
-            filtered_toggle = ui.toggle(['Raw', 'Filter'], value='Raw')
-            filtered_toggle.bind_value_to(exp_state, 'display_data')
+        with ui.tabs().classes('w-full') as tabs:
+            control_tab = ui.tab('Control', icon='home')
+            output_tab = ui.tab('Output', icon='timeline')
+            advanced_tab = ui.tab('Advanced', icon='settings')
 
-    ############### Advanced Tab #############
-    with ui.tab_panel(advanced_tab).classes('w-full items-center'):
-        ################ Advanced Options ###################
-        with ui.column().classes('w-full items-center'):
-            ui.label("If you are a subject in an experiment, do not change any of these options unless explicitly prompted to!").classes('text-1.5xl').style('color:#d9a011')
-            ui.separator()
-            space_label = ui.label(f"Disk Usage: {psutil.disk_usage(os.getcwd())}%").bind_text_from(
-                exp_state, 
-                'disk_str'
-            ).classes('text-2xl')
-            possible_freqs = [50, 100, 250, 500, 1000]
-            select_freq = ui.select(
-                possible_freqs, 
-                value=250, 
-                label="Sample Frequency (Hz)").bind_value_to(exp_state, 'select_freq').classes('w-3/4')
-            ui.separator().classes('w-2/3')
-            sleep_timeout = ui.slider(min=0, max=40, value=0).bind_value_to(exp_state, 'sleep_timeout').classes('w-3/4') #.props('label-always')
-            ui.label().bind_text_from(sleep_timeout, 'value', backward=lambda x: f"Sleep Timeout: {x} minutes")
-            sleep_timeout_timer = ui.timer(10, exp_state.check_sleep_timeout)
-            ui.separator().classes('w-2/3')
-            lsl_checker = ui.checkbox('Stream LSL').bind_value_to(exp_state, 'lsl')
-            save_checker = ui.checkbox('Save Recording Locally', value=True).bind_value_to(exp_state, 'save_local')
-            stim_delay = ui.number(value=0, label='Stimulation Delay (in ms)').bind_value_to(exp_state, 'stim_delay')
-            select_pipeline = ui.select(exp_state.pipeline_keys, value=exp_state.pipeline_key, on_change=disable_stim_toggle_callback, label="Pipeline").bind_value_to(exp_state, 'pipeline_key')
-            select_pipeline.classes('w-1/2')
-            start_button.bind_enabled_to(lsl_checker)
-            start_button.bind_enabled_to(save_checker)
-            start_button.bind_enabled_to(select_pipeline)
-            start_button.bind_enabled_to(stim_delay)
-            start_button.bind_enabled_to(select_freq)
-            start_button.bind_enabled_to(sleep_timeout)
-            start_button.bind_enabled_to(sleep_timeout_timer, 'active', forward=lambda x: not x)
+        with ui.tab_panels(tabs, value=control_tab).classes('w-full'):
+            ############### First Tab ##################
+            with ui.tab_panel(control_tab).classes('w-full items-center'):
+                ################ Simple Options ################
+                with ui.column().classes('w-full items-center'):
+                    sd_card_checker = ui.checkbox('SD Card').bind_value_from(
+                        exp_state,
+                        'sd_card'
+                    ).disable()
 
-line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
+                    test_sound_button = ui.button('Test Sound 🔊', on_click=test_sound)
 
-ui.run(
-    host='192.168.4.1', 
-    port=8081,
-    title='Portiloop Control Center',
-    dark=True,
-    favicon='🧠',
-    reload=False
-    )
+                    stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off', on_change=lambda: exp_state.toggle_stim())
+
+                    ui.separator()
+
+                    ################ Recording Controls ##################
+                    with ui.row():
+                        start_button = ui.button('Start ▶', on_click=start, color='green').classes('text-2xl')
+                        stop_button = ui.button('Stop', on_click=stop, color='orange').classes('text-2xl')
+                    start_button.bind_enabled_to(stop_button, forward=lambda x: not x)
+                    start_button.bind_enabled_to(stim_toggle)
+
+                    ################# Control Display ##################
+                    time_label = ui.label().classes('text-2xl')
+                    save_file_label = ui.label().bind_text_from(
+                        exp_state, 
+                        "exp_name", 
+                        backward=lambda x: f"Current experiment {x.split('.')[0]}")
+                    timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() - exp_state.time_started).split(".")[0]}'))
+                    sd_card_timer = ui.timer(0.5, exp_state.check_sd_card)
+                    start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
+
+            ############### Output Tab ####################
+            with ui.tab_panel(output_tab).classes('w-full items-center'):
+                ############# Line Plot stuff ################
+                line_timer = ui.timer(1/25, update_line_plot, active=False)
+                start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
+                line_plot = ui.line_plot(n=1, limit=250 * 5, update_every=25, figsize=(3, 2), layout='tight')
+
+                ui.separator()
+                ############# Display Control ###############
+                with ui.column().classes('w-full items-center'):
+                    available_channels = [f"Channel {i+1}" for i in range(RUN_SETTINGS['nb_channels'])]
+                    select_channel_display = ui.select(available_channels, value=available_channels[1], label="Display Channel")
+                    select_channel_display.bind_value_to(exp_state, 'selected_channel').classes('w-1/2')
+
+                    filtered_toggle = ui.toggle(['Raw', 'Filter'], value='Raw')
+                    filtered_toggle.bind_value_to(exp_state, 'display_data')
+
+            ############### Advanced Tab #############
+            with ui.tab_panel(advanced_tab).classes('w-full items-center'):
+                ################ Advanced Options ###################
+                with ui.column().classes('w-full items-center'):
+                    ui.label("If you are a subject in an experiment, do not change any of these options unless explicitly prompted to!").classes('text-1.5xl').style('color:#d9a011')
+                    ui.separator()
+                    space_label = ui.label(f"Disk Usage: {psutil.disk_usage(os.getcwd())}%").bind_text_from(
+                        exp_state, 
+                        'disk_str'
+                    ).classes('text-2xl')
+                    possible_freqs = [50, 100, 250, 500, 1000]
+                    select_freq = ui.select(
+                        possible_freqs, 
+                        value=250, 
+                        label="Sample Frequency (Hz)").bind_value_to(exp_state, 'select_freq').classes('w-3/4')
+                    ui.separator().classes('w-2/3')
+                    sleep_timeout = ui.slider(min=0, max=40, value=0).bind_value_to(exp_state, 'sleep_timeout').classes('w-3/4') #.props('label-always')
+                    ui.label().bind_text_from(sleep_timeout, 'value', backward=lambda x: f"Sleep Timeout: {x} minutes")
+                    sleep_timeout_timer = ui.timer(10, exp_state.check_sleep_timeout)
+                    ui.separator().classes('w-2/3')
+                    lsl_checker = ui.checkbox('Stream LSL').bind_value_to(exp_state, 'lsl')
+                    save_checker = ui.checkbox('Save Recording Locally', value=True).bind_value_to(exp_state, 'save_local')
+                    stim_delay = ui.number(value=0, label='Stimulation Delay (in ms)').bind_value_to(exp_state, 'stim_delay')
+                    select_pipeline = ui.select(exp_state.pipeline_keys, value=exp_state.pipeline_key, on_change=disable_stim_toggle_callback, label="Pipeline").bind_value_to(exp_state, 'pipeline_key')
+                    select_pipeline.classes('w-1/2')
+                    start_button.bind_enabled_to(lsl_checker)
+                    start_button.bind_enabled_to(save_checker)
+                    start_button.bind_enabled_to(select_pipeline)
+                    start_button.bind_enabled_to(stim_delay)
+                    start_button.bind_enabled_to(select_freq)
+                    start_button.bind_enabled_to(sleep_timeout)
+                    start_button.bind_enabled_to(sleep_timeout_timer, 'active', forward=lambda x: not x)
+
+        line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
+
+        ui.run(
+            host=host, 
+            port=port,
+            title=title,
+            dark=dark,
+            favicon=favicon,
+            reload=reload
+            )
+
+if __name__ == "__main__":
+    gui = SimpleUI()
+    gui.run()

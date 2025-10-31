@@ -477,7 +477,6 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
         '''
         Open the wav file and play a sound
         '''
-        self.end = time.time()
         for data in self.wav_list:
             self.pcm.write(data)
 
