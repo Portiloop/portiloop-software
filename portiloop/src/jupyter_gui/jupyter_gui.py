@@ -41,8 +41,6 @@ class JupyterUI:
             backend = Backend(self.version)
             self.nb_channels = backend.get_version()
 
-        # print(f"DEBUG: Current hardware: ADS1299 {self.nb_channels} channels | Portiloop Version: {self.version}")
-
         # General default parameters
         self.frequency = 250
         self.duration = 28800

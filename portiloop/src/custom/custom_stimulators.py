@@ -471,8 +471,6 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
                 else:
                     break
 
-        # print(f"DEBUG: Stimulator will play sound {self.soundname}, duration: {self.duration:.3f} seconds")
-
     def play_sound(self):
         '''
         Open the wav file and play a sound
@@ -525,7 +523,6 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
                 self._thread.start()
 
     def __del__(self):
-        # print("DEBUG: releasing PCM")
         del self.pcm
 
 
@@ -665,7 +662,6 @@ class AlternatingStimulator(Stimulator):
                     self.neg_wav_list.append(data)
                 else:
                     break
-        # print(f"DEBUG: Stimulator will play sound {self.soundname}, duration: {self.duration:.3f} seconds")
 
     def play_sound(self, polarity):
         '''

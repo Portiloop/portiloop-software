@@ -24,6 +24,11 @@ It enables controlling the `Portiloop` from a Graphical User Interface (GUI).
 
 You have just got your hands on the hardware for the Portiloop V3 (A Google Coral Dev Board Mini and a Portiloop board). Here are the steps you need to follow to get started using the EEG capture, the Spindle detection software, and the TPU processing.
 
+### Hadware prerequisites
+- A male-to-female jupmer wire (required to reflash if you brick the Coral board)
+- Headphones with a jack that has TWO rings (not three)
+
+
 ### Flashing the Google Coral
 Find the instructions to update your Coral Dev Board Mini to the latest OS version [here](https://coral.ai/docs/dev-board-mini/reflash/).
 
@@ -31,6 +36,8 @@ _(We recommend the force-fastboot method, as it works without `mdt`)_
 
 :warning: : The portiloop software will not work if you ignore this step.
 The software is developed for version 5.0 Eagle (Dec 2020), downloadable [here](https://dl.google.com/coral/mendel/excelsior/excelsior-eagle-20201210233645.zip)
+
+:warning: If at any point you brick your Portiloop (i.e., if the power light gets stuck on orange and never turns green, most likely because you failed to turn the Coral off gracefully), the only solution is to reflash the Coral with the force fastboot method, using a female-to-male jumper wire as described [here](https://gweb-coral-full.uc.r.appspot.com/docs/dev-board-mini/reflash/#force-boot-into-fastboot-mode). We also recommend that you wipe out the content of the home folder by executing `bash flash.sh -H` instead of executing `bash flash.sh` at the end of these instructions.
 
 ### Accessing the Google Coral
 

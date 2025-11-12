@@ -141,8 +141,6 @@ def start_capture(
 
     """
 
-    # print(f"DEBUG: Channel states: {config_dict['channel_states']}")
-
     # Initialize the LED
     leds = LEDs()
     if config_dict['stimulate']:
@@ -178,7 +176,7 @@ def start_capture(
 
     create_processor = config_dict['filter'] and processor_cls is not None
     create_detector = config_dict['detect'] and detector_cls is not None
-    create_stimulator = config_dict['detect'] and stimulator_cls is not None  # TODO: allow manual stimulation without detection
+    create_stimulator = config_dict['detect'] and stimulator_cls is not None  # FIXME: check that "detect" is right here
 
     # Initialize recording if requested
     if config_dict['record']:
@@ -210,20 +208,23 @@ def start_capture(
     stimulation_activated_buffer = []
 
     if config_dict['record']:
-        # Get the metadata and save it to a file
-        metadata = config_dict
-        # Split the original path into its components
-        dirname, basename = os.path.split(config_dict['filename'])
-        # Create dir if it doesn't exist
-        Path(dirname).mkdir(parents=True, exist_ok=True)
-        # Split the file name into its name and extension components
-        name, _ = os.path.splitext(basename)
-        # Define the new file name
-        new_name = f"{name}_metadata.json"
-        # Join the components back together into the new file path
-        metadata_path = os.path.join(dirname, new_name)
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f, indent=4)
+        try:
+            # Get the metadata and save it to a file
+            metadata = config_dict
+            # Split the original path into its components
+            dirname, basename = os.path.split(config_dict['filename'])
+            # Create dir if it doesn't exist
+            Path(dirname).mkdir(parents=True, exist_ok=True)
+            # Split the file name into its name and extension components
+            name, _ = os.path.splitext(basename)
+            # Define the new file name
+            new_name = f"{name}_metadata.json"
+            # Join the components back together into the new file path
+            metadata_path = os.path.join(dirname, new_name)
+            with open(metadata_path, "w") as f:
+                json.dump(metadata, f, indent=4)
+        except Exception as e:
+            print(f"Could not save metadata: {e}")
  
     # Initialize the variable to keep track of whether we are in a detection state or not for the markers
     prev_pause = pause_value.value

@@ -18,7 +18,11 @@ from portiloop.src.custom.custom_processors import SpindleFilter
 from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
 from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator
 
-# Import the SimpleUI so that we can launch it from this file
+# Import the SimpleUI so that we can launch it when running this file.
+# Note: The Jupyter_UI notebook example also uses this file.
+# Whether you use the Jupyter UI or run this file to use the Simple UI,
+# The custom pipeline will be made available to you.
+# The custom Simple UI from custom_ui_example.py uses the custom stimulator defined in this file along with sound_sets.json.
 
 from portiloop.src.simple_gui.simple_gui import SimpleUI
 
@@ -29,16 +33,20 @@ from portiloop.src.core.constants import SOUNDS_FOLDER
 
 # In this example, we define a custom stimulator based on SleepSpindleRealTimeStimulator.
 # Our custom stimulator will be the same as SleepSpindleRealTimeStimulator,
-# except it will play a random sound on stimulation.
+# except it will play a random sound from a set of sounds on stimulation.
 # Additionally, the index of the played sound will be logged in the CSV output.
 # (Note: CSV logging will revert to boolean when using a delayer)
 
+# Be careful when you add entries to config_dict:
+# All entries must be json-serializable as config_dict is serialized with json.dump(config_dict)
+
 class MyCustomStimulator(SleepSpindleRealTimeStimulator):
-    def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None, sound_files=[]):
+    def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
-        self.sound_files = sound_files
-        if not len(self.sound_files):  # read all files in SOUNDS_FOLDER
+        if "sound_files" in config_dict and len(config_dict["sound_files"]):
+            self.sound_files = config_dict["sound_files"]
+        else:  # read all files in SOUNDS_FOLDER
             self.sound_files = [SOUNDS_FOLDER / sound for sound in os.listdir(SOUNDS_FOLDER) if sound[-4:] == ".wav"]
         self.nb_sounds = len(self.sound_files)
         
@@ -84,6 +92,7 @@ class MyCustomStimulator(SleepSpindleRealTimeStimulator):
         return super().__del__()
     
     def stimulate(self, detection_signal):
+
         detection_points, filtered_points = detection_signal
         size = len(detection_points)
         assert len(filtered_points) == size
@@ -116,7 +125,7 @@ class MyCustomStimulator(SleepSpindleRealTimeStimulator):
     
     def play_sound(self):
         with self._lock:
-            i = self._sound_idx - 1
+            i = random.randint(a=1, b=self.nb_sounds) - 1
             pcm, wav_list = self._sounds[i]
         for data in wav_list:
             pcm.write(data)
