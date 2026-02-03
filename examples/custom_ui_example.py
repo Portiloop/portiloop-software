@@ -17,6 +17,7 @@ import os
 import socket
 from datetime import datetime
 from pathlib import Path
+import pickle as pkl
 import json
 
 from functools import partial
@@ -28,7 +29,7 @@ from nicegui import ui
 
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.utils import DummyAlsaMixer
-from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED
+from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED, STATE_PATH
 
 from portiloop.src.custom.config import RUN_SETTINGS
 
@@ -66,8 +67,44 @@ class ExperimentState:
         self.stim_delay = 0
         self.sleep_timeout = 0
         self.select_freq = 250
+        self.power_line = 60
+        self.persistent_file_name = STATE_PATH / "example_gui_state.pkl"
+
+    def save(self):
+        state = {
+            "run_dict": self.run_dict,
+            "lsl": self.lsl,
+            "save_local": self.save_local,
+            "selected_channel": self.selected_channel,
+            "display_data": self.display_data,
+            "stim_delay": self.stim_delay,
+            "sleep_timeout": self.sleep_timeout,
+            "select_freq": self.select_freq,
+            "power_line": self.power_line,
+            # "pipeline_key": self.pipeline_key
+        }
+        with open(self.persistent_file_name, 'wb') as f:
+            pkl.dump(state, f)
+
+    def load(self):
+        if self.persistent_file_name.is_file():
+            with open(self.persistent_file_name, 'rb') as f:
+                state = pkl.load(f)
+            self.run_dict = state["run_dict"]
+            self.lsl = state["lsl"]
+            self.save_local = state["save_local"]
+            self.display_data = state["display_data"]
+            self.stim_delay = state["stim_delay"]
+            self.sleep_timeout = state["sleep_timeout"]
+            self.select_freq = state["select_freq"]
+            self.power_line = state["power_line"]
+
+            self.selected_channel = state["selected_channel"]
+            # if state["pipeline_key"] in self.pipeline_keys:
+            #     self.pipeline_key = state["pipeline_key"]
 
     def start(self):
+        self.save()
         print(f"Frequency: {self.select_freq}, Sleep_timeout: {self.sleep_timeout}")
         # Set the variables for the experiment
         self.time_started = datetime.now()
@@ -79,6 +116,7 @@ class ExperimentState:
         print(f"STIMON = {self.stim_on}")
 
         self.run_dict['frequency'] = self.select_freq
+        self.run_dict["filter_settings"]["power_line"] = self.power_line
 
         # Calculating how much time to pause in seconds
         if self.sleep_timeout > 0:
@@ -183,6 +221,10 @@ class CustomUI:
             reload=False):
 
         exp_state = ExperimentState()
+        try:
+            exp_state.load()  # load persistent state
+        except Exception as e:
+            print(f"WARNING: Caught exception while loading persistent state: {e}")
 
         def start():
             exp_state.start()
@@ -280,18 +322,19 @@ class CustomUI:
             ############### Output Tab ####################
             with ui.tab_panel(output_tab).classes('w-full items-center'):
                 ############# Line Plot stuff ################
-                line_timer = ui.timer(1 / 25, update_line_plot, active=False)
+                line_timer = ui.timer(1/25, update_line_plot, active=False)
                 start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
                 line_plot = ui.line_plot(n=1, limit=250 * 5, update_every=25, figsize=(3, 2), layout='tight')
 
                 ui.separator()
                 ############# Display Control ###############
                 with ui.column().classes('w-full items-center'):
-                    available_channels = [f"Channel {i + 1}" for i in range(RUN_SETTINGS['nb_channels'])]
-                    select_channel_display = ui.select(available_channels, value=available_channels[1], label="Display Channel")
+                    available_channels = [f"Channel {i+1}" for i in range(RUN_SETTINGS['nb_channels'])]
+                    val = exp_state.selected_channel if exp_state.selected_channel in available_channels else available_channels[1]
+                    select_channel_display = ui.select(available_channels, value=val, label="Display Channel")
                     select_channel_display.bind_value_to(exp_state, 'selected_channel').classes('w-1/2')
 
-                    filtered_toggle = ui.toggle(['Raw', 'Filter'], value='Raw')
+                    filtered_toggle = ui.toggle(['Raw', 'Filter'], value=exp_state.display_data)
                     filtered_toggle.bind_value_to(exp_state, 'display_data')
 
             ############### Advanced Tab #############
@@ -307,16 +350,22 @@ class CustomUI:
                     possible_freqs = [50, 100, 250, 500, 1000]
                     select_freq = ui.select(
                         possible_freqs,
-                        value=250,
+                        value=exp_state.select_freq,
                         label="Sample Frequency (Hz)").bind_value_to(exp_state, 'select_freq').classes('w-3/4')
                     ui.separator().classes('w-2/3')
-                    sleep_timeout = ui.slider(min=0, max=40, value=0).bind_value_to(exp_state, 'sleep_timeout').classes('w-3/4')  # .props('label-always')
+                    possible_notches = [60, 50]
+                    select_notch = ui.select(
+                        possible_notches,
+                        value=exp_state.power_line,
+                        label="Notch filter frequency (Hz)").bind_value_to(exp_state, 'power_line').classes('w-3/4')
+                    ui.separator().classes('w-2/3')
+                    sleep_timeout = ui.slider(min=0, max=40, value=exp_state.sleep_timeout).bind_value_to(exp_state, 'sleep_timeout').classes('w-3/4') #.props('label-always')
                     ui.label().bind_text_from(sleep_timeout, 'value', backward=lambda x: f"Sleep Timeout: {x} minutes")
                     sleep_timeout_timer = ui.timer(10, exp_state.check_sleep_timeout)
                     ui.separator().classes('w-2/3')
-                    lsl_checker = ui.checkbox('Stream LSL').bind_value_to(exp_state, 'lsl')
-                    save_checker = ui.checkbox('Save Recording Locally', value=True).bind_value_to(exp_state, 'save_local')
-                    stim_delay = ui.number(value=0, label='Stimulation Delay (in ms)').bind_value_to(exp_state, 'stim_delay')
+                    lsl_checker = ui.checkbox('Stream LSL', value=exp_state.lsl).bind_value_to(exp_state, 'lsl')
+                    save_checker = ui.checkbox('Save Recording Locally', value=exp_state.save_local).bind_value_to(exp_state, 'save_local')
+                    stim_delay = ui.number(value=exp_state.stim_delay, label='Stimulation Delay (in ms)').bind_value_to(exp_state, 'stim_delay')
                     select_id = ui.select(self.sound_set_ids, value=self.sound_set_ids[0], on_change=_update_stimulator, label="ID").bind_value_to(self.ui_values, 'id')
                     select_id.classes('w-1/2')
                     start_button.bind_enabled_to(lsl_checker)
@@ -324,6 +373,7 @@ class CustomUI:
                     start_button.bind_enabled_to(select_id)
                     start_button.bind_enabled_to(stim_delay)
                     start_button.bind_enabled_to(select_freq)
+                    start_button.bind_enabled_to(select_notch)
                     start_button.bind_enabled_to(sleep_timeout)
                     start_button.bind_enabled_to(sleep_timeout_timer, 'active', forward=lambda x: not x)
 

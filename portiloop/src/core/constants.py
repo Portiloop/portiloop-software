@@ -40,11 +40,15 @@ if SD_CARD_DETECTED:
 else:
     WORKSPACE = HOME_FOLDER / 'workspace'
 
+# State path:
+STATE_PATH = HOME_FOLDER / 'workspace' / 'app_state'
+
 # Recording path:
 CSV_PATH = WORKSPACE / 'recordings'
 
 # Create folders if they don't exist:
 CSV_PATH.mkdir(parents=True, exist_ok=True)
+STATE_PATH.mkdir(parents=True, exist_ok=True)
 
 
 # This dictionary contains the default options that are relevant to core functions

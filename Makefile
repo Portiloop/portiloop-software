@@ -32,6 +32,10 @@ step2.temp: step1.temp
 	wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh
 	bash Miniforge3-Linux-aarch64.sh -b
 	rm Miniforge3-Linux-aarch64.sh
+	echo "Moving ~/miniforge3 directory to /opt/miniforge3..."
+	sudo mv ~/miniforge3 /opt/.
+	echo "Creating simlink..."
+	ln -s /opt/miniforge3 ~/miniforge3
 	touch step2.temp
 
 step3.temp: step2.temp
