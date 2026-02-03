@@ -1,14 +1,3 @@
----
-title: Portiloop Demo
-emoji: 💤
-colorFrom: blue
-colorTo: grey
-sdk: gradio
-sdk_version: 3.12.0
-app_file: portiloop/src/demo/demo.py
-pinned: false
----
-
 # Portiloop software
 
 This software works with the [Coral implementation](https://github.com/Portiloop/portiloop-hardware) of the `Portiloop` EEG closed-loop stimulation device.
@@ -108,17 +97,17 @@ _:warning: Failing to follow these instructions may brick your `Portiloop`, in w
 
 The Portiloop system has 3 indicator LEDs:
 - Coral board LED between the two USB-C connectors:
-  - orange: boot in progress
-  - green: boot complete
-  - red: the Coral Dev Board Mini is in fastboot mode, ready to flash
-  - turned off when the Portiloop is off
+  - orange: boot in progress
+  - green: boot complete
+  - red: the Coral Dev Board Mini is in fastboot mode, ready to flash
+  - turned off when the Portiloop is off
 - Portiloop power LED
-  - green: power plugged
-  - turned off when the Portiloop is unplugged
+  - green: power plugged
+  - turned off when the Portiloop is unplugged
 - Portiloop indicator LED
-  - purple: capture in progress
-  - blue: capture in progress with detection and stimulation pipeline enabled
-  - turned off otherwise
+  - purple: capture in progress
+  - blue: capture in progress with detection and stimulation pipeline enabled
+  - turned off otherwise
 
 ### Connect
 
@@ -126,9 +115,9 @@ Connect your computer (or smartphone) to the WiFi access point of the `Portiloop
 
 The `Portiloop` has two web-based Graphical User Interfaces that you can access via any web browser:
 - A user-friendly `Simple UI`
-  - _accessible via `192.168.4.1:8081`_
+  - _accessible via `192.168.4.1:8081`_
 - An advanced UI in the form of a `jupyter` notebook
-  - _accessible via `192.168.4.1:8080`_
+  - _accessible via `192.168.4.1:8080`_
 
 ### Simple UI
 To access the `Simple UI`, open your favorite browser and enter the following address: `192.168.4.1:8081`.
@@ -204,11 +193,11 @@ The `portiloop.custom.custom_pipelines` module defines the `PIPELINES` dictionar
 ```python
 from portiloop.src.custom.custom_pipelines import PIPELINES
 
-PIPELINES["Your_Pipeline_Name"] = {  # This name will appear in the Portiloop GUIs.
-    "processor": Your_Processor_Class,  # class of your Processor implementation (not instance).
-    "detector": Your_Detector_Class,  # class of your Detector implementation (not instance).
-    "stimulator": Your_Stimulator_Class,  # class of your Stimulator implementation (not instance).
-    "config_modifiers": {}
+PIPELINES["Your_Pipeline_Name"] = { # This name will appear in the Portiloop GUIs.
+    "processor": Your_Processor_Class, # class of your Processor implementation (not instance).
+    "detector": Your_Detector_Class, # class of your Detector implementation (not instance).
+    "stimulator": Your_Stimulator_Class, # class of your Stimulator implementation (not instance).
+    "config_modifiers": {}
 },
 ```
 You can then feed this dictionary as argument to the Portiloop GUIs.
