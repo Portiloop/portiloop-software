@@ -19,7 +19,7 @@ from pathlib import Path
 
 from portiloop.src.core.hardware.leds import Color, LEDs
 from portiloop.src.core.hardware.config_hardware import mod_config, BACKEND_CONFIG
-from portiloop.src.core.utils import Dummy, get_portiloop_version
+from portiloop.src.core.utils import Dummy, get_hardware_version
 from portiloop.src.core.output import CSVRecorder, LiveDisplay, LSLStreamer
 from portiloop.src.core.capture_backend import ADSBackend, FileBackend
 from portiloop.src.core.constants import SIGNAL_SAMPLES_FOLDER
@@ -49,8 +49,8 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
     
     sample_time = 1 / frequency
 
-    version = get_portiloop_version()
-    backend = Backend(version)
+    hardware_version = get_hardware_version()
+    backend = Backend(hardware_version)
     
     try:
         config = BACKEND_CONFIG

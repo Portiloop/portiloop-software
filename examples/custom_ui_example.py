@@ -1,13 +1,16 @@
 """
-Example of a custom UI.
+Example of a custom UI exposing custom_pipeline_example.py.
 
 This UI reads sound_sets.json and enables the user to one of the defined sound sets.
 Then, it randomly plays a sound sampled from this set when a spindle is detected.
 
-Custom variables may be passed through the configuration dicitonary derived from RUN_SETTINGS.
+Custom variables may be passed through the configuration dictionary derived from RUN_SETTINGS.
 For instance, in this UI, we pass the list of sounds in the selected set to MyCustomStimulator
-via this dictionary. Note that all entries in this dictionary must be json-serializable.
-(This is why instances of pathlib.Path are cast to strings in the code.)
+via this dictionary in the following line:
+
+exp_state.run_dict["sound_files"]
+
+Note that all entries in this dictionary must be pickle-serializable.
 """
 
 
@@ -20,19 +23,16 @@ from pathlib import Path
 import pickle as pkl
 import json
 
-from functools import partial
-
 import alsaaudio
 from alsaaudio import ALSAAudioError
 import psutil
 from nicegui import ui
 
+from portiloop import __version__
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.utils import DummyAlsaMixer
-from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED, STATE_PATH
-
+from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED, STATE_PATH, NB_CHANNELS
 from portiloop.src.custom.config import RUN_SETTINGS
-
 from portiloop.src.custom.custom_processors import SpindleFilter
 from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
 
@@ -90,7 +90,13 @@ class ExperimentState:
         if self.persistent_file_name.is_file():
             with open(self.persistent_file_name, 'rb') as f:
                 state = pkl.load(f)
-            self.run_dict = state["run_dict"]
+            
+            # check whether the previous state should be ignored (e.g., version change)
+            run_dict = state["run_dict"]
+            if run_dict["nb_channels"] != NB_CHANNELS or run_dict["software_version"] != __version__:
+                return
+
+            self.run_dict = run_dict
             self.lsl = state["lsl"]
             self.save_local = state["save_local"]
             self.display_data = state["display_data"]
@@ -278,7 +284,7 @@ class CustomUI:
         ui.label('Portiloop NEST 🧠').classes('text-4xl font-mono')
         ui.label('Control Center').classes('text-2xl font-mono')
 
-        ui.html(f"Connected to: <strong>{portiloop_ID}</strong> (v{RUN_SETTINGS['version']} - {RUN_SETTINGS['nb_channels']} channels)")
+        ui.html(f"Connected to: <strong>{portiloop_ID}</strong> (v{RUN_SETTINGS['hardware_version']} - {RUN_SETTINGS['nb_channels']} channels)")
         ui.separator()
 
         with ui.tabs().classes('w-full') as tabs:

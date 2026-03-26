@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 import io
 
 
-VERSION = '0.1.2'
+VERSION = '0.1.2'  # Note: don't forget to update this in the top __init__.py
 
 
 def is_coral():

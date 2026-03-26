@@ -3,7 +3,6 @@ import time
 import os
 import socket
 from datetime import datetime
-from pathlib import Path
 import pickle as pkl
 
 import alsaaudio
@@ -11,10 +10,10 @@ from alsaaudio import ALSAAudioError
 import psutil
 from nicegui import ui
 
+from portiloop import __version__
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.utils import DummyAlsaMixer
-from portiloop.src.core.constants import HOME_FOLDER, CSV_PATH, SD_CARD_DETECTED, STATE_PATH
-
+from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED, STATE_PATH, NB_CHANNELS
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_pipelines import PIPELINES
 
@@ -79,7 +78,13 @@ class ExperimentState:
         if self.persistent_file_name.is_file():
             with open(self.persistent_file_name, 'rb') as f:
                 state = pkl.load(f)
-            self.run_dict = state["run_dict"]
+            
+            # check whether the previous state should be ignored (e.g., version change)
+            run_dict = state["run_dict"]
+            if run_dict["nb_channels"] != NB_CHANNELS or run_dict["software_version"] != __version__:
+                return
+
+            self.run_dict = run_dict
             self.lsl = state["lsl"]
             self.save_local = state["save_local"]
             self.display_data = state["display_data"]
@@ -249,7 +254,7 @@ class SimpleUI:
         ui.label('Portiloop 🧠').classes('text-4xl font-mono')
         ui.label('Control Center').classes('text-2xl font-mono')
 
-        ui.html(f"Connected to: <strong>{portiloop_ID}</strong> (v{RUN_SETTINGS['version']} - {RUN_SETTINGS['nb_channels']} channels)")
+        ui.html(f"Connected to: <strong>{portiloop_ID}</strong> (v{RUN_SETTINGS['hardware_version']} - {RUN_SETTINGS['nb_channels']} channels)")
         ui.separator()
 
         with ui.tabs().classes('w-full') as tabs:
