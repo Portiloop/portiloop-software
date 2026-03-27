@@ -20,10 +20,12 @@ from portiloop.src.custom.custom_pipelines import PIPELINES
 portiloop_ID = socket.gethostname()
 
 
-LINE_PLOT_LEN = 250 * 2
+LINE_PLOT_LEN = 250 * 5
 LINE_PLOT_UPDATE_EVERY = 250
 LINE_PLOT_FIGSIZE = (3, 2)
 LINE_PLOT_STRIDE = 1
+TIMER_SD_CARD = 0.5
+TIMER_READ_DISPLAY_QUEUE = 1/25
 
 
 class ExperimentState:
@@ -305,13 +307,13 @@ class SimpleUI:
                         "exp_name",
                         backward=lambda x: f"Current experiment {x.split('.')[0]}")
                     timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() - exp_state.time_started).split(".")[0]}'))
-                    sd_card_timer = ui.timer(5.0, exp_state.check_sd_card)
+                    sd_card_timer = ui.timer(TIMER_SD_CARD, exp_state.check_sd_card)
                     start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
 
             ############### Output Tab ####################
             with ui.tab_panel(output_tab).classes('w-full items-center'):
                 ############# Line Plot stuff ################
-                line_timer = ui.timer(0.1, update_line_plot, active=False)  # this only empties the queue, not relevant for CPU usage related to drawing
+                line_timer = ui.timer(TIMER_READ_DISPLAY_QUEUE, update_line_plot, active=False)  # this only empties the queue, not relevant for CPU usage related to drawing
                 start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
                 line_plot = ui.line_plot(n=1, limit=LINE_PLOT_LEN, update_every=LINE_PLOT_UPDATE_EVERY, figsize=LINE_PLOT_FIGSIZE, layout='tight')
 
