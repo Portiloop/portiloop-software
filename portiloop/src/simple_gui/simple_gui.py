@@ -20,6 +20,12 @@ from portiloop.src.custom.custom_pipelines import PIPELINES
 portiloop_ID = socket.gethostname()
 
 
+LINE_PLOT_LEN = 250 * 2
+LINE_PLOT_UPDATE_EVERY = 250
+LINE_PLOT_FIGSIZE = (3, 2)
+LINE_PLOT_STRIDE = 1
+
+
 class ExperimentState:
     def __init__(self, pipelines = PIPELINES):
         self._pipelines = pipelines
@@ -205,6 +211,8 @@ class SimpleUI:
             reload=False):
 
         exp_state = ExperimentState(pipelines=self._pipelines)
+        point_index = 0
+
         try:
             exp_state.load()  # load persistent state
         except Exception as e:
@@ -224,27 +232,32 @@ class SimpleUI:
             del stimulator
 
         def update_line_plot():
-            now = datetime.now()
-            x = now.timestamp()
+            # now = datetime.now()
+            # x = now.timestamp()
+
+            x = []
+            y = []
+
+            # empty the display queue
             try:
-                # empty the queue
-                x = []
-                y = []
                 while not exp_state.display_q.empty():
                     channel = int(exp_state.selected_channel[-1]) - 1
                     point = exp_state.display_q.get(block=False)
                     time, raw_point, filtered_point = point
-                    x.append(time)
                     if exp_state.display_data == 'Raw':
                         point = raw_point[0][channel]
                     elif exp_state.display_data == 'Filter':
                         point = filtered_point[0][channel]
                     else:
                         point = 0.0
-                    y.append(point)
+                    point_index += 1
+                    if point_index % LINE_PLOT_STRIDE != 0:
+                        x.append(time)
+                        y.append(point)
             except Exception as e:
                 print(f"Caught exception: {e}")
 
+            # update the actual plot
             if len(x) > 0 and len(y) > 0:
                 line_plot.push(x, [y])
 
@@ -292,15 +305,15 @@ class SimpleUI:
                         "exp_name",
                         backward=lambda x: f"Current experiment {x.split('.')[0]}")
                     timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() - exp_state.time_started).split(".")[0]}'))
-                    sd_card_timer = ui.timer(0.5, exp_state.check_sd_card)
+                    sd_card_timer = ui.timer(5.0, exp_state.check_sd_card)
                     start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
 
             ############### Output Tab ####################
             with ui.tab_panel(output_tab).classes('w-full items-center'):
                 ############# Line Plot stuff ################
-                line_timer = ui.timer(1/25, update_line_plot, active=False)
+                line_timer = ui.timer(0.1, update_line_plot, active=False)  # this only empties the queue, not relevant for CPU usage related to drawing
                 start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
-                line_plot = ui.line_plot(n=1, limit=250 * 5, update_every=25, figsize=(3, 2), layout='tight')
+                line_plot = ui.line_plot(n=1, limit=LINE_PLOT_LEN, update_every=LINE_PLOT_UPDATE_EVERY, figsize=LINE_PLOT_FIGSIZE, layout='tight')
 
                 ui.separator()
                 ############# Display Control ###############
