@@ -20,12 +20,12 @@ from portiloop.src.custom.custom_pipelines import PIPELINES
 portiloop_ID = socket.gethostname()
 
 
-LINE_PLOT_LEN = 250 * 5
-LINE_PLOT_UPDATE_EVERY = 250
+LINE_PLOT_WINDOW = 5  # (window in seconds)
+LINE_PLOT_UPDATE_EVERY = 1
 LINE_PLOT_FIGSIZE = (3, 2)
 LINE_PLOT_STRIDE = 1
-TIMER_SD_CARD = 0.5
-TIMER_READ_DISPLAY_QUEUE = 1/25
+TIMER_SD_CARD = 5.0
+TIMER_READ_DISPLAY_QUEUE = 1.0
 
 
 class ExperimentState:
@@ -313,9 +313,10 @@ class SimpleUI:
             ############### Output Tab ####################
             with ui.tab_panel(output_tab).classes('w-full items-center'):
                 ############# Line Plot stuff ################
-                line_timer = ui.timer(TIMER_READ_DISPLAY_QUEUE, update_line_plot, active=False)  # this only empties the queue, not relevant for CPU usage related to drawing
+                line_timer = ui.timer(TIMER_READ_DISPLAY_QUEUE, update_line_plot, active=False)
                 start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
-                line_plot = ui.line_plot(n=1, limit=LINE_PLOT_LEN, update_every=LINE_PLOT_UPDATE_EVERY, figsize=LINE_PLOT_FIGSIZE, layout='tight')
+                len_plot = int(exp_state.run_dict['frequency'] * LINE_PLOT_WINDOW / LINE_PLOT_STRIDE)
+                line_plot = ui.line_plot(n=1, limit=len_plot, update_every=LINE_PLOT_UPDATE_EVERY, figsize=LINE_PLOT_FIGSIZE, layout='tight')
 
                 ui.separator()
                 ############# Display Control ###############
