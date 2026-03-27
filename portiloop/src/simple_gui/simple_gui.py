@@ -37,6 +37,7 @@ class ExperimentState:
         # self.detector_cls = pipeline["detector"]
         # self.stimulator_cls = pipeline["stimulator"]
 
+        self.point_index = 0
         self.started = False
         self.time_started = datetime.now()
         self.q_msg = Queue()
@@ -213,7 +214,6 @@ class SimpleUI:
             reload=False):
 
         exp_state = ExperimentState(pipelines=self._pipelines)
-        point_index = 0
 
         try:
             exp_state.load()  # load persistent state
@@ -252,8 +252,8 @@ class SimpleUI:
                         point = filtered_point[0][channel]
                     else:
                         point = 0.0
-                    point_index += 1
-                    if point_index % LINE_PLOT_STRIDE != 0:
+                    exp_state.point_index += 1
+                    if exp_state.point_index % LINE_PLOT_STRIDE == 0:
                         x.append(time)
                         y.append(point)
             except Exception as e:
