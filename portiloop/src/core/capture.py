@@ -297,9 +297,9 @@ def start_capture(
         
         # Go through filtering pipeline
         if processor is not None:
-            filtered_points = processor.filter(deepcopy(raw_points))
+            filtered_points = processor.filter(raw_points.copy())
         else:
-            filtered_points = deepcopy(raw_points)
+            filtered_points = raw_points.copy()
 
         # Contains the filtered points (if filtering is off, contains a copy of the raw points)
         filtered_points = filtered_points.tolist()
