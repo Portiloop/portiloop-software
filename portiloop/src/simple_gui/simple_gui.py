@@ -38,6 +38,7 @@ class ExperimentState:
         # self.stimulator_cls = pipeline["stimulator"]
 
         self.point_index = 0
+        self.len_plot = int(RUN_SETTINGS['frequency'] * LINE_PLOT_WINDOW / LINE_PLOT_STRIDE)
         self.started = False
         self.time_started = datetime.now()
         self.q_msg = Queue()
@@ -121,6 +122,9 @@ class ExperimentState:
         self.run_dict['frequency'] = self.select_freq
         self.run_dict["filter_settings"]["power_line"] = self.power_line
 
+        self.point_index = 0
+        self.len_plot = int(self.run_dict['frequency'] * LINE_PLOT_WINDOW / LINE_PLOT_STRIDE)
+
         # Calculating how much time to pause in seconds
         if self.sleep_timeout > 0:
             self.time_unpause = self.time_started.timestamp() + self.sleep_timeout * 60
@@ -179,7 +183,21 @@ class ExperimentState:
         print("Stopping recording...")
         self.q_msg.put('STOP')
         assert self._t_capture is not None
+        # flush display queue
+        while self._t_capture.is_alive():
+            while not self.display_q.empty():
+                try:
+                    self.display_q.get_nowait()
+                except Exception:
+                    break
+            time.sleep(0.05)  # avoid busy loop
         self._t_capture.join()
+        # drain remaining
+        while not self.display_q.empty():
+            try:
+                self.display_q.get_nowait()
+            except Exception:
+                break
         self._t_capture = None
         print("Done.")
 
@@ -315,8 +333,7 @@ class SimpleUI:
                 ############# Line Plot stuff ################
                 line_timer = ui.timer(TIMER_READ_DISPLAY_QUEUE, update_line_plot, active=False)
                 start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
-                len_plot = int(exp_state.run_dict['frequency'] * LINE_PLOT_WINDOW / LINE_PLOT_STRIDE)
-                line_plot = ui.line_plot(n=1, limit=len_plot, update_every=LINE_PLOT_UPDATE_EVERY, figsize=LINE_PLOT_FIGSIZE, layout='tight')
+                line_plot = ui.line_plot(n=1, limit=exp_state.len_plot, update_every=LINE_PLOT_UPDATE_EVERY, figsize=LINE_PLOT_FIGSIZE, layout='tight')
 
                 ui.separator()
                 ############# Display Control ###############
