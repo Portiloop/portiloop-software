@@ -256,8 +256,9 @@ def start_capture(
         
         # First, we send all outgoing messages to the capture process
         try:
-            msg = q_msg.get_nowait()
-            capture_backend.send_msg(msg)
+            if not q_msg.empty():
+                msg = q_msg.get_nowait()
+                capture_backend.send_msg(msg)
         except queue.Empty as e:
             pass
         except queue.ShutDown as e:
