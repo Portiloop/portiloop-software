@@ -1,6 +1,5 @@
 import numpy as np
-from scipy.signal import firwin
-from scipy import signal
+from scipy.signal import firwin, butter
 
 from portiloop.src.core.processing import Processor
 
@@ -177,7 +176,7 @@ class SlowOscillationFilter(Filter):
         assert power_line_fq in [50, 60], f"The only supported power line frequencies are 50 Hz and 60 Hz. Received {power_line_fq}"
 
         # DC offset removal filter (high-pass filter)
-        self.dc_b, self.dc_a = signal.butter(1, 0.5 / (sampling_rate / 2), "high")
+        self.dc_b, self.dc_a = butter(1, 0.5 / (sampling_rate / 2), "high")
 
         # FIR Bandpass filter (0.5 - 30 Hz)
         if use_custom_fir:
@@ -185,7 +184,7 @@ class SlowOscillationFilter(Filter):
         else:
             low = 0.5
             high = 30.0
-            fir_coef = signal.firwin(20, [low, high], pass_zero=False, window="hamming", fs=sampling_rate)
+            fir_coef = firwin(20, [low, high], pass_zero=False, window="hamming", fs=sampling_rate)
 
         # Initialize filter states for each channel
         dc_estimate = np.zeros(nb_channels)
