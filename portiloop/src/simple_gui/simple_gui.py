@@ -54,7 +54,7 @@ class ExperimentState:
         self._t_capture = None
         self.stim_on = False
         self.exp_name = ""
-        self.display_q = Queue() if ENABLE_DISPLAY else None
+        self.display_q = Queue()
         self.sd_card = False
         self.check_sd_card()
         self.lsl = False
@@ -186,22 +186,20 @@ class ExperimentState:
         self.q_msg.put('STOP')
         assert self._t_capture is not None
         # flush display queue
-        if ENABLE_DISPLAY:
-            while self._t_capture.is_alive():
-                while not self.display_q.empty():
-                    try:
-                        self.display_q.get_nowait()
-                    except Exception:
-                        break
-                time.sleep(0.05)  # avoid busy loop
-        self._t_capture.join()
-        if ENABLE_DISPLAY:
-            # drain remaining
+        while self._t_capture.is_alive():
             while not self.display_q.empty():
                 try:
                     self.display_q.get_nowait()
                 except Exception:
                     break
+            time.sleep(0.05)  # avoid busy loop
+        self._t_capture.join()
+        # drain remaining
+        while not self.display_q.empty():
+            try:
+                self.display_q.get_nowait()
+            except Exception:
+                break
         self._t_capture = None
         print("Done.")
 
@@ -256,11 +254,6 @@ class SimpleUI:
             del stimulator
 
         def update_line_plot():
-            if not ENABLE_DISPLAY:
-                return
-
-            # now = datetime.now()
-            # x = now.timestamp()
 
             x = []
             y = []
@@ -285,8 +278,9 @@ class SimpleUI:
                 print(f"Caught exception: {e}")
 
             # update the actual plot
-            if len(x) > 0 and len(y) > 0:
-                line_plot.push(x, [y])
+            if ENABLE_DISPLAY:
+                if len(x) > 0 and len(y) > 0:
+                    line_plot.push(x, [y])
 
         def disable_stim_toggle_callback(caller):
             stim_toggle.enable()
