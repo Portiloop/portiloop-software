@@ -6,6 +6,7 @@ from scipy import signal
 from portiloop.src.core.detection import Detector
 from portiloop.src.core.constants import DEFAULT_MODEL_PATH
 from portiloop.src.core.utils import Dummy
+from portiloop.src.custom.custom_processors import FIR
 
 from portiloop.src import ADS
 if ADS:
@@ -173,8 +174,8 @@ class SlowOscillationDetector(Detector):
         self.count = 0
         self.record = record
 
-        self.ssw_filter = signal.firwin(self.numtaps, self.fmin_max, fs=self.fs, pass_zero="bandpass")
-        self.zi = signal.lfilter_zi(self.ssw_filter, 1)
+        coefficients = signal.firwin(self.numtaps, self.fmin_max, fs=self.fs, pass_zero="bandpass")
+        self._fir = FIR(nb_channels=1, coefficients=coefficients)
 
         self.max_peak = None
         self.min_peak = None
@@ -206,14 +207,7 @@ class SlowOscillationDetector(Detector):
         return results, datapoints
 
     def detect_point(self, point):
-        filtered_point, self.zi = signal.lfilter(
-            self.ssw_filter, [1], [point], zi=self.zi
-        )
-
-        # self.buffer.append(point)
-        # self.filtered_buffer.append(filtered_point[0])
-
-        tsignal = filtered_point[0]
+        tsignal = self._fir.filter(np.array([point]))[0]  # FIXME: this should be done in the processor, not in the detector
         if tsignal > self.max_peak:
             self.max_peak = tsignal
         if tsignal < self.min_peak:
