@@ -20,12 +20,14 @@ from portiloop.src.custom.custom_pipelines import PIPELINES
 portiloop_ID = socket.gethostname()
 
 
+ENABLE_DISPLAY = False
 LINE_PLOT_WINDOW = 5  # (window in seconds)
 LINE_PLOT_UPDATE_EVERY = 1
 LINE_PLOT_FIGSIZE = (3, 2)
 LINE_PLOT_STRIDE = 1
-TIMER_SD_CARD = 5.0
 TIMER_READ_DISPLAY_QUEUE = 1.0
+
+TIMER_SD_CARD = 5.0
 
 
 class ExperimentState:
@@ -52,7 +54,7 @@ class ExperimentState:
         self._t_capture = None
         self.stim_on = False
         self.exp_name = ""
-        self.display_q = Queue()
+        self.display_q = Queue() if ENABLE_DISPLAY else None
         self.sd_card = False
         self.check_sd_card()
         self.lsl = False
@@ -184,20 +186,22 @@ class ExperimentState:
         self.q_msg.put('STOP')
         assert self._t_capture is not None
         # flush display queue
-        while self._t_capture.is_alive():
+        if ENABLE_DISPLAY:
+            while self._t_capture.is_alive():
+                while not self.display_q.empty():
+                    try:
+                        self.display_q.get_nowait()
+                    except Exception:
+                        break
+                time.sleep(0.05)  # avoid busy loop
+        self._t_capture.join()
+        if ENABLE_DISPLAY:
+            # drain remaining
             while not self.display_q.empty():
                 try:
                     self.display_q.get_nowait()
                 except Exception:
                     break
-            time.sleep(0.05)  # avoid busy loop
-        self._t_capture.join()
-        # drain remaining
-        while not self.display_q.empty():
-            try:
-                self.display_q.get_nowait()
-            except Exception:
-                break
         self._t_capture = None
         print("Done.")
 
@@ -252,6 +256,9 @@ class SimpleUI:
             del stimulator
 
         def update_line_plot():
+            if not ENABLE_DISPLAY:
+                return
+
             # now = datetime.now()
             # x = now.timestamp()
 
@@ -331,9 +338,10 @@ class SimpleUI:
             ############### Output Tab ####################
             with ui.tab_panel(output_tab).classes('w-full items-center'):
                 ############# Line Plot stuff ################
-                line_timer = ui.timer(TIMER_READ_DISPLAY_QUEUE, update_line_plot, active=False)
-                start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
-                line_plot = ui.line_plot(n=1, limit=exp_state.len_plot, update_every=LINE_PLOT_UPDATE_EVERY, figsize=LINE_PLOT_FIGSIZE, layout='tight')
+                if ENABLE_DISPLAY:
+                    line_timer = ui.timer(TIMER_READ_DISPLAY_QUEUE, update_line_plot, active=False)
+                    start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
+                    line_plot = ui.line_plot(n=1, limit=exp_state.len_plot, update_every=LINE_PLOT_UPDATE_EVERY, figsize=LINE_PLOT_FIGSIZE, layout='tight')
 
                 ui.separator()
                 ############# Display Control ###############
@@ -385,8 +393,9 @@ class SimpleUI:
                     start_button.bind_enabled_to(select_notch)
                     start_button.bind_enabled_to(sleep_timeout)
                     start_button.bind_enabled_to(sleep_timeout_timer, 'active', forward=lambda x: not x)
-
-        line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
+        
+        if ENABLE_DISPLAY:
+            line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
 
         ui.run(
             host=host, 
