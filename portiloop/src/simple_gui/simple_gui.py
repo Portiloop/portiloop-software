@@ -20,11 +20,11 @@ from portiloop.src.custom.custom_pipelines import PIPELINES
 portiloop_ID = socket.gethostname()
 
 
-ENABLE_DISPLAY = False
+ENABLE_DISPLAY = True
 LINE_PLOT_WINDOW = 5  # (window in seconds)
-LINE_PLOT_UPDATE_EVERY = 1
+LINE_PLOT_UPDATE_EVERY = 2  # plot every N x TIMER_READ_DISPLAY_QUEUE s
 LINE_PLOT_FIGSIZE = (3, 2)
-LINE_PLOT_STRIDE = 1
+LINE_PLOT_STRIDE = 4  # plot only 1 in N datapoints
 TIMER_READ_DISPLAY_QUEUE = 1.0
 
 TIMER_SD_CARD = 5.0

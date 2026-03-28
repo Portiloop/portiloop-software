@@ -141,8 +141,6 @@ def start_capture(
 
     """
 
-    print(f"DEBUG: {(processor_cls, detector_cls, stimulator_cls, q_msg, q_display)} with {config_dict}")
-
     # Initialize the LED
     leds = LEDs()
     if config_dict['stimulate']:
