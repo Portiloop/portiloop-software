@@ -35,18 +35,12 @@ class ExperimentState:
         self._pipelines = pipelines
         self.pipeline_keys = list(self._pipelines.keys())
         self.pipeline_key = self.pipeline_keys[0]
-        # self.processor_cls = pipeline["processor"]
-        # self.detector_cls = pipeline["detector"]
-        # self.stimulator_cls = pipeline["stimulator"]
 
         self.point_index = 0
         self.len_plot = int(RUN_SETTINGS['frequency'] * LINE_PLOT_WINDOW / LINE_PLOT_STRIDE)
         self.started = False
         self.time_started = datetime.now()
         self.q_msg = Queue()
-        # self.processor_cls = SpindleFilter
-        # self.detector_cls = SleepSpindleRealTimeDetector
-        # self.stimulator_cls = SleepSpindleRealTimeStimulator
         self.run_dict = RUN_SETTINGS
         # enable all channels:
         self.run_dict["channel_states"] = ["simple"] * self.run_dict["nb_channels"]
@@ -236,7 +230,6 @@ class SimpleUI:
             reload=False):
 
         exp_state = ExperimentState(pipelines=self._pipelines)
-
         try:
             exp_state.load()  # load persistent state
         except Exception as e:
@@ -391,18 +384,19 @@ class SimpleUI:
                     start_button.bind_enabled_to(select_notch)
                     start_button.bind_enabled_to(sleep_timeout)
                     start_button.bind_enabled_to(sleep_timeout_timer, 'active', forward=lambda x: not x)
-        
+
         if ENABLE_DISPLAY:
             line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
 
         ui.run(
-            host=host, 
+            host=host,
             port=port,
             title=title,
             dark=dark,
             favicon=favicon,
             reload=reload
             )
+
 
 if __name__ == "__main__":
     gui = SimpleUI()

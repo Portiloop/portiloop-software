@@ -24,12 +24,11 @@ if ADS:
 
 
 class JupyterUI:
-    def __init__(self, pipelines = PIPELINES, default_pipeline_key=DEFAULT_PIPELINE_KEY):
+    def __init__(self, pipelines=PIPELINES, default_pipeline_key=DEFAULT_PIPELINE_KEY):
 
         self._pipelines = pipelines
         self._default_pipeline_key = default_pipeline_key
 
-        # {now.strftime('%m_%d_%Y_%H_%M_%S')}
         self.filename = CSV_PATH / 'recording' / 'recording.csv'
         self.record_raw = True
         self.record_filtered = False
