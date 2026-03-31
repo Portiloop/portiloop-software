@@ -130,7 +130,7 @@ It has several options, including:
 
 You can select the relevant pipeline and parameters for your experiments in the `Advanced` tab.
 
-:info: The `Acquisition only` pipeline does not perform any detection or stimulation.
+:information_source: The `Acquisition only` pipeline does not perform any detection or stimulation.
 
 ### Jupyter UI
 
