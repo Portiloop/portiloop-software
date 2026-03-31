@@ -356,7 +356,7 @@ class SimpleUI:
                         'disk_str'
                     ).classes('text-2xl')
                     select_pipeline = ui.select(exp_state.pipeline_keys, value=exp_state.pipeline_key, on_change=disable_stim_toggle_callback, label="Pipeline").bind_value_to(exp_state, 'pipeline_key')
-                    select_pipeline.classes('w-1/2')
+                    select_pipeline.classes('w-3/4')
                     possible_freqs = [50, 100, 250, 500, 1000]
                     select_freq = ui.select(
                         possible_freqs,
