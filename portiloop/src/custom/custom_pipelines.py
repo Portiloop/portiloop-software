@@ -7,6 +7,12 @@ from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector, 
 from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator, SlowOscillationStimulator
 
 PIPELINES = {
+    "Acquisition only": {
+        "processor": None,
+        "detector": None,
+        "stimulator": None,
+        "config_modifiers": {}
+    },
     "Sleep spindles": {
         "processor": SpindleFilter,
         "detector": SleepSpindleRealTimeDetector,
@@ -21,4 +27,4 @@ PIPELINES = {
     }
 }
 
-DEFAULT_PIPELINE_KEY = "Sleep spindles"
+DEFAULT_PIPELINE_KEY = "Acquisition only"

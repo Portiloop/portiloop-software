@@ -9,12 +9,12 @@ It enables controlling the `Portiloop` from a Graphical User Interface (GUI).
 - [GUI usage](#usage)
 - [Developer guide](#developer-guide)
 
-## Installation (Portiloop V3):
+## Installation (Portiloop V2.3):
 
-You have just got your hands on the hardware for the Portiloop V3 (A Google Coral Dev Board Mini and a Portiloop board). Here are the steps you need to follow to get started using the EEG capture, the Spindle detection software, and the TPU processing.
+You have just got your hands on the hardware for the Portiloop V2.3 (A Google Coral Dev Board Mini and a Portiloop board). Here are the steps you need to follow to get started.
 
 ### Hadware prerequisites
-- A male-to-female jupmer wire (required to reflash if you brick the Coral board)
+- A male-to-female jupmer wire (required to reflash if you brick the Coral Dev Board Mini)
 - Headphones with a jack that has TWO rings (not three)
 
 
@@ -127,6 +127,10 @@ It has several options, including:
 - Detecting patterns of interest in real-time (e.g., Sleep Spindles)
 - Performing closed-loop stimulation based on this detection
 - Recording raw EEG along with the above detections in a CSV file
+
+You can select the relevant pipeline and parameters for your experiments in the `Advanced` tab.
+
+:information_source: The `Acquisition only` pipeline does not perform any detection or stimulation.
 
 ### Jupyter UI
 

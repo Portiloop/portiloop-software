@@ -19,7 +19,7 @@ from pathlib import Path
 
 from portiloop.src.core.hardware.leds import Color, LEDs
 from portiloop.src.core.hardware.config_hardware import mod_config, BACKEND_CONFIG
-from portiloop.src.core.utils import Dummy, get_portiloop_version
+from portiloop.src.core.utils import Dummy, get_hardware_version
 from portiloop.src.core.output import CSVRecorder, LiveDisplay, LSLStreamer
 from portiloop.src.core.capture_backend import ADSBackend, FileBackend
 from portiloop.src.core.constants import SIGNAL_SAMPLES_FOLDER
@@ -49,8 +49,8 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
     
     sample_time = 1 / frequency
 
-    version = get_portiloop_version()
-    backend = Backend(version)
+    hardware_version = get_hardware_version()
+    backend = Backend(hardware_version)
     
     try:
         config = BACKEND_CONFIG
@@ -256,8 +256,9 @@ def start_capture(
         
         # First, we send all outgoing messages to the capture process
         try:
-            msg = q_msg.get_nowait()
-            capture_backend.send_msg(msg)
+            if not q_msg.empty():
+                msg = q_msg.get_nowait()
+                capture_backend.send_msg(msg)
         except queue.Empty as e:
             pass
         except queue.ShutDown as e:
@@ -296,9 +297,9 @@ def start_capture(
         
         # Go through filtering pipeline
         if processor is not None:
-            filtered_points = processor.filter(deepcopy(raw_points))
+            filtered_points = processor.filter(raw_points.copy())
         else:
-            filtered_points = deepcopy(raw_points)
+            filtered_points = raw_points.copy()
 
         # Contains the filtered points (if filtering is off, contains a copy of the raw points)
         filtered_points = filtered_points.tolist()

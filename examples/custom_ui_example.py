@@ -1,13 +1,16 @@
 """
-Example of a custom UI.
+Example of a custom UI exposing custom_pipeline_example.py.
 
-This UI reads sound_sets.json and enables the user to one of the defined sound sets.
+This UI reads sound_sets.json and enables the user to select one of the defined sound sets.
 Then, it randomly plays a sound sampled from this set when a spindle is detected.
 
-Custom variables may be passed through the configuration dicitonary derived from RUN_SETTINGS.
+Custom variables may be passed through the configuration dictionary derived from RUN_SETTINGS.
 For instance, in this UI, we pass the list of sounds in the selected set to MyCustomStimulator
-via this dictionary. Note that all entries in this dictionary must be json-serializable.
-(This is why instances of pathlib.Path are cast to strings in the code.)
+via this dictionary in the following line:
+
+exp_state.run_dict["sound_files"]
+
+Note that all entries in this dictionary must be pickle-serializable.
 """
 
 
@@ -20,19 +23,16 @@ from pathlib import Path
 import pickle as pkl
 import json
 
-from functools import partial
-
 import alsaaudio
 from alsaaudio import ALSAAudioError
 import psutil
 from nicegui import ui
 
+from portiloop import __version__
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.utils import DummyAlsaMixer
-from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED, STATE_PATH
-
+from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED, STATE_PATH, NB_CHANNELS
 from portiloop.src.custom.config import RUN_SETTINGS
-
 from portiloop.src.custom.custom_processors import SpindleFilter
 from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
 
@@ -42,8 +42,20 @@ from custom_pipeline_example import MyCustomStimulator
 portiloop_ID = socket.gethostname()
 
 
+ENABLE_DISPLAY = True
+LINE_PLOT_WINDOW = 5  # (window in seconds)
+LINE_PLOT_UPDATE_EVERY = 2  # plot every N x TIMER_READ_DISPLAY_QUEUE s
+LINE_PLOT_FIGSIZE = (3, 2)
+LINE_PLOT_STRIDE = 4  # plot only 1 in N datapoints
+TIMER_READ_DISPLAY_QUEUE = 1.0
+
+TIMER_SD_CARD = 5.0
+
+
 class ExperimentState:
     def __init__(self):
+        self.point_index = 0
+        self.len_plot = int(RUN_SETTINGS['frequency'] * LINE_PLOT_WINDOW / LINE_PLOT_STRIDE)
         self.started = False
         self.time_started = datetime.now()
         self.q_msg = Queue()
@@ -54,7 +66,7 @@ class ExperimentState:
         self._t_capture = None
         self.stim_on = False
         self.exp_name = ""
-        self.display_q = Queue()
+        self.display_q = Queue() if ENABLE_DISPLAY else None
         self.sd_card = False
         self.check_sd_card()
         self.lsl = False
@@ -81,7 +93,6 @@ class ExperimentState:
             "sleep_timeout": self.sleep_timeout,
             "select_freq": self.select_freq,
             "power_line": self.power_line,
-            # "pipeline_key": self.pipeline_key
         }
         with open(self.persistent_file_name, 'wb') as f:
             pkl.dump(state, f)
@@ -90,7 +101,13 @@ class ExperimentState:
         if self.persistent_file_name.is_file():
             with open(self.persistent_file_name, 'rb') as f:
                 state = pkl.load(f)
-            self.run_dict = state["run_dict"]
+            
+            # check whether the previous state should be ignored (e.g., version change)
+            run_dict = state["run_dict"]
+            if run_dict["nb_channels"] != NB_CHANNELS or run_dict["software_version"] != __version__:
+                return
+
+            self.run_dict = run_dict
             self.lsl = state["lsl"]
             self.save_local = state["save_local"]
             self.display_data = state["display_data"]
@@ -100,8 +117,6 @@ class ExperimentState:
             self.power_line = state["power_line"]
 
             self.selected_channel = state["selected_channel"]
-            # if state["pipeline_key"] in self.pipeline_keys:
-            #     self.pipeline_key = state["pipeline_key"]
 
     def start(self):
         self.save()
@@ -117,6 +132,9 @@ class ExperimentState:
 
         self.run_dict['frequency'] = self.select_freq
         self.run_dict["filter_settings"]["power_line"] = self.power_line
+
+        self.point_index = 0
+        self.len_plot = int(self.run_dict['frequency'] * LINE_PLOT_WINDOW / LINE_PLOT_STRIDE)
 
         # Calculating how much time to pause in seconds
         if self.sleep_timeout > 0:
@@ -176,7 +194,23 @@ class ExperimentState:
         print("Stopping recording...")
         self.q_msg.put('STOP')
         assert self._t_capture is not None
+        if ENABLE_DISPLAY:
+            # flush display queue
+            while self._t_capture.is_alive():
+                while not self.display_q.empty():
+                    try:
+                        self.display_q.get_nowait()
+                    except Exception:
+                        break
+                time.sleep(0.05)  # avoid busy loop
         self._t_capture.join()
+        if ENABLE_DISPLAY:
+            # drain remaining
+            while not self.display_q.empty():
+                try:
+                    self.display_q.get_nowait()
+                except Exception:
+                    break
         self._t_capture = None
         print("Done.")
 
@@ -242,27 +276,33 @@ class CustomUI:
             del stimulator
 
         def update_line_plot():
-            now = datetime.now()
-            x = now.timestamp()
+
+            if not ENABLE_DISPLAY:
+                return
+
+            x = []
+            y = []
+
+            # empty the display queue
             try:
-                # empty the queue
-                x = []
-                y = []
                 while not exp_state.display_q.empty():
                     channel = int(exp_state.selected_channel[-1]) - 1
                     point = exp_state.display_q.get(block=False)
                     time, raw_point, filtered_point = point
-                    x.append(time)
                     if exp_state.display_data == 'Raw':
                         point = raw_point[0][channel]
                     elif exp_state.display_data == 'Filter':
                         point = filtered_point[0][channel]
                     else:
                         point = 0.0
-                    y.append(point)
+                    exp_state.point_index += 1
+                    if exp_state.point_index % LINE_PLOT_STRIDE == 0:
+                        x.append(time)
+                        y.append(point)
             except Exception as e:
                 print(f"Caught exception: {e}")
 
+            # update the actual plot 
             if len(x) > 0 and len(y) > 0:
                 line_plot.push(x, [y])
         
@@ -278,7 +318,7 @@ class CustomUI:
         ui.label('Portiloop NEST 🧠').classes('text-4xl font-mono')
         ui.label('Control Center').classes('text-2xl font-mono')
 
-        ui.html(f"Connected to: <strong>{portiloop_ID}</strong> (v{RUN_SETTINGS['version']} - {RUN_SETTINGS['nb_channels']} channels)")
+        ui.html(f"Connected to: <strong>{portiloop_ID}</strong> (v{RUN_SETTINGS['hardware_version']} - {RUN_SETTINGS['nb_channels']} channels)")
         ui.separator()
 
         with ui.tabs().classes('w-full') as tabs:
@@ -316,15 +356,16 @@ class CustomUI:
                         "exp_name",
                         backward=lambda x: f"Current experiment {x.split('.')[0]}")
                     timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() - exp_state.time_started).split(".")[0]}'))
-                    sd_card_timer = ui.timer(0.5, exp_state.check_sd_card)
+                    sd_card_timer = ui.timer(TIMER_SD_CARD, exp_state.check_sd_card)
                     start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
 
             ############### Output Tab ####################
             with ui.tab_panel(output_tab).classes('w-full items-center'):
                 ############# Line Plot stuff ################
-                line_timer = ui.timer(1/25, update_line_plot, active=False)
-                start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
-                line_plot = ui.line_plot(n=1, limit=250 * 5, update_every=25, figsize=(3, 2), layout='tight')
+                if ENABLE_DISPLAY:
+                    line_timer = ui.timer(TIMER_READ_DISPLAY_QUEUE, update_line_plot, active=False)
+                    start_button.bind_enabled_to(line_timer, 'active', forward=lambda x: not x)
+                    line_plot = ui.line_plot(n=1, limit=exp_state.len_plot, update_every=LINE_PLOT_UPDATE_EVERY, figsize=LINE_PLOT_FIGSIZE, layout='tight')
 
                 ui.separator()
                 ############# Display Control ###############
@@ -377,7 +418,8 @@ class CustomUI:
                     start_button.bind_enabled_to(sleep_timeout)
                     start_button.bind_enabled_to(sleep_timeout_timer, 'active', forward=lambda x: not x)
 
-        line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
+        if ENABLE_DISPLAY:
+            line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
 
         ui.run(
             host=host,
@@ -386,7 +428,7 @@ class CustomUI:
             dark=dark,
             favicon=favicon,
             reload=reload
-        )
+            )
 
 
 if __name__ == "__main__":

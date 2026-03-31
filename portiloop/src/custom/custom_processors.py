@@ -1,35 +1,22 @@
 import numpy as np
-from scipy.signal import firwin
-from scipy import signal
+from scipy.signal import firwin, butter
 
 from portiloop.src.core.processing import Processor
 
 
-def shift_numpy(arr, num, fill_value=np.nan):
-    result = np.empty_like(arr)
-    if num > 0:
-        result[:num] = fill_value
-        result[num:] = arr[:-num]
-    elif num < 0:
-        result[num:] = fill_value
-        result[:num] = arr[-num:]
-    else:
-        result[:] = arr
-    return result
-
-
 class FIR:
-    def __init__(self, nb_channels, coefficients, buffer=None):
-
-        self.coefficients = np.expand_dims(np.array(coefficients), axis=1)
+    def __init__(self, nb_channels, coefficients):
+        self.coefficients = np.array(coefficients, dtype=float)
         self.taps = len(self.coefficients)
         self.nb_channels = nb_channels
-        self.buffer = np.array(buffer) if buffer is not None else np.zeros((self.taps, self.nb_channels))
+        self.buffer = np.zeros((2 * self.taps, self.nb_channels))  # ring buffer
+        self._head = 0
 
     def filter(self, x):
-        self.buffer = shift_numpy(self.buffer, 1, x)
-        filtered = np.sum(self.buffer * self.coefficients, axis=0)
-        return filtered
+        self._head = (self._head - 1) % self.taps
+        self.buffer[self._head] = x
+        self.buffer[self._head + self.taps] = x  # x is stored twice such that the ring buffer can be accessed in a single call
+        return np.dot(self.coefficients, self.buffer[self._head:self._head + self.taps])
 
 
 class Notch:
@@ -177,7 +164,7 @@ class SlowOscillationFilter(Filter):
         assert power_line_fq in [50, 60], f"The only supported power line frequencies are 50 Hz and 60 Hz. Received {power_line_fq}"
 
         # DC offset removal filter (high-pass filter)
-        self.dc_b, self.dc_a = signal.butter(1, 0.5 / (sampling_rate / 2), "high")
+        self.dc_b, self.dc_a = butter(1, 0.5 / (sampling_rate / 2), "high")
 
         # FIR Bandpass filter (0.5 - 30 Hz)
         if use_custom_fir:
@@ -185,7 +172,7 @@ class SlowOscillationFilter(Filter):
         else:
             low = 0.5
             high = 30.0
-            fir_coef = signal.firwin(20, [low, high], pass_zero=False, window="hamming", fs=sampling_rate)
+            fir_coef = firwin(20, [low, high], pass_zero=False, window="hamming", fs=sampling_rate)
 
         # Initialize filter states for each channel
         dc_estimate = np.zeros(nb_channels)

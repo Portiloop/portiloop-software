@@ -1,12 +1,13 @@
 from pathlib import Path
 
+from portiloop import __version__
 from portiloop.src.core.hardware.backend import Backend
-from portiloop.src.core.utils import get_portiloop_version
+from portiloop.src.core.utils import get_hardware_version
 
 try:
-    VERSION = get_portiloop_version()
-    backend = Backend(VERSION)
-    nb_channels = backend.get_version()
+    HARDWARE_VERSION = get_hardware_version()
+    backend = Backend(HARDWARE_VERSION)
+    NB_CHANNELS = backend.get_nb_channels()
 finally:
     backend.close()
     del backend
@@ -54,8 +55,9 @@ STATE_PATH.mkdir(parents=True, exist_ok=True)
 # This dictionary contains the default options that are relevant to core functions
 # It can be copied and extended by custom modules
 DEFAULT_CONFIG_DICT = {
-    "version": VERSION,
-    "nb_channels": nb_channels,
+    "software_version": __version__,
+    "hardware_version": HARDWARE_VERSION,
+    "nb_channels": NB_CHANNELS,
     "frequency": 250,
     "duration": 36000,
     "filter": True,
@@ -68,8 +70,8 @@ DEFAULT_CONFIG_DICT = {
     "threshold": 0.75,
     "signal_input": "ADS",
     "python_clock": True,
-    "signal_labels": [f"ch{i+1}" for i in range(nb_channels)],
-    "channel_states": ["disabled" for _ in range(nb_channels)],
+    "signal_labels": [f"ch{i+1}" for i in range(NB_CHANNELS)],
+    "channel_states": ["disabled" for _ in range(NB_CHANNELS)],
     "channel_detection": 2,
     "detection_sound": "15msPN_48kHz_norm_stereo.wav",
     "spindle_detection_mode": "Fast",
