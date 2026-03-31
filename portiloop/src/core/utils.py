@@ -1,20 +1,20 @@
 import io
 
 
-def get_portiloop_version():
+def get_hardware_version():
     # Check if we are on a Portiloop V1 or V2.
     try:
         with io.open('/sys/firmware/devicetree/base/model', 'r') as m:
             string = m.read().lower()
             if "phanbell" in string:
-                version = 1
+                hardware_version = 1
             elif "coral" in string:
-                version = 2
+                hardware_version = 2
             else:
-                version = -1
+                hardware_version = -1
     except Exception:
-        version = -1
-    return version
+        hardware_version = -1
+    return hardware_version
 
 
 class DummyAlsaMixer:

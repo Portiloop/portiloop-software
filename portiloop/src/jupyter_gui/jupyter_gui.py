@@ -6,7 +6,7 @@ import os
 from portiloop.src import ADS
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.hardware.config_hardware import to_ads_frequency, LEADOFF_CONFIG
-from portiloop.src.core.utils import get_portiloop_version, DummyAlsaMixer
+from portiloop.src.core.utils import get_hardware_version, DummyAlsaMixer
 from portiloop.src.core.constants import CSV_PATH, SIGNAL_SAMPLES_FOLDER
 
 from portiloop.src.custom.config import RUN_SETTINGS
@@ -24,22 +24,21 @@ if ADS:
 
 
 class JupyterUI:
-    def __init__(self, pipelines = PIPELINES, default_pipeline_key=DEFAULT_PIPELINE_KEY):
+    def __init__(self, pipelines=PIPELINES, default_pipeline_key=DEFAULT_PIPELINE_KEY):
 
         self._pipelines = pipelines
         self._default_pipeline_key = default_pipeline_key
 
-        # {now.strftime('%m_%d_%Y_%H_%M_%S')}
         self.filename = CSV_PATH / 'recording' / 'recording.csv'
         self.record_raw = True
         self.record_filtered = False
 
-        self.version = get_portiloop_version()
+        self.hardware_version = get_hardware_version()
 
         # Check which version of the ADS we are in.
-        if self.version != -1:
-            backend = Backend(self.version)
-            self.nb_channels = backend.get_version()
+        if self.hardware_version != -1:
+            backend = Backend(self.hardware_version)
+            self.nb_channels = backend.get_nb_channels()
 
         # General default parameters
         self.frequency = 250

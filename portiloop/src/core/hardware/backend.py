@@ -66,7 +66,7 @@ class Backend:
 
         self.stop_continuous()
 
-    def get_version(self):
+    def get_nb_channels(self):
         config_bits = self.read_regs(0x00, 1)
         channel_bits = config_bits[0] & 0x03
         if channel_bits == 0x00:
@@ -100,7 +100,7 @@ class Backend:
 
     def read(self):
         values = self.dev.xfer([RDATA] + [0x00] * 27)
-        return Reading(values[1:], self.get_version())
+        return Reading(values[1:], self.get_nb_channels())
 
     def start_continuous(self):
         self.dev.xfer([RDATAC])
@@ -110,7 +110,7 @@ class Backend:
 
     def read_continuous(self):
         values = self.dev.xfer([0x00] * 27)
-        return Reading(values, self.get_version())
+        return Reading(values, self.get_nb_channels())
 
     def is_ready(self):
         return not self.drdy.read()
