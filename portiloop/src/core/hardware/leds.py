@@ -20,10 +20,17 @@ class LEDs:
         self.led1_B = GPIO("/dev/gpiochip0", 10, "out")
         self.led1_G = GPIO("/dev/gpiochip0", 9, "out")
 
+        self.leds_ctl = GPIO("/dev/gpiochip0", 39, "out")
+
         # LED1
         self.led1_R.write(False)
         self.led1_B.write(False)
         self.led1_G.write(False)
+
+        self.leds_ctl.write(False)
+    
+    def activate(self, active=True):
+        self.leds_ctl.write(active)
 
     def led1(self, value: Color):
         if value == Color.RED:
