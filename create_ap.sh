@@ -20,7 +20,7 @@ gpg --export --armor B53DC80D13EDEF05 | sudo apt-key add -
 sudo apt-get --allow-releaseinfo-change-suite update
 
 echo "Creating access point interface..."
-sudo apt-get install hostapd dnsmasq
+sudo apt-get install hostapd dnsmasq -y
 
 cd ~/portiloop-software/portiloop/setup_files
 sudo cp create_ap0.sh /usr/local/bin/create_ap0.sh
