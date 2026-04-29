@@ -9,8 +9,9 @@ step_pre0.temp:
 	sudo apt upgrade
 	echo "Disabling weston..."
 	sudo systemctl disable weston
+	touch step_pre0.temp
 
-step_pre1.temp:
+step_pre1.temp: step_pre0.temp
 	echo "--- BOOT PARTITION FLASHING STEP ---"
 	cd ~/portiloop-software/portiloop/setup_files
 	echo "Downloading protected boot partition from GitHub..."
@@ -19,6 +20,17 @@ step_pre1.temp:
 	touch step_pre1.temp
 
 step_pre2.temp: step_pre1.temp
+	echo "Flashing boot partition..."
+	sudo umount /boot
+	cd ~/portiloop-software/portiloop/setup_files
+	sudo dd if=boot_ext4.img of=/dev/mmcblk0p2 bs=4M status=progress
+	sudo sync
+	echo "Replacing fstab..."
+	sudo cp /etc/fstab /etc/fstab.old
+	sudo cp fstab /etc/fstab
+	touch step_pre2.temp
+
+step_pre3.temp: step_pre2.temp
 	echo "--- PORTILOOP V3 PRE-INSTALLATION STEP ---"
 
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp security.list /etc/apt/sources.list.d/security.list
@@ -28,9 +40,9 @@ step_pre2.temp: step_pre1.temp
 	gpg --export --armor C0BA5CE6DC6315A3 | sudo apt-key add -
 	sudo apt-get --allow-releaseinfo-change update
 	sudo apt-get update
-	touch step_pre2.temp
+	touch step_pre3.temp
 
-step0.temp: step_pre2.temp
+step0.temp: step_pre3.temp
 	echo "Creating acces point..."
 	cd ~/portiloop-software && bash create_ap.sh
 	touch step0.temp
