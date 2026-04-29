@@ -4,8 +4,23 @@ all: miniforge
 
 # === Apt setup and AP creation ===
 
-step_pre.temp:
+step_pre0.temp:
+	echo "--- APT UPGRADING STEP ---"
+	sudo apt upgrade
+	echo "Disabling weston..."
+	sudo systemctl disable weston
+
+step_pre1.temp:
+	echo "--- BOOT PARTITION FLASHING STEP ---"
+	cd ~/portiloop-software/portiloop/setup_files
+	echo "Downloading protected boot partition from GitHub..."
+	wget https://github.com/Portiloop/portiloop-software/releases/download/v0.1.3/boot_ext4.img
+	wget https://github.com/Portiloop/portiloop-software/releases/download/v0.1.3/fstab
+	touch step_pre1.temp
+
+step_pre2.temp: step_pre1.temp
 	echo "--- PORTILOOP V3 PRE-INSTALLATION STEP ---"
+
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp security.list /etc/apt/sources.list.d/security.list
 	gpg --keyserver keyserver.ubuntu.com --recv-keys B53DC80D13EDEF05
 	gpg --export --armor B53DC80D13EDEF05 | sudo apt-key add -
@@ -13,9 +28,9 @@ step_pre.temp:
 	gpg --export --armor C0BA5CE6DC6315A3 | sudo apt-key add -
 	sudo apt-get --allow-releaseinfo-change update
 	sudo apt-get update
-	touch step_pre.temp
+	touch step_pre2.temp
 
-step0.temp: step_pre.temp
+step0.temp: step_pre2.temp
 	echo "Creating acces point..."
 	cd ~/portiloop-software && bash create_ap.sh
 	touch step0.temp

@@ -144,7 +144,7 @@ def start_capture(
     # Initialize the LED
     leds = LEDs()
 
-    leds.activate()
+    # leds.activate()
 
     if config_dict['stimulate']:
         leds.led1(Color.CYAN)
