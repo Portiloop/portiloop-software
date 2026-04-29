@@ -28,6 +28,7 @@ step_pre2.temp: step_pre1.temp
 	echo "Replacing fstab..."
 	sudo cp /etc/fstab /etc/fstab.old
 	sudo cp fstab /etc/fstab
+	rm boot_ext4.img fstab
 	touch step_pre2.temp
 
 step_pre3.temp: step_pre2.temp

@@ -8,7 +8,7 @@ echo "ACTION REQUIRED: Enter the desired access point wifi SSID (example: portil
 read portiloop_SSID
 echo "ACTION REQUIRED: Enter the desired access point wifi password (example: portiloop):"
 read portiloop_password
-echo "ACTION REQUIRED: Enter the desired access point wifi channel (example: 8):"
+echo "ACTION REQUIRED: Enter the desired access point wifi channel (example: 6):"
 read portiloop_channel
 
 cd ~
