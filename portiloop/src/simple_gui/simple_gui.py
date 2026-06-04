@@ -111,7 +111,8 @@ class ExperimentState:
         self.time_started = datetime.now()
         stim_str = "STIMON" if self.stim_on else "STIMOFF"
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
-        exp_name = f"{portiloop_ID}_{time_str}_{stim_str}.csv" if self.custom_exp_name == "" else f"{self.custom_exp_name}_{time_str}_{stim_str}.csv"
+        prefix = self.custom_exp_name or portiloop_ID
+        exp_name = f"{prefix}_{time_str}_{stim_str}.csv"
         print(f"Starting recording {exp_name.split('.')[0]}")
         print(f"STIMON = {self.stim_on}")
 
