@@ -49,6 +49,7 @@ class ExperimentState:
         self._t_capture = None
         self.stim_on = False
         self.custom_exp_name = ""
+        self.exp_name = ""
         self.display_q = Queue() if ENABLE_DISPLAY else None
         self.sd_card = False
         self.check_sd_card()
@@ -112,8 +113,8 @@ class ExperimentState:
         stim_str = "STIMON" if self.stim_on else "STIMOFF"
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
         prefix = self.custom_exp_name or portiloop_ID
-        exp_name = f"{prefix}_{time_str}_{stim_str}.csv"
-        print(f"Starting recording {exp_name.split('.')[0]}")
+        self.exp_name = f"{prefix}_{time_str}_{stim_str}.csv"
+        print(f"Starting recording {self.exp_name.split('.')[0]}")
         print(f"STIMON = {self.stim_on}")
 
         self.run_dict['frequency'] = self.select_freq
@@ -151,7 +152,7 @@ class ExperimentState:
         self.run_dict['record'] = self.save_local
 
         workspace_dir = CSV_PATH
-        self.run_dict['filename'] = os.path.join(workspace_dir, exp_name.split('.')[0], exp_name)
+        self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name.split('.')[0], self.exp_name)
 
         self._t_capture = Process(target=start_capture,
                                   args=(self._pipelines[self.pipeline_key]["processor"],
@@ -310,7 +311,7 @@ class SimpleUI:
                     save_file_label = ui.label().bind_text_from(
                         exp_state,
                         "exp_name",
-                        backward=lambda x: f"Current experiment {x.split('.')[0]}")
+                        backward=lambda x: f"Current experiment: {x.split('.')[0]}")
                     timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() - exp_state.time_started).split(".")[0]}'))
                     sd_card_timer = ui.timer(TIMER_SD_CARD, exp_state.check_sd_card)
                     start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
@@ -340,7 +341,7 @@ class SimpleUI:
                 with ui.column().classes('w-full items-center'):
                     ui.label("If you are a subject in an experiment, do not change any of these options unless explicitly prompted to!").classes('text-1.5xl').style('color:#d9a011')
                     ui.separator()
-                    space_label = ui.label(f"Disk Usage: {psutil.disk_usage(os.getcwd())}%").bind_text_from(
+                    space_label = ui.label(f"Disk usage: {psutil.disk_usage(os.getcwd())}%").bind_text_from(
                         exp_state,
                         'disk_str'
                     ).classes('text-2xl')
@@ -350,7 +351,7 @@ class SimpleUI:
                     select_freq = ui.select(
                         possible_freqs,
                         value=exp_state.select_freq,
-                        label="Sample Frequency (Hz)").bind_value_to(exp_state, 'select_freq').classes('w-3/4')
+                        label="Sample frequency (Hz)").bind_value_to(exp_state, 'select_freq').classes('w-3/4')
                     ui.separator().classes('w-2/3')
                     possible_notches = [60, 50]
                     select_notch = ui.select(
@@ -364,7 +365,7 @@ class SimpleUI:
                     ui.separator().classes('w-2/3')
                     lsl_checker = ui.checkbox('Stream LSL', value=exp_state.lsl).bind_value_to(exp_state, 'lsl')
                     save_checker = ui.checkbox('Save recording locally', value=exp_state.save_local).bind_value_to(exp_state, 'save_local')
-                    filename_box = ui.input(value='', label='File name').props('clearable').bind_value_to(exp_state, 'custom_exp_name')
+                    filename_box = ui.input(value='', label='Recording name').props('clearable').bind_value_to(exp_state, 'custom_exp_name')
                     stim_delay = ui.number(value=exp_state.stim_delay, label='Stimulation delay (in ms)').bind_value_to(exp_state, 'stim_delay')
                     start_button.bind_enabled_to(lsl_checker)
                     start_button.bind_enabled_to(save_checker)
