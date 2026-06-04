@@ -41,13 +41,14 @@ class ExperimentState:
         self.started = False
         self.time_started = datetime.now()
         self.q_msg = Queue()
+
         self.run_dict = RUN_SETTINGS
-        # enable all channels:
-        self.run_dict["channel_states"] = ["simple"] * self.run_dict["nb_channels"]
+        self.run_dict["channel_states"] = ["simple"] * self.run_dict["nb_channels"]  # enable all channels
+
         self.pause_value = Value('b', False)
         self._t_capture = None
         self.stim_on = False
-        self.exp_name = ""
+        self.custom_exp_name = ""
         self.display_q = Queue() if ENABLE_DISPLAY else None
         self.sd_card = False
         self.check_sd_card()
@@ -75,7 +76,8 @@ class ExperimentState:
             "sleep_timeout": self.sleep_timeout,
             "select_freq": self.select_freq,
             "power_line": self.power_line,
-            "pipeline_key": self.pipeline_key
+            "pipeline_key": self.pipeline_key,
+            "custom_exp_name": self.custom_exp_name,
         }
         with open(self.persistent_file_name, 'wb') as f:
             pkl.dump(state, f)
@@ -98,21 +100,19 @@ class ExperimentState:
             self.sleep_timeout = state["sleep_timeout"]
             self.select_freq = state["select_freq"]
             self.power_line = state["power_line"]
-
             self.selected_channel = state["selected_channel"]
             if state["pipeline_key"] in self.pipeline_keys:
                 self.pipeline_key = state["pipeline_key"]
+            self.custom_exp_name = state["custom_exp_name"]
 
     def start(self):
         self.save()
-        print(f"Frequency: {self.select_freq}, Sleep_timeout: {self.sleep_timeout}")
         # Set the variables for the experiment
         self.time_started = datetime.now()
         stim_str = "STIMON" if self.stim_on else "STIMOFF"
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
-        self.exp_name = f"{portiloop_ID}_{time_str}_{stim_str}.csv"
-        print(f"Starting recording {self.exp_name.split('.')[0]}")
-
+        exp_name = f"{portiloop_ID}_{time_str}_{stim_str}.csv" if self.custom_exp_name == "" else f"{self.custom_exp_name}_{time_str}_{stim_str}.csv"
+        print(f"Starting recording {exp_name.split('.')[0]}")
         print(f"STIMON = {self.stim_on}")
 
         self.run_dict['frequency'] = self.select_freq
@@ -134,35 +134,23 @@ class ExperimentState:
                 mixer = DummyAlsaMixer()
             else:
                 mixer = alsaaudio.Mixer(control='SoftMaster', device='dmixer')
-                # mixer = alsaaudio.Mixer()
         except ALSAAudioError as e:
             print(e)
-            print(f"No ALSA mixer found. Volume control will not be available from notebook.\nAvailable mixers were:\n{mixers}")
+            print(f"No ALSA mixer found. Volume control will not be available.")
             mixer = DummyAlsaMixer()
 
         volume = mixer.getvolume()[0]  # we will set the same volume on all channels
         self.run_dict['volume'] = volume
-
-        if self.stim_on:
-            self.run_dict['stimulate'] = True
-        else:
-            self.run_dict['stimulate'] = False
+        self.run_dict['stimulate'] = self.stim_on
 
         if self.stim_delay != 0:
             self.run_dict['stim_delay'] = int(self.stim_delay) / 1000
 
-        if self.lsl:
-            self.run_dict['lsl'] = True
-        else:
-            self.run_dict['lsl'] = False
-
-        if self.save_local:
-            self.run_dict['record'] = True
-        else:
-            self.run_dict['record'] = False
+        self.run_dict['lsl'] = self.lsl
+        self.run_dict['record'] = self.save_local
 
         workspace_dir = CSV_PATH
-        self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name.split('.')[0], self.exp_name)
+        self.run_dict['filename'] = os.path.join(workspace_dir, exp_name.split('.')[0], exp_name)
 
         self._t_capture = Process(target=start_capture,
                                   args=(self._pipelines[self.pipeline_key]["processor"],
@@ -375,11 +363,13 @@ class SimpleUI:
                     ui.separator().classes('w-2/3')
                     lsl_checker = ui.checkbox('Stream LSL', value=exp_state.lsl).bind_value_to(exp_state, 'lsl')
                     save_checker = ui.checkbox('Save Recording Locally', value=exp_state.save_local).bind_value_to(exp_state, 'save_local')
+                    filename_box = ui.input(value='', label='File name').props('clearable').bind_value_to(exp_state, 'custom_exp_name')
                     stim_delay = ui.number(value=exp_state.stim_delay, label='Stimulation Delay (in ms)').bind_value_to(exp_state, 'stim_delay')
                     start_button.bind_enabled_to(lsl_checker)
                     start_button.bind_enabled_to(save_checker)
                     start_button.bind_enabled_to(select_pipeline)
                     start_button.bind_enabled_to(stim_delay)
+                    start_button.bind_enabled_to(filename_box)
                     start_button.bind_enabled_to(select_freq)
                     start_button.bind_enabled_to(select_notch)
                     start_button.bind_enabled_to(sleep_timeout)
