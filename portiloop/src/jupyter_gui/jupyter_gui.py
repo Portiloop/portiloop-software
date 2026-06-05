@@ -605,7 +605,7 @@ class JupyterUI:
                               self.b_lsl,
                               widgets.HBox([self.b_record, self.b_record_raw, self.b_record_filtered]),
                               self.b_filename,
-                              #   self.b_test_impedance,
+                              self.b_test_impedance,
                               self.b_display,
                               self.b_disp_type,
                               self.b_capture,
@@ -987,7 +987,7 @@ class JupyterUI:
             reading = backend.read()
 
             # Check if any of the negative bits are set and initialize the impedance array
-            #             impedance_check = [any([is_set(leadoff_n, i) for i in range(2, 9)])]
+            # impedance_check = [any([is_set(leadoff_n, i) for i in range(2, 9)])]
             impedance_check = [any([reading.loff_n(i) for i in range(7)])]
 
             for i in range(7):

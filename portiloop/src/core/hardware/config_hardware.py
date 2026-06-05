@@ -1,6 +1,7 @@
 ADS_GAIN = 24
 ADS_LSB = (2 / ADS_GAIN) / (2**24 - 1)  # needs to be multiplied by VREF
 
+# This is the default configuration of the ADS1299:
 DEFAULT_BACKEND_CONFIG = [
     # nomenclature: name [default setting] [bits 7-0] : description
     # Read only ID:
@@ -34,6 +35,7 @@ DEFAULT_BACKEND_CONFIG = [
     0x00,  # CONFIG4 [00] [0, 0, 0, 0, SINGLE_SHOT, 0, PD_LOFF_COMP(bar), 0] : Single-shot, lead-off comparator disabled
 ]
 
+# This is the default configuration used by Portiloop:
 BACKEND_CONFIG = [
     0x3E,  # ID (RO)
     0x95,  # CONFIG1 [95] [1, DAISY_EN(bar), CLK_EN, 1, 0, DR[2:0]] : Datarate = 500 SPS
