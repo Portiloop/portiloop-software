@@ -979,7 +979,7 @@ class JupyterUI:
 
         try:
             backend.write_regs(0x00, LEADOFF_CONFIG)
-            backend.start()
+            # backend.start()
             start_time = time.time()
             current_time = time.time()
             while current_time - start_time < 2:

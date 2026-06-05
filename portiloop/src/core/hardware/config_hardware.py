@@ -61,7 +61,7 @@ BACKEND_CONFIG = [
     0x20,  # Enable SRB1
 ]
 
-
+# This is the configuration used for leadoff detection:
 LEADOFF_CONFIG = [
     0x3E,  # ID (RO)
     0x95,  # CONFIG1 [95] [1, DAISY_EN(bar), CLK_EN, 1, 0, DR[2:0]] : Datarate = 500 SPS
@@ -78,8 +78,8 @@ LEADOFF_CONFIG = [
     0x60,  # CH8SET
     0x00,  # BIAS_SENSP 00
     0x00,  # BIAS_SENSN 00
-    0xFF,  # LOFF_SENSP Lead-off on all positive pins?
-    0xFF,  # LOFF_SENSN Lead-off on all negative pins?
+    0xFF,  # LOFF_SENSP
+    0xFF,  # LOFF_SENSN
     0x00,  # Normal lead-off
     0x00,  # Lead-off positive status (RO)
     0x00,  # Lead-off negative status (RO)
