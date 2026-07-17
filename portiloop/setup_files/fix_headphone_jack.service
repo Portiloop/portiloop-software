@@ -1,0 +1,12 @@
+[Unit]
+Description=Force headphone jack switch sync
+After=sound.target alsa-restore.service alsa-state.service
+Requires=alsa-restore.service alsa-state.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fix_headphone_jack.sh
+TimeoutStartSec=20
+
+[Install]
+WantedBy=multi-user.target
