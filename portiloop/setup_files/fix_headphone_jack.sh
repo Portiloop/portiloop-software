@@ -7,5 +7,8 @@ else
     amixer -c 0 cset iface=MIXER,name='Headphone Switch' off
 fi
 
-# Force the DPCM front-end/back-end link to establish
-speaker-test -t wav -c 2 -D plughw:0,0 -l 1h
+# Briefly open a capture stream in the background to prime the shared
+# ADDA analog front end, then run playback
+timeout 2 arecord -D hw:0,0 -f S16_LE -r 48000 -c 2 /dev/null &
+speaker-test -t wav -c 2 -D plughw:0,0 -l 1
+wait

@@ -77,6 +77,11 @@ Otherwise, your CSV will be recorded in internal memory under `/home/mendel/work
 _:warning: Recording large CSV files in internal memory will quickly make your `Portiloop` unusable: the internal memory is quite small and recording CSVs in internal memory should never be done, except for quick testing.
 In case you inadvertently fill up your `Portiloop` internal memory, it will refuse to boot and you will have to reflash and reinstall the entire system._
 
+### Headphones
+
+To use headphones on the `Portiloop`, plug the headphones in before powering the device.
+Then, when you turn the device on, it should play a sound in the headphones when the light turns green.
+
 ### Power up
 
 To power the `Portiloop`, plug your USB-C battery into `USB-C Power` and press the `Power` button for 3 seconds.
@@ -91,8 +96,6 @@ When everything goes smoothly, the light close to `USB-C Power` turns off.
 However, it may happen that this light refuses to turn off due to some internal issue.
 In that case, just wait for a couple more seconds before unplugging.
 
-_:warning: Failing to follow these instructions may brick your `Portiloop`, in which case you will have to reflash and reinstall the entire system._
-
 ### Indicator LEDs
 
 The Portiloop system has 3 indicator LEDs:
@@ -102,12 +105,9 @@ The Portiloop system has 3 indicator LEDs:
   - red: the Coral Dev Board Mini is in fastboot mode, ready to flash
   - turned off when the Portiloop is off
 - Portiloop power LED
-  - green: power plugged
-  - turned off when the Portiloop is unplugged
+  - (disabled by default, can be enabled programatically)
 - Portiloop indicator LED
-  - purple: capture in progress
-  - blue: capture in progress with detection and stimulation pipeline enabled
-  - turned off otherwise
+  - (disabled by default, can be enabled programatically)
 
 ### Connect
 
