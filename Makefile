@@ -21,14 +21,14 @@ step_pre1.temp: step_pre0.temp
 
 step_pre2.temp: step_pre1.temp
 	echo "Flashing boot partition..."
-	sudo umount /boot
-	cd ~/portiloop-software/portiloop/setup_files
-	sudo dd if=boot_ext4.img of=/dev/mmcblk0p2 bs=4M status=progress
-	sudo sync
-	echo "Replacing fstab..."
-	sudo cp /etc/fstab /etc/fstab.old
-	sudo cp fstab /etc/fstab
-	rm boot_ext4.img fstab
+# 	sudo umount /boot
+# 	cd ~/portiloop-software/portiloop/setup_files
+# 	sudo dd if=boot_ext4.img of=/dev/mmcblk0p2 bs=4M status=progress
+# 	sudo sync
+# 	echo "Replacing fstab..."
+# 	sudo cp /etc/fstab /etc/fstab.old
+# 	sudo cp fstab /etc/fstab
+# 	rm boot_ext4.img fstab
 	touch step_pre2.temp
 
 step_pre3.temp: step_pre2.temp
@@ -93,7 +93,7 @@ step5.temp: step4.temp
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp create_login_folder.service /etc/systemd/system/create_login_folder.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp miniforge_jupyter.service /etc/systemd/system/jupyter.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp simplegui.service /etc/systemd/system/simplegui.service
-	cd ~/portiloop-software/portiloop/setup_files && sudo cp fix_headphone_jack.sh /usr/local/bin/fix_headphone_jack.sh
+# 	cd ~/portiloop-software/portiloop/setup_files && sudo cp fix_headphone_jack.sh /usr/local/bin/fix_headphone_jack.sh
 	sudo chmod +x /usr/local/bin/fix_headphone_jack.sh
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp fix_headphone_jack.service /etc/systemd/system/fix_headphone_jack.service
 	touch step5.temp
@@ -101,8 +101,8 @@ step5.temp: step4.temp
 step6.temp: step5.temp
 	echo "Reloading systemctl daemon..."
 	sudo systemctl daemon-reload
-	echo "Enabling headphone jack fix service..."
-	sudo systemctl enable fix_headphone_jack.service
+# 	echo "Enabling headphone jack fix service..."
+# 	sudo systemctl enable fix_headphone_jack.service
 	echo "Enabling manual login service..."
 	sudo systemctl enable create_login_folder.service
 	echo "Enabling jupyter service..."
