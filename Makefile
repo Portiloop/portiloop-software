@@ -6,9 +6,9 @@ all: miniforge
 
 step_pre0.temp:
 	echo "--- APT UPGRADING STEP ---"
-	sudo apt upgrade -y
-	echo "Disabling weston..."
-	sudo systemctl disable weston
+# 	sudo apt upgrade -y
+# 	echo "Disabling weston..."
+# 	sudo systemctl disable weston
 	touch step_pre0.temp
 
 step_pre1.temp: step_pre0.temp
