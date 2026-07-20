@@ -7,8 +7,8 @@ all: miniforge
 step_pre0.temp:
 	echo "--- APT UPGRADING STEP ---"
 	sudo apt upgrade -y
-	echo "Disabling weston..."
-	sudo systemctl disable weston
+# 	echo "Disabling weston..."  # Don't: this causes sound issues
+# 	sudo systemctl disable weston
 	touch step_pre0.temp
 
 step_pre1.temp: step_pre0.temp
@@ -93,16 +93,11 @@ step5.temp: step4.temp
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp create_login_folder.service /etc/systemd/system/create_login_folder.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp miniforge_jupyter.service /etc/systemd/system/jupyter.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp simplegui.service /etc/systemd/system/simplegui.service
-	cd ~/portiloop-software/portiloop/setup_files && sudo cp fix_headphone_jack.sh /usr/local/bin/fix_headphone_jack.sh
-	sudo chmod +x /usr/local/bin/fix_headphone_jack.sh
-	cd ~/portiloop-software/portiloop/setup_files && sudo cp fix_headphone_jack.service /etc/systemd/system/fix_headphone_jack.service
 	touch step5.temp
 
 step6.temp: step5.temp
 	echo "Reloading systemctl daemon..."
 	sudo systemctl daemon-reload
-	echo "Enabling headphone jack fix service..."
-	sudo systemctl enable fix_headphone_jack.service
 	echo "Enabling manual login service..."
 	sudo systemctl enable create_login_folder.service
 	echo "Enabling jupyter service..."
