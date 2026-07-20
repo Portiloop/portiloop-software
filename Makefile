@@ -13,10 +13,10 @@ step_pre0.temp:
 
 step_pre1.temp: step_pre0.temp
 	echo "--- BOOT PARTITION FLASHING STEP ---"
-	cd ~/portiloop-software/portiloop/setup_files
-	echo "Downloading protected boot partition from GitHub..."
-	wget https://github.com/Portiloop/portiloop-software/releases/download/v0.1.3/boot_ext4.img
-	wget https://github.com/Portiloop/portiloop-software/releases/download/v0.1.3/fstab
+# 	cd ~/portiloop-software/portiloop/setup_files
+# 	echo "Downloading protected boot partition from GitHub..."
+# 	wget https://github.com/Portiloop/portiloop-software/releases/download/v0.1.3/boot_ext4.img
+# 	wget https://github.com/Portiloop/portiloop-software/releases/download/v0.1.3/fstab
 	touch step_pre1.temp
 
 step_pre2.temp: step_pre1.temp
