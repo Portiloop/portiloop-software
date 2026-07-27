@@ -56,55 +56,99 @@ class Delayer(ABC):
         pass
 
 
-class RandomDelayer(Delayer):
-    def __init__(self, config_dict, min_delay: float = 0.0, max_delay: float = 10.0, stimulate_fn: callable = None):
-        """
-        Randomly delays stimulations between min_delay and max_delay whenever a detection happens.
-        While delaying a stimulation, no new detection is taken in account.
+# class RandomDelayer(Delayer):
+#     def __init__(self, config_dict, stimulate_fn: callable = None):
+#         """
+#         Randomly delays stimulations between min_delay and max_delay whenever a detection happens.
+#         While delaying a stimulation, no new detection is taken in account.
 
-        Args:
-            config_dict: configuration dictionary
-            min_delay: Minimum delay in seconds
-            max_delay: Maximum delay in seconds
-        """
-        self.min_delay = min_delay
-        self.max_delay = max_delay
-        self.sample_freq = config_dict['frequency']
+#         Args:
+#             config_dict: configuration dictionary
+#         """
+#         self.min_delay = config_dict['min_delay']
+#         self.max_delay = config_dict['max_delay']
+#         self.sample_freq = config_dict['frequency']
 
-        self._t = 0
-        self._t_next_detection = None
-        self.stimulate = stimulate_fn
+#         self._t = 0
+#         self._t_next_detection = None
+#         self.stimulate = stimulate_fn
 
-    def step(self, point):
-        """
-        Moves through the state machine
-        """
+#     def step(self, point):
+#         """
+#         Moves through the state machine
+#         """
 
-        self._t += 1
+#         self._t += 1
 
-        if self._t_next_detection is None:
-            return False
-        else:
-            if self._t >= self._t_next_detection:
-                # Actually stimulate the patient after the delay
-                if self.stimulate is not None:
-                    self.stimulate()
-                self._t_next_detection = None
-                return True
-            else:
-                return False
+#         if self._t_next_detection is None:
+#             return False
+#         else:
+#             if self._t >= self._t_next_detection:
+#                 # Actually stimulate the patient after the delay
+#                 if self.stimulate is not None:
+#                     self.stimulate()
+#                 self._t_next_detection = None
+#                 return True
+#             else:
+#                 return False
 
-    def detected(self):
-        """
-        Defines what happens on detection
-        """
-        if self._t_next_detection is None:
-            delay = np.random.uniform(low=self.min_delay, high=self.max_delay)
-            delay_steps = int(self.sample_freq * delay)
-            self._t_next_detection = self._t + delay_steps
+#     def detected(self):
+#         """
+#         Defines what happens on detection
+#         """
+#         if self._t_next_detection is None:
+#             delay = np.random.uniform(low=self.min_delay, high=self.max_delay)
+#             delay_steps = int(self.sample_freq * delay)
+#             self._t_next_detection = self._t + delay_steps
 
 
-class TimingDelayer(Delayer):
+# class TimingDelayer(Delayer):
+#     def __init__(self, config_dict, stimulate_fn=None):
+#         """
+#         Delays based on the timing.
+
+#         Args:
+#             config_dict: configuration dictionary
+#         """
+#         self.state = TimingStates.READY
+#         self.stimulation_delay = config_dict['min_delay']
+#         self.inter_stim_delay = config_dict['inter_stim_delay']
+#         self.sample_freq = config_dict['frequency']
+
+#         self.stimulate = stimulate_fn
+#         self.waiting_start = time.time()
+#         self.delaying_start = time.time()
+
+#     def step(self, point):
+#         """
+#         Moves through the state machine
+#         """
+#         if self.state == TimingStates.READY:
+#             return False
+#         elif self.state == TimingStates.DELAYING:
+#             if time.time() - self.delaying_start > self.stimulation_delay:
+#                 # Actually stimulate the patient after the delay
+#                 if self.stimulate is not None:
+#                     self.stimulate()
+#                 self.state = TimingStates.WAITING
+#                 self.waiting_start = time.time()
+#                 return True
+#             return False
+#         elif self.state == TimingStates.WAITING:
+#             if time.time() - self.waiting_start > self.inter_stim_delay:
+#                 self.state = TimingStates.READY
+#             return False
+
+#     def detected(self):
+#         """
+#         Defines what happens when a detection comes depending on what state you are in
+#         """
+#         if self.state == TimingStates.READY:
+#             self.state = TimingStates.DELAYING
+#             self.delaying_start = time.time()
+
+
+class RandomTimingDelayer(Delayer):
     def __init__(self, config_dict, stimulate_fn=None):
         """
         Delays based on the timing.
@@ -113,13 +157,17 @@ class TimingDelayer(Delayer):
             config_dict: configuration dictionary
         """
         self.state = TimingStates.READY
-        self.stimulation_delay = config_dict['stim_delay']
+        self.min_delay = config_dict['min_delay']
+        self.max_delay = config_dict['max_delay']
+        if self.max_delay < self.min_delay:  # constant delay
+            self.max_delay = self.min_delay
         self.inter_stim_delay = config_dict['inter_stim_delay']
         self.sample_freq = config_dict['frequency']
 
         self.stimulate = stimulate_fn
         self.waiting_start = time.time()
         self.delaying_start = time.time()
+        self._delay = 0
 
     def step(self, point):
         """
@@ -128,7 +176,7 @@ class TimingDelayer(Delayer):
         if self.state == TimingStates.READY:
             return False
         elif self.state == TimingStates.DELAYING:
-            if time.time() - self.delaying_start > self.stimulation_delay:
+            if time.time() - self.delaying_start >= self._delay:
                 # Actually stimulate the patient after the delay
                 if self.stimulate is not None:
                     self.stimulate()
@@ -146,8 +194,9 @@ class TimingDelayer(Delayer):
         Defines what happens when a detection comes depending on what state you are in
         """
         if self.state == TimingStates.READY:
-            self.state = TimingStates.DELAYING
+            self._delay = np.random.uniform(low=self.min_delay, high=self.max_delay)
             self.delaying_start = time.time()
+            self.state = TimingStates.DELAYING
 
 
 class UpStateStates(Enum):
@@ -158,7 +207,7 @@ class UpStateStates(Enum):
 
 # Class that delays stimulation to always stimulate peak or through
 
-# FIXME: this class implementation doesn't make sense, it is losing a lot of time buffering
+# FIXME: this class implementation is losing a lot of time buffering
 class UpStateDelayer(Delayer):
 
     def __init__(self, config_dict, stimulate_fn=None, time_to_buffer=0.3):
@@ -168,7 +217,7 @@ class UpStateDelayer(Delayer):
             time_to_buffer: float -> Time to wait to build buffer in seconds
         '''
         self.sample_freq = config_dict['frequency']
-        self.peak = config_dict['spindle_detection_mode'] == 'Peak'
+        self.peak = config_dict['stim_delay_mode'] == 'Peak'
         self.buffer = []
         self.time_to_buffer = time_to_buffer
         self.channel_idx = config_dict['channel_detection'] - 1
@@ -256,7 +305,7 @@ class UpStateDelayer(Delayer):
 #         self.k_0 = k_0
 #         self.fs = config_dict['frequency']
 
-#         self.target_phase = config_dict['so_phase_delay']
+#         self.target_phase = 0
 
 #         self.sin_out = 0
 #         self.cos_out = 1
@@ -341,19 +390,12 @@ class DelayedStimulator(Stimulator, ABC):
             self.csv_recorder = Dummy()
 
         # Initialize stimulation delayer if requested
-        delay = not ((config_dict['stim_delay'] == 0.0) and (config_dict['inter_stim_delay'] == 0.0))
-        delay_phase = (not delay) and (not config_dict['spindle_detection_mode'] == 'Fast')
-        so_delay_phase = not (delay or delay_phase) and config_dict['so_phase_delay'] is not None
-
         stimulate_fn = lambda: self.send_stimulation("DELAY_STIM", True)
-
-        if delay:
-            stimulation_delayer = TimingDelayer(config_dict, stimulate_fn=stimulate_fn)
-        elif delay_phase:
+        time_delay = not ((config_dict['min_delay'] == 0.0) and (config_dict['max_delay'] == 0.0) and (config_dict['inter_stim_delay'] == 0.0))
+        if time_delay:
+            stimulation_delayer = RandomTimingDelayer(config_dict, stimulate_fn=stimulate_fn)
+        elif config_dict['stim_delay_mode'] in ['Peak', 'Valley']:
             stimulation_delayer = UpStateDelayer(config_dict, stimulate_fn=stimulate_fn)
-        elif so_delay_phase:
-            raise NotImplementedError
-            # stimulation_delayer = SOPhaseDelayer(config_dict)
         else:
             stimulation_delayer = None
         self.delayer = stimulation_delayer

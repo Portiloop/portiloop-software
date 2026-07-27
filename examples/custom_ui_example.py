@@ -76,7 +76,7 @@ class ExperimentState:
         self.selected_channel = 'Channel 2'
         self.display_data = 'Raw'
         self.disk_str = f"Disk Usage:"
-        self.stim_delay = 0
+        self.min_delay = 0
         self.sleep_timeout = 0
         self.select_freq = 250
         self.power_line = 60
@@ -89,7 +89,7 @@ class ExperimentState:
             "save_local": self.save_local,
             "selected_channel": self.selected_channel,
             "display_data": self.display_data,
-            "stim_delay": self.stim_delay,
+            "min_delay": self.min_delay,
             "sleep_timeout": self.sleep_timeout,
             "select_freq": self.select_freq,
             "power_line": self.power_line,
@@ -111,7 +111,7 @@ class ExperimentState:
             self.lsl = state["lsl"]
             self.save_local = state["save_local"]
             self.display_data = state["display_data"]
-            self.stim_delay = state["stim_delay"]
+            self.min_delay = state["min_delay"]
             self.sleep_timeout = state["sleep_timeout"]
             self.select_freq = state["select_freq"]
             self.power_line = state["power_line"]
@@ -163,8 +163,8 @@ class ExperimentState:
         else:
             self.run_dict['stimulate'] = False
 
-        if self.stim_delay != 0:
-            self.run_dict['stim_delay'] = int(self.stim_delay) / 1000
+        if self.min_delay != 0:
+            self.run_dict['min_delay'] = int(self.min_delay) / 1000
 
         if self.lsl:
             self.run_dict['lsl'] = True
@@ -406,13 +406,13 @@ class CustomUI:
                     ui.separator().classes('w-2/3')
                     lsl_checker = ui.checkbox('Stream LSL', value=exp_state.lsl).bind_value_to(exp_state, 'lsl')
                     save_checker = ui.checkbox('Save Recording Locally', value=exp_state.save_local).bind_value_to(exp_state, 'save_local')
-                    stim_delay = ui.number(value=exp_state.stim_delay, label='Stimulation Delay (in ms)').bind_value_to(exp_state, 'stim_delay')
+                    min_delay = ui.number(value=exp_state.min_delay, label='Stimulation Delay (in ms)').bind_value_to(exp_state, 'min_delay')
                     select_id = ui.select(self.sound_set_ids, value=self.sound_set_ids[0], on_change=_update_stimulator, label="ID").bind_value_to(self.ui_values, 'id')
                     select_id.classes('w-1/2')
                     start_button.bind_enabled_to(lsl_checker)
                     start_button.bind_enabled_to(save_checker)
                     start_button.bind_enabled_to(select_id)
-                    start_button.bind_enabled_to(stim_delay)
+                    start_button.bind_enabled_to(min_delay)
                     start_button.bind_enabled_to(select_freq)
                     start_button.bind_enabled_to(select_notch)
                     start_button.bind_enabled_to(sleep_timeout)

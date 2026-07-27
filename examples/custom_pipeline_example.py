@@ -32,7 +32,7 @@ from portiloop.src.core.constants import SOUNDS_FOLDER
 
 
 # In this example, we define a custom stimulator based on SleepSpindleRealTimeStimulator.
-# Our custom stimulator will be the same as SleepSpindleRealTimeStimulator,
+# Our custom stimulator will be similar to SleepSpindleRealTimeStimulator,
 # except it will play a random sound from a set of sounds on stimulation.
 # Additionally, the index of the played sound will be logged in the CSV output.
 # (Note: CSV logging will revert to boolean when using a delayer)
