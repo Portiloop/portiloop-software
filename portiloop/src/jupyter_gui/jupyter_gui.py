@@ -80,7 +80,7 @@ class JupyterUI:
         self.detection_sound = "stimul_100ms.wav"
 
         # Delayer parameters
-        self.stim_delay_mode = 'Fast'
+        self.stim_delay_mode = 'Time'
         self.min_delay = 0.0
         self.max_delay = 0.0
         self.inter_stim_delay = 0.0
@@ -476,8 +476,8 @@ class JupyterUI:
         )
 
         self.b_stim_delay_mode = widgets.Dropdown(
-            options=['Fast', 'Peak', 'Valley', 'Random'],
-            value='Fast',
+            options=['Time', 'Peak', 'Valley'],
+            value='Time',
             description='Stimulation Delay Mode',
             disabled=False,
             style={'description_width': 'initial'}

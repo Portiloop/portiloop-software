@@ -74,7 +74,7 @@ DEFAULT_CONFIG_DICT = {
     "channel_states": ["disabled" for _ in range(NB_CHANNELS)],
     "channel_detection": 2,
     "detection_sound": "15msPN_48kHz_norm_stereo.wav",
-    "stim_delay_mode": "Fast",  # possible values: 'Fast', 'Peak', 'Valley'
+    "stim_delay_mode": "Time",  # possible values: 'Time', 'Peak', 'Valley'
     "min_delay": 0.0,
     "max_delay": 0.0,
     "inter_stim_delay": 0.0,
