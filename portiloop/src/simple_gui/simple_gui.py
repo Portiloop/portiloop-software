@@ -61,6 +61,7 @@ class ExperimentState:
         self.display_data = 'Raw'
         self.disk_str = f"Disk Usage:"
         self.min_delay = 0
+        self.max_delay = 0
         self.sleep_timeout = 0
         self.select_freq = 250
         self.power_line = 60
@@ -74,6 +75,7 @@ class ExperimentState:
             "selected_channel": self.selected_channel,
             "display_data": self.display_data,
             "min_delay": self.min_delay,
+            "max_delay": self.max_delay,
             "sleep_timeout": self.sleep_timeout,
             "select_freq": self.select_freq,
             "power_line": self.power_line,
@@ -87,24 +89,27 @@ class ExperimentState:
         if self.persistent_file_name.is_file():
             with open(self.persistent_file_name, 'rb') as f:
                 state = pkl.load(f)
-            
-            # check whether the previous state should be ignored (e.g., version change)
-            run_dict = state["run_dict"]
-            if run_dict["nb_channels"] != NB_CHANNELS or run_dict["software_version"] != __version__:
-                return
 
-            self.run_dict = run_dict
-            self.lsl = state["lsl"]
-            self.save_local = state["save_local"]
-            self.display_data = state["display_data"]
-            self.min_delay = state["min_delay"]
-            self.sleep_timeout = state["sleep_timeout"]
-            self.select_freq = state["select_freq"]
-            self.power_line = state["power_line"]
-            self.selected_channel = state["selected_channel"]
-            if state["pipeline_key"] in self.pipeline_keys:
-                self.pipeline_key = state["pipeline_key"]
-            self.custom_exp_name = state["custom_exp_name"]
+            try:
+                # check whether the previous state should be ignored (e.g., version change)
+                run_dict = state["run_dict"]
+                if run_dict["nb_channels"] != NB_CHANNELS or run_dict["software_version"] != __version__:
+                    return
+                self.run_dict = run_dict
+                self.lsl = state["lsl"]
+                self.save_local = state["save_local"]
+                self.display_data = state["display_data"]
+                self.min_delay = state["min_delay"]
+                self.max_delay = state["max_delay"]
+                self.sleep_timeout = state["sleep_timeout"]
+                self.select_freq = state["select_freq"]
+                self.power_line = state["power_line"]
+                self.selected_channel = state["selected_channel"]
+                if state["pipeline_key"] in self.pipeline_keys:
+                    self.pipeline_key = state["pipeline_key"]
+                self.custom_exp_name = state["custom_exp_name"]
+            except Exception as e:
+                print(f"Caught exception while loading app state: {e}")
 
     def start(self):
         self.save()
@@ -147,6 +152,9 @@ class ExperimentState:
 
         if self.min_delay != 0:
             self.run_dict['min_delay'] = int(self.min_delay) / 1000
+
+        if self.max_delay != 0:
+            self.run_dict['max_delay'] = int(self.max_delay) / 1000
 
         self.run_dict['lsl'] = self.lsl
         self.run_dict['record'] = self.save_local
@@ -366,11 +374,13 @@ class SimpleUI:
                     lsl_checker = ui.checkbox('Stream LSL', value=exp_state.lsl).bind_value_to(exp_state, 'lsl')
                     save_checker = ui.checkbox('Save recording locally', value=exp_state.save_local).bind_value_to(exp_state, 'save_local')
                     filename_box = ui.input(value='', label='Recording name').props('clearable').bind_value_to(exp_state, 'custom_exp_name')
-                    min_delay = ui.number(value=exp_state.min_delay, label='Stimulation delay (in ms)').bind_value_to(exp_state, 'min_delay')
+                    min_delay = ui.number(value=exp_state.min_delay, label='Stimulation min delay (in ms)').bind_value_to(exp_state, 'min_delay')
+                    max_delay = ui.number(value=exp_state.max_delay, label='Stimulation max delay (in ms)').bind_value_to(exp_state, 'max_delay')
                     start_button.bind_enabled_to(lsl_checker)
                     start_button.bind_enabled_to(save_checker)
                     start_button.bind_enabled_to(select_pipeline)
                     start_button.bind_enabled_to(min_delay)
+                    start_button.bind_enabled_to(max_delay)
                     start_button.bind_enabled_to(filename_box)
                     start_button.bind_enabled_to(select_freq)
                     start_button.bind_enabled_to(select_notch)
