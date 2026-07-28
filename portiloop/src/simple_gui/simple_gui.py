@@ -62,6 +62,7 @@ class ExperimentState:
         self.disk_str = f"Disk Usage:"
         self.min_delay = 0
         self.max_delay = 0
+        self.inter_stim_delay = 0
         self.sleep_timeout = 0
         self.select_freq = 250
         self.power_line = 60
@@ -76,6 +77,7 @@ class ExperimentState:
             "display_data": self.display_data,
             "min_delay": self.min_delay,
             "max_delay": self.max_delay,
+            "inter_stim_delay": self.inter_stim_delay,
             "sleep_timeout": self.sleep_timeout,
             "select_freq": self.select_freq,
             "power_line": self.power_line,
@@ -101,6 +103,7 @@ class ExperimentState:
                 self.display_data = state["display_data"]
                 self.min_delay = state["min_delay"]
                 self.max_delay = state["max_delay"]
+                self.inter_stim_delay = state["inter_stim_delay"]
                 self.sleep_timeout = state["sleep_timeout"]
                 self.select_freq = state["select_freq"]
                 self.power_line = state["power_line"]
@@ -155,6 +158,9 @@ class ExperimentState:
 
         if self.max_delay != 0:
             self.run_dict['max_delay'] = int(self.max_delay) / 1000
+
+        if self.inter_stim_delay != 0:
+            self.run_dict['inter_stim_delay'] = int(self.inter_stim_delay) / 1000
 
         self.run_dict['lsl'] = self.lsl
         self.run_dict['record'] = self.save_local
@@ -374,13 +380,15 @@ class SimpleUI:
                     lsl_checker = ui.checkbox('Stream LSL', value=exp_state.lsl).bind_value_to(exp_state, 'lsl')
                     save_checker = ui.checkbox('Save recording locally', value=exp_state.save_local).bind_value_to(exp_state, 'save_local')
                     filename_box = ui.input(value='', label='Recording name').props('clearable').bind_value_to(exp_state, 'custom_exp_name')
-                    min_delay = ui.number(value=exp_state.min_delay, label='Stimulation min delay (in ms)').bind_value_to(exp_state, 'min_delay')
-                    max_delay = ui.number(value=exp_state.max_delay, label='Stimulation max delay (in ms)').bind_value_to(exp_state, 'max_delay')
+                    min_delay = ui.number(value=exp_state.min_delay, label='Min stim delay (ms)').bind_value_to(exp_state, 'min_delay')
+                    max_delay = ui.number(value=exp_state.max_delay, label='Max stim delay (ms)').bind_value_to(exp_state, 'max_delay')
+                    inter_stim_delay = ui.number(value=exp_state.inter_stim_delay, label='Inter-stim delay (ms)').bind_value_to(exp_state, 'inter_stim_delay')
                     start_button.bind_enabled_to(lsl_checker)
                     start_button.bind_enabled_to(save_checker)
                     start_button.bind_enabled_to(select_pipeline)
                     start_button.bind_enabled_to(min_delay)
                     start_button.bind_enabled_to(max_delay)
+                    start_button.bind_enabled_to(inter_stim_delay)
                     start_button.bind_enabled_to(filename_box)
                     start_button.bind_enabled_to(select_freq)
                     start_button.bind_enabled_to(select_notch)
