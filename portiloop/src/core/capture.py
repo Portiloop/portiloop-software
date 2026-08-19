@@ -86,7 +86,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         
         # sampling loop:
         while c and t < t_max:
-            print("T3")
+            # print("T3")
             t = time.time()
             if python_clock:
                 if t <= t_next:
@@ -102,8 +102,10 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
             if t >= t_chk_msg:
                 t_chk_msg = t + time_msg_in
                 if p_msg_io.poll():
+                    print("T111")
                     message = p_msg_io.recv()
                     if message == 'STOP':
+                        print("T222")
                         # p_msg_io.send(("PRT", f"msg from parent process: {message}"))
                         c = False
             it += 1
