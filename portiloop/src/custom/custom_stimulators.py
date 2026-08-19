@@ -382,22 +382,38 @@ class UpStateDelayer(Delayer):
 
 class DelayedStimulator(Stimulator, ABC):
     def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
+        print("F0")
         super().__init__(config_dict, lsl_streamer, csv_recorder)
+        print("F1")
 
         if self.lsl_streamer is None:
             self.lsl_streamer = Dummy()
         if self.csv_recorder is None:
             self.csv_recorder = Dummy()
 
+        print("F2")
+
         # Initialize stimulation delayer if requested
         stimulate_fn = lambda: self.send_stimulation("DELAY_STIM", True)
+
+        print("F3")
+
         time_delay = not ((config_dict['min_delay'] == 0.0) and (config_dict['max_delay'] == 0.0) and (config_dict['inter_stim_delay'] == 0.0))
+
+        print("F4")
+
         if time_delay:
+            print("F5")
             stimulation_delayer = RandomTimingDelayer(config_dict, stimulate_fn=stimulate_fn)
+            print("F6")
         elif config_dict['stim_delay_mode'] in ['Peak', 'Valley']:
+            print("F7")
             stimulation_delayer = UpStateDelayer(config_dict, stimulate_fn=stimulate_fn)
+            print("F8")
         else:
+            print("F9")
             stimulation_delayer = None
+        print("F10")
         self.delayer = stimulation_delayer
 
     def stimulate(self, detection_signal):
