@@ -398,7 +398,11 @@ class DelayedStimulator(Stimulator, ABC):
 
         print("F3")
 
-        time_delay = not ((config_dict['min_delay'] == 0.0) and (config_dict['max_delay'] == 0.0) and (config_dict['inter_stim_delay'] == 0.0))
+        try:
+            time_delay = not ((config_dict['min_delay'] == 0.0) and (config_dict['max_delay'] == 0.0) and (config_dict['inter_stim_delay'] == 0.0))
+        except Exception as e:
+            print(f"caught: {e}")
+            raise e
 
         print("F4")
 
