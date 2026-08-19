@@ -446,6 +446,7 @@ class DelayedStimulator(Stimulator, ABC):
 
 class SleepSpindleRealTimeStimulator(DelayedStimulator):
     def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
+        print("E0")
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
         print("E1")
