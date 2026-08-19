@@ -448,6 +448,8 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
     def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
 
+        print("E1")
+
         soundname = config_dict['detection_sound']
 
         if soundname is None:
@@ -460,9 +462,12 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
         self.last_detected_ts = time.time()
         self.wait_t = 0.4  # 400 ms
 
+        print("E2")
+
         # Initialize Alsa stuff
         # Open WAV file and set PCM device
         with wave.open(str(self._sound), 'rb') as f:
+            print("E3")
             device = 'softvol'
 
             self.duration = f.getnframes() / float(f.getframerate())
@@ -482,19 +487,26 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
 
             self.periodsize = f.getframerate() // 8
 
+            print("E4")
+
             try:
+                print("E5")
                 self.pcm = alsaaudio.PCM(channels=f.getnchannels(), rate=f.getframerate(), format=frmt, periodsize=self.periodsize, device=device)
             except alsaaudio.ALSAAudioError as e:
+                print("E6")
                 self.pcm = Dummy()
                 raise e
 
             # Store data in list to avoid reopening the file
             self.wav_list = []
+            print("E7")
             while True:
                 data = f.readframes(self.periodsize)
                 if data:
+                    print("E8")
                     self.wav_list.append(data)
                 else:
+                    print("E9")
                     break
 
     def play_sound(self):
