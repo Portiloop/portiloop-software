@@ -32,6 +32,8 @@ if ADS:
 PORTILOOP_ID = f"{socket.gethostname()}-portiloop"
 PROFILE = True
 
+DEBUG = True
+
 
 def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_msg_in, channel_states):
     """
@@ -44,6 +46,9 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         time_msg_in: float: min time between attempts to recv incomming messages
         channel_states: list: list of strings representing channel states ('disabled', 'simple', etc.)
     """
+
+    print("T1")
+
     if duration <= 0:
         duration = np.inf
     
@@ -53,6 +58,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
     backend = Backend(hardware_version)
     
     try:
+        print("T2")
         config = BACKEND_CONFIG
         if python_clock:  # set ADS to 2 * frequency
             datarate = 2 * frequency
@@ -80,6 +86,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         
         # sampling loop:
         while c and t < t_max:
+            print("T3")
             t = time.time()
             if python_clock:
                 if t <= t_next:
@@ -141,6 +148,8 @@ def start_capture(
 
     """
 
+    print("T4")
+
     # Initialize the LED
     leds = LEDs()
 
@@ -181,8 +190,11 @@ def start_capture(
     create_detector = config_dict['detect'] and detector_cls is not None
     create_stimulator = config_dict['detect'] and stimulator_cls is not None  # FIXME: check that "detect" is right here
 
+    print("T5")
+
     # Initialize recording if requested
     if config_dict['record']:
+        print("T6")
         csv_recorder = CSVRecorder(config_dict['filename'],
                                    raw_signal=config_dict['record_raw'],
                                    filtered_signal=config_dict['record_filtered'] and create_processor,  # set to False if you don't want to log the filtered signal
@@ -192,16 +204,28 @@ def start_capture(
                                    stimulation_activated=True,
                                    default_detection_value=0,
                                    default_stimulation_value=0)
+        print("T7")
     else:
+        print("T8")
         csv_recorder = Dummy()
 
     # Pipeline components:
 
+    print("T9")
+
     detector = detector_cls(config_dict, lsl_streamer, csv_recorder) if create_detector else None
+
+    print("T10")
+
     stimulator = stimulator_cls(config_dict, lsl_streamer, csv_recorder) if create_stimulator else None
+
+    print("T11")
+
     if create_processor:
+        print("T12")
         processor = processor_cls(config_dict, lsl_streamer, csv_recorder)
     else:
+        print("T13")
         processor = None
 
     # Buffer used for the visualization and the recording
@@ -211,9 +235,12 @@ def start_capture(
     stimulation_activated_buffer = []
 
     if config_dict['record']:
+        print("T14")
         try:
+            print("T15")
             # Get the metadata and save it to a file
             metadata = config_dict
+            print("T16")
             # Split the original path into its components
             dirname, basename = os.path.split(config_dict['filename'])
             # Create dir if it doesn't exist
@@ -224,15 +251,19 @@ def start_capture(
             new_name = f"{name}_metadata.json"
             # Join the components back together into the new file path
             metadata_path = os.path.join(dirname, new_name)
+            print("T17")
             with open(metadata_path, "w") as f:
+                print("T18")
                 json.dump(metadata, f, indent=4)
         except Exception as e:
+            print("T100")
             print(f"Could not save metadata: {e}")
  
     # Initialize the variable to keep track of whether we are in a detection state or not for the markers
     prev_pause = pause_value.value
 
     if detector is not None:
+        print("T20")
         marker_str = LSLStreamer.string_for_detection_activation(prev_pause)
         lsl_streamer.push_marker(marker_str)
 
@@ -254,11 +285,14 @@ def start_capture(
     # Main capture loop
     while True:
 
+        print("T21")
+
         if PROFILE:
             t00 = time.perf_counter()
         
         # First, we send all outgoing messages to the capture process
         try:
+            print("T22")
             if not q_msg.empty():
                 msg = q_msg.get_nowait()
                 capture_backend.send_msg(msg)
@@ -268,6 +302,7 @@ def start_capture(
             raise e
         
         # Then, we check if we have received a message from the capture process
+        print("T22")
         msg = capture_backend.get_msg()
         # Either we have received a stop message, or a print message.
         if msg is None:
@@ -283,6 +318,8 @@ def start_capture(
             perf["wait msg"][0] += t1 - t00
             perf["wait msg"][1] += 1
 
+        print("T23")
+
         # Then, we retrieve the data from the capture process
         raw_points = capture_backend.get_data()  # np.array (data series x ads_channels), or None
         # If we have no data, we continue to the next iteration
@@ -293,6 +330,8 @@ def start_capture(
                 perf["no data"][1] += 1
             continue
 
+        print("T24")
+
         if PROFILE:
             t2 = time.perf_counter()
             perf["got data"][0] += t2 - t1
@@ -300,8 +339,10 @@ def start_capture(
         
         # Go through filtering pipeline
         if processor is not None:
+            print("T25")
             filtered_points = processor.filter(raw_points.copy())
         else:
+            print("T26")
             filtered_points = raw_points.copy()
 
         # Contains the filtered points (if filtering is off, contains a copy of the raw points)
@@ -325,6 +366,8 @@ def start_capture(
         if pause != prev_pause and detector is not None:
             lsl_streamer.push_marker(LSLStreamer.string_for_detection_activation(pause))
             prev_pause = pause
+
+        print("T27")
 
         if PROFILE:
             t4 = time.perf_counter()
@@ -368,6 +411,8 @@ def start_capture(
         if q_display is not None:
             q_display.put([timestamp, raw_points, filtered_points])
 
+        print("T28")
+
         if PROFILE:
             t8 = time.perf_counter()
             perf["buffers"][0] += t8 - t7
@@ -389,6 +434,8 @@ def start_capture(
             csv_recorder.append_stimulation_activated_buffer(stimulation_activated_buffer)
             csv_recorder.write()
 
+            print("T29")
+
             raw_signal_buffer = []
             filtered_signal_buffer = []
             stimulation_activated_buffer = []
@@ -397,6 +444,8 @@ def start_capture(
                 t10 = time.perf_counter()
                 perf["csv"][0] += t10 - t9
                 perf["csv"][1] += 1
+
+        print("T30")
 
     if PROFILE:
         t_end = time.perf_counter()
