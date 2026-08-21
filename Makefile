@@ -40,7 +40,8 @@ step_pre3.temp: step_pre2.temp
 	gpg --keyserver keyserver.ubuntu.com --recv-keys C0BA5CE6DC6315A3
 	gpg --export --armor C0BA5CE6DC6315A3 | sudo apt-key add -
 	sudo apt-get --allow-releaseinfo-change update
-	sudo apt-get update
+	sudo apt update
+	sudo apt install -y exfat-fuse exfat-utils
 	touch step_pre3.temp
 
 step0.temp: step_pre3.temp
