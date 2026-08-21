@@ -70,7 +70,22 @@ Similarly, the `Simple UI` can be accessed by typing `192.168.4.1:8081` in your 
 
 ### SD card
 
-If using an SD card to record your EEG signal in CSV format, plug the SD card into your `Portiloop` before powering the `Portiloop` on.
+To work on the Portiloop, your SD card must have a partition. You can check whether your SD card has a partition by accessing the Coral via SSH, and executing `lsblk`. This command should output something like:
+```
+NAME         MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+mmcblk0      179:0    0  7.3G  0 disk 
+├─mmcblk0p1  179:1    0    4M  0 part 
+├─mmcblk0p2  179:2    0  128M  0 part /boot
+├─mmcblk0p3  179:3    0    2G  0 part /home
+└─mmcblk0p4  179:4    0  5.2G  0 part /
+mmcblk0boot0 179:32   0    4M  1 disk 
+mmcblk0boot1 179:64   0    4M  1 disk 
+mmcblk2      179:96   0  119G  0 disk 
+└─mmcblk2p1  179:97   0  119G  0 part
+```
+i.e., the SD card should appear as `mmcblk2` and have a partition appearing as `mmcblk2p1`.
+
+When using an SD card to record your EEG signal in CSV format, plug the SD card into your `Portiloop` before powering the `Portiloop` on.
 Your CSV will then be recorded in the SD card under the `workspace` folder.
 Otherwise, your CSV will be recorded in internal memory under `/home/mendel/workspace`
 
