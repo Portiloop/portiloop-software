@@ -11,12 +11,13 @@ It enables controlling the `Portiloop` from a Graphical User Interface (GUI).
 
 ## Installation (Portiloop V2.3):
 
-You have just got your hands on the hardware for the Portiloop V2.3 (A Google Coral Dev Board Mini and a Portiloop board). Here are the steps you need to follow to get started.
+You have just got your hands on the hardware for the Portiloop V2.3 (a Google Coral Dev Board Mini and a Portiloop board). Here are the steps you need to follow to get started.
 
 ### Hadware prerequisites
+- A power bank and a USB-C cable
 - A male-to-female jupmer wire, and a Linux PC (required to reflash if you brick the Coral Dev Board Mini)
-- Headphones with a jack that has TWO rings (not three)
-- A USB-C power bank and cable
+- Headphones with a jack that has TWO rings (not three) (required if you want to use sound output)
+- A micro-SD card (required if you want to record signal)
 
 
 ### Flashing the Google Coral
@@ -60,7 +61,8 @@ If some issues arise, make sure your PC is connected to the same network as the 
 - Clone this repository in the home folder: `cd ~ && git clone https://github.com/Portiloop/portiloop-software.git`
 - Go into the cloned repository: `cd ~/portiloop-software`,
 - Run `make` and follow the instructions when prompted. Reboot when complete.
-- Note that `make` usually fails just before the last step (when attempting to play a test sound). Whenever it does, just call `make` again.
+- Note 1: `make` usually fails just before the last step (when attempting to play a test sound). Whenever it does, just call `make` again.
+- Note 2: The first time you reboot after completing `make`, the device may fail to shutdown. In that situation, just wait for a few seconds after pressing the power button and unplug the power cable.
 
 That's it! Your Jupyter server should now be up and running, listening on IP address `192.168.4.1` and port `8080`, and automatically starting whenever the system boots up. You can now access it by typing `192.168.4.1:8080` in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arises, try with a different web browser.
 Similarly, the `Simple UI` can be accessed by typing `192.168.4.1:8081` in your browser. 
