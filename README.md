@@ -61,8 +61,8 @@ If some issues arise, make sure your PC is connected to the same network as the 
 - Clone this repository in the home folder: `cd ~ && git clone https://github.com/Portiloop/portiloop-software.git`
 - Go into the cloned repository: `cd ~/portiloop-software`,
 - Run `make` and follow the instructions when prompted. Reboot when complete.
-- Note 1: `make` usually fails just before the last step (when attempting to play a test sound). Whenever it does, just call `make` again.
-- Note 2: The first time you reboot after completing `make`, the device may fail to shutdown. In that situation, just wait for a few seconds after pressing the power button and unplug the power cable.
+- :information_source: `make` usually fails just before the last step (when attempting to play a test sound). Whenever it does, just call `make` again.
+- :information_source: The first time you reboot after completing `make`, the device may fail to shutdown. In that situation, just wait for a few seconds after pressing the power button and unplug the power cable.
 
 That's it! Your Jupyter server should now be up and running, listening on IP address `192.168.4.1` and port `8080`, and automatically starting whenever the system boots up. You can now access it by typing `192.168.4.1:8080` in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arises, try with a different web browser.
 Similarly, the `Simple UI` can be accessed by typing `192.168.4.1:8081` in your browser. 
@@ -95,7 +95,9 @@ In case you inadvertently fill up your `Portiloop` internal memory, it will refu
 
 ### Signal recording file
 
-When recording signal, the structure of the output CSV file depends on the number of channels of your Portiloop, on whether detection / stimulation is enabled, and on your Detector / Stimulator. NB: the `stimulation_on` column is `1` when the UI stimulation switch is active and `0` otherwise, while the `stimulation` column contains the stimulus that has been sent if the stimulation switch was active or that would have been sent if the switch were active.
+When recording signal, the structure of the output CSV file depends on the number of channels of your Portiloop, on whether detection / stimulation is enabled, and on your specific Detector / Stimulator.
+
+:information_source: _the `stimulation_on` column is `1` when the UI stimulation switch is active and `0` otherwise, while the `stimulation` column contains the stimulus that has been sent if the stimulation switch was active or that would have been sent if the switch were active._
 
 
 ### Headphones
