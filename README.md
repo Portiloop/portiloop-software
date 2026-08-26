@@ -95,7 +95,7 @@ In case you inadvertently fill up your `Portiloop` internal memory, it will refu
 
 ### Signal recording file
 
-When recording signal, the structure of the output CSV file depends on the number of channels of your Portiloop, on whether detection'/ stimulation is enabled, and on your Detector / Stimulator. NB: the `stimulation_on` column is `1` when the UI stimulation switch is active and `0` otherwise, while the `stimulation` column contains the stimulus that has been sent if the stimulation switch was active or that would have been sent if the switch were active.
+When recording signal, the structure of the output CSV file depends on the number of channels of your Portiloop, on whether detection / stimulation is enabled, and on your Detector / Stimulator. NB: the `stimulation_on` column is `1` when the UI stimulation switch is active and `0` otherwise, while the `stimulation` column contains the stimulus that has been sent if the stimulation switch was active or that would have been sent if the switch were active.
 
 
 ### Headphones
