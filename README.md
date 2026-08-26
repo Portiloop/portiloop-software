@@ -16,7 +16,7 @@ You have just got your hands on the hardware for the Portiloop V2.3 (a Google Co
 ### Hadware prerequisites
 - A power bank and a USB-C cable
 - A male-to-female jupmer wire, and a Linux PC (required to reflash if you brick the Coral Dev Board Mini)
-- Headphones with a jack that has TWO rings (not three) (required if you want to use sound output)
+- Headphones with a jack that has TWO rings (not three) (required if you want to use the sound output)
 - A micro-SD card (required if you want to record signal)
 
 
