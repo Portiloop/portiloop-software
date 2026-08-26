@@ -80,9 +80,9 @@ class JupyterUI:
         self.detection_sound = "stimul_100ms.wav"
 
         # Delayer parameters
-        self.spindle_detection_mode = 'Fast'
-        self.spindle_freq = 10
-        self.stim_delay = 0.0
+        self.stim_delay_mode = 'Time'
+        self.min_delay = 0.0
+        self.max_delay = 0.0
         self.inter_stim_delay = 0.0
 
         # Pipeline
@@ -442,13 +442,24 @@ class JupyterUI:
             tooltip='Check if electrodes are properly connected'
         )
 
-        self.b_stim_delay = widgets.FloatSlider(
-            value=self.stim_delay,
+        self.b_min_delay = widgets.FloatSlider(
+            value=self.min_delay,
             min=0.0,
             max=10.0,
             step=0.01,
-            description="Stim Delay",
-            tooltip="Time delay in seconds between detection and stimulation",
+            description="Min Delay",
+            tooltip="Minimum time delay in seconds between detection and stimulation",
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
+
+        self.b_max_delay = widgets.FloatSlider(
+            value=self.max_delay,
+            min=0.0,
+            max=20.0,
+            step=0.01,
+            description="Max Delay",
+            tooltip="When this is larger than Min Delay, stimulation delays are random between Min Delay and Max Delay",
             disabled=False,
             style={'description_width': 'initial'}
         )
@@ -464,17 +475,10 @@ class JupyterUI:
             style={'description_width': 'initial'}
         )
 
-        self.b_spindle_mode = widgets.Dropdown(
-            options=['Fast', 'Peak', 'Through'],
-            value='Fast',
-            description='Spindle Stimulation Mode',
-            disabled=False,
-            style={'description_width': 'initial'}
-        )
-
-        self.b_spindle_freq = widgets.IntText(
-            value=self.spindle_freq,
-            description='Spindle Freq (Hz):',
+        self.b_stim_delay_mode = widgets.Dropdown(
+            options=['Time', 'Peak', 'Valley'],
+            value='Time',
+            description='Stimulation Delay Mode',
             disabled=False,
             style={'description_width': 'initial'}
         )
@@ -482,12 +486,10 @@ class JupyterUI:
         self.b_accordion_delaying = widgets.Accordion(
             children=[
                 widgets.VBox([
-                    self.b_stim_delay,
+                    self.b_stim_delay_mode,
+                    self.b_min_delay,
+                    self.b_max_delay,
                     self.b_inter_stim_delay,
-                    widgets.HBox([
-                        self.b_spindle_mode,
-                        self.b_spindle_freq
-                    ])
                 ]),
             ]
         )
@@ -565,8 +567,7 @@ class JupyterUI:
         self.b_filename.observe(self.on_b_filename, 'value')
         self.b_channel_detect.observe(self.on_b_channel_detect, 'value')
         self.b_sound_detect.observe(self.on_b_sound_detect, 'value')
-        self.b_spindle_mode.observe(self.on_b_spindle_mode, 'value')
-        self.b_spindle_freq.observe(self.on_b_spindle_freq, 'value')
+        self.b_stim_delay_mode.observe(self.on_b_stim_delay_mode, 'value')
         self.b_power_line.observe(self.on_b_power_line, 'value')
         self.b_custom_fir.observe(self.on_b_custom_fir, 'value')
         self.b_custom_fir_order.observe(self.on_b_custom_fir_order, 'value')
@@ -579,7 +580,8 @@ class JupyterUI:
         self.b_test_stimulus.on_click(self.on_b_test_stimulus)
         self.b_test_impedance.on_click(self.on_b_test_impedance)
         self.b_pause.observe(self.on_b_pause, 'value')
-        self.b_stim_delay.observe(self.on_b_delay, 'value')
+        self.b_min_delay.observe(self.on_b_min_delay, 'value')
+        self.b_max_delay.observe(self.on_b_max_delay, 'value')
         self.b_inter_stim_delay.observe(self.on_b_inter_delay, 'value')
 
     def __del__(self):
@@ -605,7 +607,7 @@ class JupyterUI:
                               self.b_lsl,
                               widgets.HBox([self.b_record, self.b_record_raw, self.b_record_filtered]),
                               self.b_filename,
-                              #   self.b_test_impedance,
+                              self.b_test_impedance,
                               self.b_display,
                               self.b_disp_type,
                               self.b_capture,
@@ -632,8 +634,7 @@ class JupyterUI:
         self.b_signal_sample.disabled = self.signal_input == 'ADS'
         self.b_offline_speed.disabled = self.signal_input == 'ADS'
         self.b_channel_detect.disabled = False
-        self.b_spindle_freq.disabled = False
-        self.b_spindle_mode.disabled = False
+        self.b_stim_delay_mode.disabled = False
         self.b_polyak_mean.disabled = not self.processor_cls == SpindleFilter
         self.b_polyak_std.disabled = not self.processor_cls == SpindleFilter
         self.b_epsilon.disabled = not self.processor_cls == SpindleFilter
@@ -649,7 +650,8 @@ class JupyterUI:
         self.b_pause.disabled = not self.detect
         self.b_test_stimulus.disabled = False  # only enabled when running
         self.b_test_impedance.disabled = False
-        self.b_stim_delay.disabled = False
+        self.b_min_delay.disabled = False
+        self.b_max_delay.disabled = False
         self.b_inter_stim_delay.disabled = False
         self.b_sound_detect.disabled = False
 
@@ -672,8 +674,7 @@ class JupyterUI:
         for i in range(self.nb_channels):
             self.chann_buttons[i].disabled = True
         self.b_channel_detect.disabled = True
-        self.b_spindle_freq.disabled = True
-        self.b_spindle_mode.disabled = True
+        self.b_stim_delay_mode.disabled = True
         self.b_signal_input.disabled = True
         self.b_signal_sample.disabled = True
         self.b_offline_speed.disabled = True
@@ -691,7 +692,8 @@ class JupyterUI:
         self.b_threshold.disabled = True
         # self.b_test_stimulus.disabled = not self.stimulate # only enabled when running
         self.b_test_impedance.disabled = True
-        self.b_stim_delay.disabled = True
+        self.b_min_delay.disabled = True
+        self.b_max_delay.disabled = True
         self.b_inter_stim_delay.disabled = True
         self.b_sound_detect.disabled = True
 
@@ -709,15 +711,8 @@ class JupyterUI:
     def on_b_channel_detect(self, value):
         self.channel_detection = value['new']
 
-    def on_b_spindle_freq(self, value):
-        val = value['new']
-        if val > 0:
-            self.spindle_freq = val
-        else:
-            self.b_spindle_freq.value = self.spindle_freq
-
-    def on_b_spindle_mode(self, value):
-        self.spindle_detection_mode = value['new']
+    def on_b_stim_delay_mode(self, value):
+        self.stim_delay_mode = value['new']
 
     def on_b_capture(self, value):
         val = value['new']
@@ -958,9 +953,13 @@ class JupyterUI:
         elif val == 'Paused':
             self.pause_value.value = True
 
-    def on_b_delay(self, value):
+    def on_b_min_delay(self, value):
         val = value['new']
-        self.stim_delay = val
+        self.min_delay = val
+
+    def on_b_max_delay(self, value):
+        val = value['new']
+        self.max_delay = val
 
     def on_b_inter_delay(self, value):
         val = value['new']
@@ -979,7 +978,7 @@ class JupyterUI:
 
         try:
             backend.write_regs(0x00, LEADOFF_CONFIG)
-            backend.start()
+            # backend.start()
             start_time = time.time()
             current_time = time.time()
             while current_time - start_time < 2:
@@ -987,7 +986,7 @@ class JupyterUI:
             reading = backend.read()
 
             # Check if any of the negative bits are set and initialize the impedance array
-            #             impedance_check = [any([is_set(leadoff_n, i) for i in range(2, 9)])]
+            # impedance_check = [any([is_set(leadoff_n, i) for i in range(2, 9)])]
             impedance_check = [any([reading.loff_n(i) for i in range(7)])]
 
             for i in range(7):

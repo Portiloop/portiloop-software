@@ -41,12 +41,14 @@ class ExperimentState:
         self.started = False
         self.time_started = datetime.now()
         self.q_msg = Queue()
+
         self.run_dict = RUN_SETTINGS
-        # enable all channels:
-        self.run_dict["channel_states"] = ["simple"] * self.run_dict["nb_channels"]
+        self.run_dict["channel_states"] = ["simple"] * self.run_dict["nb_channels"]  # enable all channels
+
         self.pause_value = Value('b', False)
         self._t_capture = None
         self.stim_on = False
+        self.custom_exp_name = ""
         self.exp_name = ""
         self.display_q = Queue() if ENABLE_DISPLAY else None
         self.sd_card = False
@@ -58,7 +60,9 @@ class ExperimentState:
         self.selected_channel = 'Channel 2'
         self.display_data = 'Raw'
         self.disk_str = f"Disk Usage:"
-        self.stim_delay = 0
+        self.min_delay = 0
+        self.max_delay = 0
+        self.inter_stim_delay = 0
         self.sleep_timeout = 0
         self.select_freq = 250
         self.power_line = 60
@@ -71,11 +75,14 @@ class ExperimentState:
             "save_local": self.save_local,
             "selected_channel": self.selected_channel,
             "display_data": self.display_data,
-            "stim_delay": self.stim_delay,
+            "min_delay": self.min_delay,
+            "max_delay": self.max_delay,
+            "inter_stim_delay": self.inter_stim_delay,
             "sleep_timeout": self.sleep_timeout,
             "select_freq": self.select_freq,
             "power_line": self.power_line,
-            "pipeline_key": self.pipeline_key
+            "pipeline_key": self.pipeline_key,
+            "custom_exp_name": self.custom_exp_name,
         }
         with open(self.persistent_file_name, 'wb') as f:
             pkl.dump(state, f)
@@ -84,35 +91,38 @@ class ExperimentState:
         if self.persistent_file_name.is_file():
             with open(self.persistent_file_name, 'rb') as f:
                 state = pkl.load(f)
-            
-            # check whether the previous state should be ignored (e.g., version change)
-            run_dict = state["run_dict"]
-            if run_dict["nb_channels"] != NB_CHANNELS or run_dict["software_version"] != __version__:
-                return
 
-            self.run_dict = run_dict
-            self.lsl = state["lsl"]
-            self.save_local = state["save_local"]
-            self.display_data = state["display_data"]
-            self.stim_delay = state["stim_delay"]
-            self.sleep_timeout = state["sleep_timeout"]
-            self.select_freq = state["select_freq"]
-            self.power_line = state["power_line"]
-
-            self.selected_channel = state["selected_channel"]
-            if state["pipeline_key"] in self.pipeline_keys:
-                self.pipeline_key = state["pipeline_key"]
+            try:
+                # check whether the previous state should be ignored (e.g., version change)
+                run_dict = state["run_dict"]
+                if run_dict["nb_channels"] != NB_CHANNELS or run_dict["software_version"] != __version__:
+                    return
+                self.run_dict = run_dict
+                self.lsl = state["lsl"]
+                self.save_local = state["save_local"]
+                self.display_data = state["display_data"]
+                self.min_delay = state["min_delay"]
+                self.max_delay = state["max_delay"]
+                self.inter_stim_delay = state["inter_stim_delay"]
+                self.sleep_timeout = state["sleep_timeout"]
+                self.select_freq = state["select_freq"]
+                self.power_line = state["power_line"]
+                self.selected_channel = state["selected_channel"]
+                if state["pipeline_key"] in self.pipeline_keys:
+                    self.pipeline_key = state["pipeline_key"]
+                self.custom_exp_name = state["custom_exp_name"]
+            except Exception as e:
+                print(f"Caught exception while loading app state: {e}")
 
     def start(self):
         self.save()
-        print(f"Frequency: {self.select_freq}, Sleep_timeout: {self.sleep_timeout}")
         # Set the variables for the experiment
         self.time_started = datetime.now()
         stim_str = "STIMON" if self.stim_on else "STIMOFF"
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
-        self.exp_name = f"{portiloop_ID}_{time_str}_{stim_str}.csv"
+        prefix = self.custom_exp_name or portiloop_ID
+        self.exp_name = f"{prefix}_{time_str}_{stim_str}.csv"
         print(f"Starting recording {self.exp_name.split('.')[0]}")
-
         print(f"STIMON = {self.stim_on}")
 
         self.run_dict['frequency'] = self.select_freq
@@ -134,32 +144,26 @@ class ExperimentState:
                 mixer = DummyAlsaMixer()
             else:
                 mixer = alsaaudio.Mixer(control='SoftMaster', device='dmixer')
-                # mixer = alsaaudio.Mixer()
         except ALSAAudioError as e:
             print(e)
-            print(f"No ALSA mixer found. Volume control will not be available from notebook.\nAvailable mixers were:\n{mixers}")
+            print(f"No ALSA mixer found. Volume control will not be available.")
             mixer = DummyAlsaMixer()
 
         volume = mixer.getvolume()[0]  # we will set the same volume on all channels
         self.run_dict['volume'] = volume
+        self.run_dict['stimulate'] = self.stim_on
 
-        if self.stim_on:
-            self.run_dict['stimulate'] = True
-        else:
-            self.run_dict['stimulate'] = False
+        if self.min_delay != 0:
+            self.run_dict['min_delay'] = int(self.min_delay) / 1000
 
-        if self.stim_delay != 0:
-            self.run_dict['stim_delay'] = int(self.stim_delay) / 1000
+        if self.max_delay != 0:
+            self.run_dict['max_delay'] = int(self.max_delay) / 1000
 
-        if self.lsl:
-            self.run_dict['lsl'] = True
-        else:
-            self.run_dict['lsl'] = False
+        if self.inter_stim_delay != 0:
+            self.run_dict['inter_stim_delay'] = int(self.inter_stim_delay) / 1000
 
-        if self.save_local:
-            self.run_dict['record'] = True
-        else:
-            self.run_dict['record'] = False
+        self.run_dict['lsl'] = self.lsl
+        self.run_dict['record'] = self.save_local
 
         workspace_dir = CSV_PATH
         self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name.split('.')[0], self.exp_name)
@@ -321,7 +325,7 @@ class SimpleUI:
                     save_file_label = ui.label().bind_text_from(
                         exp_state,
                         "exp_name",
-                        backward=lambda x: f"Current experiment {x.split('.')[0]}")
+                        backward=lambda x: f"Current experiment: {x.split('.')[0]}")
                     timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() - exp_state.time_started).split(".")[0]}'))
                     sd_card_timer = ui.timer(TIMER_SD_CARD, exp_state.check_sd_card)
                     start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
@@ -351,7 +355,7 @@ class SimpleUI:
                 with ui.column().classes('w-full items-center'):
                     ui.label("If you are a subject in an experiment, do not change any of these options unless explicitly prompted to!").classes('text-1.5xl').style('color:#d9a011')
                     ui.separator()
-                    space_label = ui.label(f"Disk Usage: {psutil.disk_usage(os.getcwd())}%").bind_text_from(
+                    space_label = ui.label(f"Disk usage: {psutil.disk_usage(os.getcwd())}%").bind_text_from(
                         exp_state,
                         'disk_str'
                     ).classes('text-2xl')
@@ -361,7 +365,7 @@ class SimpleUI:
                     select_freq = ui.select(
                         possible_freqs,
                         value=exp_state.select_freq,
-                        label="Sample Frequency (Hz)").bind_value_to(exp_state, 'select_freq').classes('w-3/4')
+                        label="Sample frequency (Hz)").bind_value_to(exp_state, 'select_freq').classes('w-3/4')
                     ui.separator().classes('w-2/3')
                     possible_notches = [60, 50]
                     select_notch = ui.select(
@@ -369,17 +373,23 @@ class SimpleUI:
                         value=exp_state.power_line,
                         label="Notch filter frequency (Hz)").bind_value_to(exp_state, 'power_line').classes('w-3/4')
                     ui.separator().classes('w-2/3')
-                    sleep_timeout = ui.slider(min=0, max=40, value=exp_state.sleep_timeout).bind_value_to(exp_state, 'sleep_timeout').classes('w-3/4') #.props('label-always')
-                    ui.label().bind_text_from(sleep_timeout, 'value', backward=lambda x: f"Sleep Timeout: {x} minutes")
+                    sleep_timeout = ui.slider(min=0, max=180, value=exp_state.sleep_timeout).bind_value_to(exp_state, 'sleep_timeout').classes('w-3/4') #.props('label-always')
+                    ui.label().bind_text_from(sleep_timeout, 'value', backward=lambda x: f"Stimulation starts after: {x} minutes")
                     sleep_timeout_timer = ui.timer(10, exp_state.check_sleep_timeout)
                     ui.separator().classes('w-2/3')
                     lsl_checker = ui.checkbox('Stream LSL', value=exp_state.lsl).bind_value_to(exp_state, 'lsl')
-                    save_checker = ui.checkbox('Save Recording Locally', value=exp_state.save_local).bind_value_to(exp_state, 'save_local')
-                    stim_delay = ui.number(value=exp_state.stim_delay, label='Stimulation Delay (in ms)').bind_value_to(exp_state, 'stim_delay')
+                    save_checker = ui.checkbox('Save recording locally', value=exp_state.save_local).bind_value_to(exp_state, 'save_local')
+                    filename_box = ui.input(value='', label='Recording name').props('clearable').bind_value_to(exp_state, 'custom_exp_name')
+                    min_delay = ui.number(value=exp_state.min_delay, label='Min stim delay (ms)').bind_value_to(exp_state, 'min_delay')
+                    max_delay = ui.number(value=exp_state.max_delay, label='Max stim delay (ms)').bind_value_to(exp_state, 'max_delay')
+                    inter_stim_delay = ui.number(value=exp_state.inter_stim_delay, label='Inter-stim delay (ms)').bind_value_to(exp_state, 'inter_stim_delay')
                     start_button.bind_enabled_to(lsl_checker)
                     start_button.bind_enabled_to(save_checker)
                     start_button.bind_enabled_to(select_pipeline)
-                    start_button.bind_enabled_to(stim_delay)
+                    start_button.bind_enabled_to(min_delay)
+                    start_button.bind_enabled_to(max_delay)
+                    start_button.bind_enabled_to(inter_stim_delay)
+                    start_button.bind_enabled_to(filename_box)
                     start_button.bind_enabled_to(select_freq)
                     start_button.bind_enabled_to(select_notch)
                     start_button.bind_enabled_to(sleep_timeout)

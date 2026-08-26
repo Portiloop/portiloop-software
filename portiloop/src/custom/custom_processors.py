@@ -107,8 +107,8 @@ class SpindleFilter(Filter):
         if len(filter_args) > 0:
             use_fir, use_notch, use_std = filter_args
         else:
-            use_fir = True,
-            use_notch = True,
+            use_fir = True
+            use_notch = True
             use_std = True
         self.use_fir = use_fir
         self.use_notch = use_notch

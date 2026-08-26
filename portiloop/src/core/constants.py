@@ -74,11 +74,10 @@ DEFAULT_CONFIG_DICT = {
     "channel_states": ["disabled" for _ in range(NB_CHANNELS)],
     "channel_detection": 2,
     "detection_sound": "15msPN_48kHz_norm_stereo.wav",
-    "spindle_detection_mode": "Fast",
-    "spindle_freq": 10,
-    "stim_delay": 0.0,
+    "stim_delay_mode": "Time",  # possible values: 'Time', 'Peak', 'Valley'
+    "min_delay": 0.0,
+    "max_delay": 0.0,
     "inter_stim_delay": 0.0,
-    "so_phase_delay": None,  # None or target phase in radians
     "volume": 100,
     "filter_settings": {
         "power_line": 60,

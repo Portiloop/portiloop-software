@@ -1,4 +1,3 @@
-import copy
 import time
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -6,7 +5,6 @@ from threading import Thread, Lock
 
 import wave
 import numpy as np
-from matplotlib import pyplot as plt
 from scipy.signal import find_peaks
 
 from portiloop.src.core.stimulation import Stimulator
@@ -31,6 +29,7 @@ class Delayer(ABC):
     """
     Interface that defines Delayers for stimulation
     """
+
     @abstractmethod
     def step(self, point):
         """
@@ -44,35 +43,131 @@ class Delayer(ABC):
         """
         pass
 
-    # @abstractmethod
-    # def step_timestep(self, point):
-    #     pass
-
     def detected(self):
+        """
+        May be called when a pattern of interest is detected by the detector.
+        """
         pass
 
     def not_detected(self):
+        """
+        May be called when no pattern of interest is detected by the detector.
+        """
         pass
 
 
-class TimingDelayer(Delayer):
-    def __init__(self, stimulation_delay=0.0, inter_stim_delay=0.0, sample_freq=250):
+# class RandomDelayer(Delayer):
+#     def __init__(self, config_dict, stimulate_fn: callable = None):
+#         """
+#         Randomly delays stimulations between min_delay and max_delay whenever a detection happens.
+#         While delaying a stimulation, no new detection is taken in account.
+
+#         Args:
+#             config_dict: configuration dictionary
+#         """
+#         self.min_delay = config_dict['min_delay']
+#         self.max_delay = config_dict['max_delay']
+#         self.sample_freq = config_dict['frequency']
+
+#         self._t = 0
+#         self._t_next_detection = None
+#         self.stimulate = stimulate_fn
+
+#     def step(self, point):
+#         """
+#         Moves through the state machine
+#         """
+
+#         self._t += 1
+
+#         if self._t_next_detection is None:
+#             return False
+#         else:
+#             if self._t >= self._t_next_detection:
+#                 # Actually stimulate the patient after the delay
+#                 if self.stimulate is not None:
+#                     self.stimulate()
+#                 self._t_next_detection = None
+#                 return True
+#             else:
+#                 return False
+
+#     def detected(self):
+#         """
+#         Defines what happens on detection
+#         """
+#         if self._t_next_detection is None:
+#             delay = np.random.uniform(low=self.min_delay, high=self.max_delay)
+#             delay_steps = int(self.sample_freq * delay)
+#             self._t_next_detection = self._t + delay_steps
+
+
+# class TimingDelayer(Delayer):
+#     def __init__(self, config_dict, stimulate_fn=None):
+#         """
+#         Delays based on the timing.
+
+#         Args:
+#             config_dict: configuration dictionary
+#         """
+#         self.state = TimingStates.READY
+#         self.stimulation_delay = config_dict['min_delay']
+#         self.inter_stim_delay = config_dict['inter_stim_delay']
+#         self.sample_freq = config_dict['frequency']
+
+#         self.stimulate = stimulate_fn
+#         self.waiting_start = time.time()
+#         self.delaying_start = time.time()
+
+#     def step(self, point):
+#         """
+#         Moves through the state machine
+#         """
+#         if self.state == TimingStates.READY:
+#             return False
+#         elif self.state == TimingStates.DELAYING:
+#             if time.time() - self.delaying_start > self.stimulation_delay:
+#                 # Actually stimulate the patient after the delay
+#                 if self.stimulate is not None:
+#                     self.stimulate()
+#                 self.state = TimingStates.WAITING
+#                 self.waiting_start = time.time()
+#                 return True
+#             return False
+#         elif self.state == TimingStates.WAITING:
+#             if time.time() - self.waiting_start > self.inter_stim_delay:
+#                 self.state = TimingStates.READY
+#             return False
+
+#     def detected(self):
+#         """
+#         Defines what happens when a detection comes depending on what state you are in
+#         """
+#         if self.state == TimingStates.READY:
+#             self.state = TimingStates.DELAYING
+#             self.delaying_start = time.time()
+
+
+class RandomTimingDelayer(Delayer):
+    def __init__(self, config_dict, stimulate_fn=None):
         """
-        Delays based on the timing
-        params:
-            stimulation_delay (float): How much time to wait after a detection before stimulation
-            inter_stim_delay (float): How much time to wait after a stimulation before going back to a detection state
+        Delays based on the timing.
+
+        Args:
+            config_dict: configuration dictionary
         """
         self.state = TimingStates.READY
-        self.stimulation_delay = stimulation_delay
-        self.inter_stim_delay = inter_stim_delay
-        self.time_counter = 0
-        self.sample_freq = sample_freq
+        self.min_delay = config_dict['min_delay']
+        self.max_delay = config_dict['max_delay']
+        if self.max_delay < self.min_delay:  # constant delay
+            self.max_delay = self.min_delay
+        self.inter_stim_delay = config_dict['inter_stim_delay']
+        self.sample_freq = config_dict['frequency']
 
-        self.stimulate = None
+        self.stimulate = stimulate_fn
         self.waiting_start = time.time()
         self.delaying_start = time.time()
-        self.delaying_counter = 0
+        self._delay = 0
 
     def step(self, point):
         """
@@ -81,7 +176,7 @@ class TimingDelayer(Delayer):
         if self.state == TimingStates.READY:
             return False
         elif self.state == TimingStates.DELAYING:
-            if time.time() - self.delaying_start > self.stimulation_delay:
+            if time.time() - self.delaying_start >= self._delay:
                 # Actually stimulate the patient after the delay
                 if self.stimulate is not None:
                     self.stimulate()
@@ -94,36 +189,14 @@ class TimingDelayer(Delayer):
                 self.state = TimingStates.READY
             return False
 
-    # def step_timestep(self, point):
-    #     """
-    #     Moves through the state machine
-    #     """
-    #     if self.state == TimingStates.READY:
-    #         return False
-    #     elif self.state == TimingStates.DELAYING:
-    #         self.delaying_counter += 1
-    #         if self.delaying_counter > self.stimulation_delay * self.sample_freq:
-    #             # Actually stimulate the patient after the delay
-    #             if self.stimulate is not None:
-    #                 self.stimulate()
-    #             self.state = TimingStates.WAITING
-    #             self.waiting_counter = 0
-    #             return True
-    #         return False
-    #     elif self.state == TimingStates.WAITING:
-    #         self.waiting_counter += 1
-    #         if self.waiting_counter > self.inter_stim_delay * self.sample_freq:
-    #             self.state = TimingStates.READY
-    #         return False
-
     def detected(self):
         """
         Defines what happens when a detection comes depending on what state you are in
         """
         if self.state == TimingStates.READY:
-            self.state = TimingStates.DELAYING
+            self._delay = np.random.uniform(low=self.min_delay, high=self.max_delay)
             self.delaying_start = time.time()
-            self.delaying_counter = 0
+            self.state = TimingStates.DELAYING
 
 
 class UpStateStates(Enum):
@@ -134,21 +207,23 @@ class UpStateStates(Enum):
 
 # Class that delays stimulation to always stimulate peak or through
 
-
+# FIXME: this class implementation is losing a lot of time buffering
 class UpStateDelayer(Delayer):
 
-    def __init__(self, sample_freq, peak, time_to_buffer, stimulate=None):
+    def __init__(self, config_dict, stimulate_fn=None, time_to_buffer=0.3):
         '''
         args:
-            sample_freq: int -> Sampling frequency of signal in Hz
-            time_to_wait: float -> Time to wait to build buffer in seconds
+            config_dict: configuration dictionary
+            time_to_buffer: float -> Time to wait to build buffer in seconds
         '''
-        # Get number of timesteps for a whole spindle
-        self.sample_freq = sample_freq
-        self.peak = peak
+        self.sample_freq = config_dict['frequency']
+        self.peak = config_dict['stim_delay_mode'] == 'Peak'
         self.buffer = []
         self.time_to_buffer = time_to_buffer
-        self.stimulate = stimulate
+        self.channel_idx = config_dict['channel_detection'] - 1
+        self.stimulate = stimulate_fn
+
+        self.time_to_wait = -1
 
         self.state = UpStateStates.NO_SPINDLE
         self.time_started = time.time()
@@ -161,7 +236,7 @@ class UpStateDelayer(Delayer):
         if self.state == UpStateStates.NO_SPINDLE:
             return False
         elif self.state == UpStateStates.BUFFERING:
-            self.buffer.append(point)
+            self.buffer.append(point[self.channel_idx])
             # If we are done buffering, move on to the waiting stage
             if time.time() - self.time_started >= self.time_to_buffer:
                 # Compute the necessary time to wait
@@ -182,61 +257,24 @@ class UpStateDelayer(Delayer):
                 return True
             return False
 
-    def step_timesteps(self, point):
-        '''
-        Step the delayer, ads a point to buffer if necessary.
-        Returns True if stimulation is actually done
-        '''
-        if self.state == UpStateStates.NO_SPINDLE:
-            return False
-        elif self.state == UpStateStates.BUFFERING:
-            self.buffer.append(point)
-            # If we are done buffering, move on to the waiting stage
-            if len(self.buffer) >= self.time_to_buffer * self.sample_freq:
-                # Compute the necessary time to wait
-                self.time_to_wait = self.compute_time_to_wait()
-                self.state = UpStateStates.DELAYING
-                self.buffer = []
-                self.delaying_counter = 0
-            return False
-        elif self.state == UpStateStates.DELAYING:
-            # Check if we are done delaying
-            self.delaying_counter += 1
-            if self.delaying_counter >= self.time_to_wait * self.sample_freq:
-                # Actually stimulate the patient after the delay
-                if self.stimulate is not None:
-                    self.stimulate()
-                # Reset state
-                self.time_to_wait = -1
-                self.state = UpStateStates.NO_SPINDLE
-                return True
-            return False
-
     def detected(self):
         if self.state == UpStateStates.NO_SPINDLE:
             self.state = UpStateStates.BUFFERING
+            self.time_started = time.time()
 
     def compute_time_to_wait(self):
         """
         Computes the time we want to wait in total based on the spindle frequency and the buffer
         """
-        # If we want to look at the valleys, we search for peaks on the inversed signal
+        # If we want to look at the valleys, we search for peaks on the inverted signal
+        buffer = np.array(self.buffer)
         if not self.peak:
-            self.buffer = -self.buffer
+            buffer = -buffer
 
         # Returns the index of the last peak in the buffer
-        peaks, _ = find_peaks(self.buffer, prominence=1)
+        peaks, _ = find_peaks(buffer, prominence=1)
 
-        # Make a figure to show the peaks
-        if False:
-            plt.figure()
-            plt.plot(self.buffer)
-            for peak in peaks:
-                plt.axvline(x=peak)
-            plt.plot(np.zeros_like(self.buffer), "--", color="gray")
-            plt.show()
-
-        if len(peaks) == 0:
+        if len(peaks) < 2:
             print("No peaks found, increase buffer size")
             return (self.sample_freq / 10) * (1.0 / self.sample_freq)
 
@@ -244,99 +282,99 @@ class UpStateDelayer(Delayer):
         avg_dist = np.mean(np.diff(peaks))
 
         # Compute the time until next peak and return it
-        if (avg_dist < len(self.buffer) - peaks[-1]):
+        if (avg_dist < len(buffer) - peaks[-1]):
             print("Average distance between peaks is smaller than the time to last peak, decrease buffer size")
-            return (len(self.buffer) - peaks[-1]) * (1.0 / self.sample_freq)
-        return (avg_dist - (len(self.buffer) - peaks[-1])) * (1.0 / self.sample_freq)
+            return (len(buffer) - peaks[-1]) * (1.0 / self.sample_freq)
+        return (avg_dist - (len(buffer) - peaks[-1])) * (1.0 / self.sample_freq)
 
 
-class SOPhaseDelayer(Delayer):
-    def __init__(self,
-                 target_phase=0,
-                 k_p: float = 0.05,
-                 k_i: float = 5e-8,
-                 k_0: float = 0.03,
-                 sample_freq=250):
-        """
-        Phase Locked Loop for In-Phase Slow Oscillation Detection
-        params:
-            target_phase (float): Targeted phase to deliver stimulus (radian)
-        """
-        self.k_p = k_p
-        self.k_i = k_i
-        self.k_0 = k_0
-        self.fs = sample_freq
+# class SOPhaseDelayer(Delayer):  # FIXME: This class is not tested and has memory leaks
+#     def __init__(self,
+#                  config_dict,
+#                  k_p: float = 0.05,
+#                  k_i: float = 5e-8,
+#                  k_0: float = 0.03):
+#         """
+#         Phase Locked Loop for In-Phase Slow Oscillation Detection
+#         params:
+#             config_dict: configuration dictionary
+#             k_p, k_i, k_0: PLL tuning parameters
+#         """
+#         self.k_p = k_p
+#         self.k_i = k_i
+#         self.k_0 = k_0
+#         self.fs = config_dict['frequency']
 
-        self.target_phase = target_phase
+#         self.target_phase = 0
 
-        self.sin_out = 0
-        self.cos_out = 1
-        self.pd_output = 0      # phase detector output
-        self.lf_output = 0      # loop filter output
-        self.integrator = 0
+#         self.sin_out = 0
+#         self.cos_out = 1
+#         self.pd_output = 0      # phase detector output
+#         self.lf_output = 0      # loop filter output
+#         self.integrator = 0
 
-        self.freq_const = 2 * np.pi * (1/self.fs)
-        self.init_estimate = 0
-        self.phase_estimate = self.freq_const
+#         self.freq_const = 2 * np.pi * (1/self.fs)
+#         self.init_estimate = 0
+#         self.phase_estimate = self.freq_const
 
-        self.atol = np.deg2rad(10)
-        self.time_counter = 0
+#         self.atol = np.deg2rad(10)
+#         self.channel_idx = config_dict['channel_detection'] - 1
 
-        self.prev_cos_out = 1
-        self.cos_outs = []
-        self.phase_estimates = []
-        self.phase_indicators = []
-        self.stimulate_flag = False
+#         self.prev_cos_out = 1
+#         self.cos_outs = []
+#         self.phase_estimates = []
+#         self.phase_indicators = []
+#         self.stimulate_flag = False
 
-        self.phase_indicator = None
-        self.stimulate = None
+#         self.phase_indicator = None
+#         self.stimulate = None
 
-    def wrap_phase(self, phase):
-        return np.angle(np.exp(1j * phase))
+#     def wrap_phase(self, phase):
+#         return np.angle(np.exp(1j * phase))
 
-    def pll_detect(self, point):
-        self.pd_output = point * self.sin_out
+#     def pll_detect(self, point):
+#         self.pd_output = point * self.sin_out
 
-        self.integrator += self.k_i * self.pd_output
-        self.lf_output = self.k_p * self.pd_output + self.integrator
+#         self.integrator += self.k_i * self.pd_output
+#         self.lf_output = self.k_p * self.pd_output + self.integrator
 
-        next_phase = self.phase_estimate + self.init_estimate
-        self.init_estimate = self.freq_const + self.k_0 * self.lf_output
+#         next_phase = self.phase_estimate + self.init_estimate
+#         self.init_estimate = self.freq_const + self.k_0 * self.lf_output
 
-        self.sin_out = -np.sin(self.phase_estimate)
-        next_cos_out = np.cos(self.phase_estimate)
+#         self.sin_out = -np.sin(self.phase_estimate)
+#         next_cos_out = np.cos(self.phase_estimate)
 
-        self.phase_indicator = (
-            (np.isclose(self.wrap_phase(self.phase_estimate), self.target_phase, atol=self.atol)) and
-            (self.prev_cos_out <= self.cos_out >= next_cos_out)
-        )
-        self.cos_outs.append(self.cos_out)
-        self.phase_estimates.append(self.phase_estimate)
-        self.phase_indicators.append(self.phase_indicator)
+#         self.phase_indicator = (
+#             (np.isclose(self.wrap_phase(self.phase_estimate), self.target_phase, atol=self.atol)) and
+#             (self.prev_cos_out <= self.cos_out >= next_cos_out)
+#         )
+#         self.cos_outs.append(self.cos_out)
+#         self.phase_estimates.append(self.phase_estimate)
+#         self.phase_indicators.append(self.phase_indicator)
 
-        self.prev_cos_out = self.cos_out
-        self.cos_out = next_cos_out
-        self.phase_estimate = next_phase
+#         self.prev_cos_out = self.cos_out
+#         self.cos_out = next_cos_out
+#         self.phase_estimate = next_phase
 
-        return self.phase_indicator
+#         return self.phase_indicator
 
-    def step(self, point):
-        """
-        Moves through the state machine
-        """
-        pll_output = self.pll_detect(point)
-        if self.stimulate_flag and pll_output:
-            if self.stimulate is not None:
-                self.stimulate()
-            self.stimulate_flag = False
-            return True
-        return False
+#     def step(self, point):
+#         """
+#         Moves through the state machine
+#         """
+#         pll_output = self.pll_detect(point[self.channel_idx])
+#         if self.stimulate_flag and pll_output:
+#             if self.stimulate is not None:
+#                 self.stimulate()
+#             self.stimulate_flag = False
+#             return True
+#         return False
 
-    def detected(self):
-        self.stimulate_flag = True
+#     def detected(self):
+#         self.stimulate_flag = True
 
-    def not_detected(self):
-        self.stimulate_flag = False
+#     def not_detected(self):
+#         self.stimulate_flag = False
 
 
 # ================== STIMULATORS ==================
@@ -352,27 +390,15 @@ class DelayedStimulator(Stimulator, ABC):
             self.csv_recorder = Dummy()
 
         # Initialize stimulation delayer if requested
-        delay = not ((config_dict['stim_delay'] == 0.0) and (config_dict['inter_stim_delay'] == 0.0))
-        delay_phase = (not delay) and (not config_dict['spindle_detection_mode'] == 'Fast')
-        so_delay_phase = not (delay or delay_phase) and config_dict['so_phase_delay'] is not None
-        if delay:
-            stimulation_delayer = TimingDelayer(
-                stimulation_delay=config_dict['stim_delay'],
-                inter_stim_delay=config_dict['inter_stim_delay']
-            )
-        elif delay_phase:
-            stimulation_delayer = UpStateDelayer(
-                config_dict['frequency'],
-                config_dict['spindle_detection_mode'] == 'Peak', 0.3)
-        elif so_delay_phase:
-            stimulation_delayer = SOPhaseDelayer(target_phase=config_dict['so_phase_delay'])
+        stimulate_fn = lambda: self.send_stimulation("DELAY_STIM", True)
+        time_delay = not ((config_dict['min_delay'] == 0.0) and (config_dict['max_delay'] == 0.0) and (config_dict['inter_stim_delay'] == 0.0))
+        if time_delay:
+            stimulation_delayer = RandomTimingDelayer(config_dict, stimulate_fn=stimulate_fn)
+        elif config_dict['stim_delay_mode'] in ['Peak', 'Valley']:
+            stimulation_delayer = UpStateDelayer(config_dict, stimulate_fn=stimulate_fn)
         else:
             stimulation_delayer = None
-
         self.delayer = stimulation_delayer
-        if self.delayer is not None:
-            # When there is a delayer, delayer.step is in charge of calling delayer.stimulate
-            self.delayer.stimulate = lambda: self.send_stimulation("DELAY_STIM", True)
 
     def stimulate(self, detection_signal):
         """
@@ -394,7 +420,7 @@ class DelayedStimulator(Stimulator, ABC):
             detection_point = detection_points[i]
             res_stim = self._stimulate(detection_point)
             if self.delayer is not None:
-                res_del = self.delayer.step(filtered_point[self.config_dict['channel_detection'] - 1])
+                res_del = self.delayer.step(filtered_point)
                 self.csv_recorder.append_stimulation_signal_buffer([int(res_del)])
             else:
                 self.csv_recorder.append_stimulation_signal_buffer([int(res_stim)])
@@ -516,14 +542,14 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
             self._thread = None
 
     def test_stimulus(self):
-        start = time.time()
         with self._lock:
             if self._thread is None:
                 self._thread = Thread(target=self._t_sound, daemon=True)
                 self._thread.start()
 
     def __del__(self):
-        del self.pcm
+        if hasattr(self, 'pcm'):
+            del self.pcm
 
 
 class SpindleTrainRealTimeStimulator(SleepSpindleRealTimeStimulator):
@@ -564,197 +590,10 @@ class IsolatedSpindleRealTimeStimulator(SpindleTrainRealTimeStimulator):
         return res
 
 
-class AlternatingStimulator(Stimulator):
-    def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
-        super().__init__(config_dict, lsl_streamer, csv_recorder)
-
-        if self.lsl_streamer is None:
-            self.lsl_streamer = Dummy()
-        if self.csv_recorder is None:
-            self.csv_recorder = Dummy()
-
-        stim_interval = 0.250
-
-        # soundname = config_dict['detection_sound']
-
-        self.pos_soundname = 'syllPos120.wav'  # CHANGE HERE TO THE SOUND THAT YOU WANT. ONLY ADD THE FILE NAME, NOT THE ENTIRE PATH
-        self.neg_soundname = 'syllNeg120.wav'
-
-        self.pos_sound = SOUNDS_FOLDER / self.pos_soundname
-        self.neg_sound = SOUNDS_FOLDER / self.neg_soundname
-
-        self._thread = None
-        self._lock = Lock()
-
-        # Stimulation parameters
-        self.stim_interval = stim_interval
-        self.stim_polarity = True
-        self.last_stim = 0.0
-
-        # Initialize Alsa stuff
-        # Open WAV file and set PCM device
-        with wave.open(str(self.pos_sound), 'rb') as f:
-            device = 'softvol'
-
-            self.duration = f.getnframes() / float(f.getframerate())
-
-            # 8bit is unsigned in wav files
-            if f.getsampwidth() == 1:
-                frmt = alsaaudio.PCM_FORMAT_U8
-            # Otherwise we assume signed data, little endian
-            elif f.getsampwidth() == 2:
-                frmt = alsaaudio.PCM_FORMAT_S16_LE
-            elif f.getsampwidth() == 3:
-                frmt = alsaaudio.PCM_FORMAT_S24_3LE
-            elif f.getsampwidth() == 4:
-                frmt = alsaaudio.PCM_FORMAT_S32_LE
-            else:
-                raise ValueError('Unsupported format')
-
-            self.periodsize = f.getframerate() // 8
-
-            try:
-                self.pcm = alsaaudio.PCM(channels=f.getnchannels(), rate=f.getframerate(), format=frmt, periodsize=self.periodsize, device=device)
-            except alsaaudio.ALSAAudioError as e:
-                self.pcm = Dummy()
-                raise e
-
-            # Store data in list to avoid reopening the file
-            self.pos_wav_list = []
-            while True:
-                data = f.readframes(self.periodsize)
-                if data:
-                    self.pos_wav_list.append(data)
-                else:
-                    break
-
-        with wave.open(str(self.neg_sound), 'rb') as f:
-            device = 'softvol'
-
-            self.duration = f.getnframes() / float(f.getframerate())
-
-            # 8bit is unsigned in wav files
-            if f.getsampwidth() == 1:
-                frmt = alsaaudio.PCM_FORMAT_U8
-            # Otherwise we assume signed data, little endian
-            elif f.getsampwidth() == 2:
-                frmt = alsaaudio.PCM_FORMAT_S16_LE
-            elif f.getsampwidth() == 3:
-                frmt = alsaaudio.PCM_FORMAT_S24_3LE
-            elif f.getsampwidth() == 4:
-                frmt = alsaaudio.PCM_FORMAT_S32_LE
-            else:
-                raise ValueError('Unsupported format')
-
-            self.periodsize = f.getframerate() // 8
-
-            try:
-                self.pcm = alsaaudio.PCM(channels=f.getnchannels(), rate=f.getframerate(), format=frmt, periodsize=self.periodsize, device=device)
-            except alsaaudio.ALSAAudioError as e:
-                self.pcm = Dummy()
-                raise e
-
-            # Store data in list to avoid reopening the file
-            self.neg_wav_list = []
-            while True:
-                data = f.readframes(self.periodsize)
-                if data:
-                    self.neg_wav_list.append(data)
-                else:
-                    break
-
-    def play_sound(self, polarity):
-        '''
-        Open the wav file and play a sound
-        '''
-        print(polarity)
-        played_sound = self.pos_wav_list if polarity else self.neg_wav_list
-        for data in played_sound:
-            self.pcm.write(data)
-
-        # Added this to make sure the thread does not stop before the sound is done playing
-        time.sleep(self.duration)
-
-    def stimulate(self, detection_signal):
-        stim = []
-        for _ in detection_signal:
-            # We ignore the input signal and simply make sure we stimulate at the given interval
-            current_time = time.time()
-            if current_time - self.last_stim >= self.stim_interval:
-                stim.append(1)
-                # Check if we are in the inverted phase:
-                if self.stim_polarity:
-                    stim_text = 'STIM_POS'
-                else:
-                    stim_text = 'STIM_NEG'
-                self.send_stimulation(stim_text, True)
-                self.last_stim = current_time
-                self.stim_polarity = not self.stim_polarity
-            else:
-                stim.append(0)
-        assert len(detection_signal) == len(stim)
-        self.csv_recorder.append_stimulation_signal_buffer(stim)
-
-    def send_stimulation(self, lsl_text, sound):
-        # Send lsl stimulation
-        # print(f"Stimulating at time: {time.time()} with text: {lsl_text}")
-        self.lsl_streamer.push_marker(lsl_text)
-        polarity_copy = copy.deepcopy(self.stim_polarity)
-        # Send sound to patient
-        if sound:
-            with self._lock:
-                if self._thread is None:
-                    self._thread = Thread(target=self._t_sound, args=(polarity_copy, ), daemon=True)
-                    self._thread.start()
-
-    def _t_sound(self, polarity):
-        self.play_sound(polarity)
-        with self._lock:
-            self._thread = None
-
-    def test_stimulus(self):
-        start = time.time()
-        with self._lock:
-            if self._thread is None:
-                self._thread = Thread(target=self._t_sound, daemon=True)
-                self._thread.start()
-
-    def __del__(self):
-        del self.pcm
-
-
 class SlowOscillationStimulator(SleepSpindleRealTimeStimulator):
     def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
         super().__init__(config_dict, lsl_streamer, csv_recorder)
         self.wait_t = .1  # Stimulate the first point of a detected SO only
-
-    # def stimulate(self, detection_signal):
-    #     pass
-    #     # change for so
-    #     stim = []
-    #     for sig in detection_signal:
-    #         # We detect a stimulation
-    #         if sig:
-    #             # Record time of stimulation
-    #             ts = time.time()
-    #
-    #             # Check if time since last stimulation is long enough
-    #             if ts - self.last_detected_ts > self.wait_t:
-    #                 stim.append(True)
-    #                 if not isinstance(self.delayer, Dummy):
-    #                     # If we have a delayer, notify it
-    #                     self.delayer.detected()
-    #                     # Send the LSL marer for the fast stimulation
-    #                     self.send_stimulation("FAST_STIM", False)
-    #                 else:
-    #                     self.send_stimulation("STIM", not self.sham)
-    #             else:
-    #                 stim.append(False)
-    #             self.last_detected_ts = ts
-    #         else:
-    #             self.delayer.not_detected()
-    #             stim.append(False)
-    #     return stim
 
     def _stimulate(self, detection_point):
         res = False
@@ -774,5 +613,6 @@ class SlowOscillationStimulator(SleepSpindleRealTimeStimulator):
                     self.send_stimulation("STIM", True)
             self.last_detected_ts = ts
         elif self.delayer is not None:
-            self.delayer.not_detected()
+            self.delayer.not_detected()  # used by the SO phase delayer
         return res
+

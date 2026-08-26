@@ -11,11 +11,13 @@ It enables controlling the `Portiloop` from a Graphical User Interface (GUI).
 
 ## Installation (Portiloop V2.3):
 
-You have just got your hands on the hardware for the Portiloop V2.3 (A Google Coral Dev Board Mini and a Portiloop board). Here are the steps you need to follow to get started.
+You have just got your hands on the hardware for the Portiloop V2.3 (a Google Coral Dev Board Mini and a Portiloop board). Here are the steps you need to follow to get started.
 
 ### Hadware prerequisites
-- A male-to-female jupmer wire (required to reflash if you brick the Coral Dev Board Mini)
-- Headphones with a jack that has TWO rings (not three)
+- A power bank and a USB-C cable
+- A male-to-female jupmer wire, and a Linux PC (required to reflash if you brick the Coral Dev Board Mini)
+- Headphones with a jack that has TWO rings (not three) (required if you want to use the sound output)
+- A micro-SD card (required if you want to record signal)
 
 
 ### Flashing the Google Coral
@@ -26,14 +28,13 @@ _(We recommend the force-fastboot method, as it works without `mdt`)_
 :warning: : The portiloop software will not work if you ignore this step.
 The software is developed for version 5.0 Eagle (Dec 2020), downloadable [here](https://dl.google.com/coral/mendel/excelsior/excelsior-eagle-20201210233645.zip)
 
-:warning: If at any point you brick your Portiloop (i.e., if the power light gets stuck on orange and never turns green, most likely because you failed to turn the Coral off gracefully), the only solution is to reflash the Coral with the force fastboot method, using a female-to-male jumper wire as described [here](https://gweb-coral-full.uc.r.appspot.com/docs/dev-board-mini/reflash/#force-boot-into-fastboot-mode). We also recommend that you wipe out the content of the home folder by executing `bash flash.sh -H` instead of executing `bash flash.sh` at the end of these instructions.
+:warning: If at any point you brick your Portiloop (i.e., if the power light gets stuck on orange and never turns green), the only solution is to reflash the Coral with the force fastboot method, using a female-to-male jumper wire as described [here](https://gweb-coral-full.uc.r.appspot.com/docs/dev-board-mini/reflash/#force-boot-into-fastboot-mode). We also recommend that you wipe out the content of the home folder by executing `bash flash.sh -H` instead of executing `bash flash.sh` at the end of these instructions.
 
 ### Accessing the Google Coral
 
 These first steps will help you set up an SSH connection to the device.
 
-- Power up the board through the USB-C power port.
-- Connect another USB cable to the OTG-port on the board and to your _Linux_ host machine. Then connect to the board through serial (or via `mdt`) by executing `screen /dev/ttyACM0` (or `mdt shell`)
+- Connect a USB-C cable to the OTG-port on the board and to your _Linux_ host machine. Then connect to the board through serial (or via `mdt`) by executing `screen /dev/ttyACM0` (or `mdt devices` then `mdt shell`)
 
 _If you see a message telling you that screen is busy, you can use `sudo lsof /dev/ttyACM0` and then retry the screen step._
 
@@ -45,7 +46,7 @@ _If you see a message telling you that screen is busy, you can use `sudo lsof /d
 
 _(if you get an error message, you can instead execute `sudo nano /etc/ssh/sshd_config`, find the `PasswordAuthentication no` line, replace 'no' by 'yes', and save by pressing `CTRL + o`, then `ENTER`, then `CTRL + x`)_
 
-- Note your randomly-generated hostname (displayed as `mendel@your-hostname`) or define a custom hostname (`sudo hostnamectl set-hostname your-hostname`)
+- Note your randomly-generated hostname (displayed as `mendel@your-hostname`) or define a custom hostname (`sudo hostnamectl set-hostname <your hostname here>`)
 - Shutdown the device (`sudo shutdown now` or press the `Power` button for 3 seconds) and pull out the OTG-port cable before the Coral board reboots (which otherwise happens automatically after a few seconds as long as this cable is plugged in).
 
 Next time you turn the Coral board on, you should be able to ssh into it using the hostname (or the IP address of the device):
@@ -59,9 +60,9 @@ If some issues arise, make sure your PC is connected to the same network as the 
 - SSH into the device
 - Clone this repository in the home folder: `cd ~ && git clone https://github.com/Portiloop/portiloop-software.git`
 - Go into the cloned repository: `cd ~/portiloop-software`,
-- Run `make` and follow the instructions when prompted
-  - Don't forget to reboot the device afterward
-- Note that `make` may fail at several points during installation. Whenever it does, just call `make` again.
+- Run `make` and follow the instructions when prompted. Reboot when complete.
+- :information_source: `make` usually fails just before the last step (when attempting to play a test sound). Whenever it does, just call `make` again.
+- :information_source: The first time you reboot after completing `make`, the device may fail to shutdown. In that situation, just wait for a few seconds after pressing the power button and unplug the power cable.
 
 That's it! Your Jupyter server should now be up and running, listening on IP address `192.168.4.1` and port `8080`, and automatically starting whenever the system boots up. You can now access it by typing `192.168.4.1:8080` in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arises, try with a different web browser.
 Similarly, the `Simple UI` can be accessed by typing `192.168.4.1:8081` in your browser. 
@@ -70,12 +71,39 @@ Similarly, the `Simple UI` can be accessed by typing `192.168.4.1:8081` in your 
 
 ### SD card
 
-If using an SD card to record your EEG signal in CSV format, plug the SD card into your `Portiloop` before powering the `Portiloop` on.
+To work on the Portiloop, your SD card must have a partition. You can check whether your SD card has a partition by accessing the Coral via SSH, and executing `lsblk`. This command should output something like:
+```
+NAME         MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+mmcblk0      179:0    0  7.3G  0 disk 
+├─mmcblk0p1  179:1    0    4M  0 part 
+├─mmcblk0p2  179:2    0  128M  0 part /boot
+├─mmcblk0p3  179:3    0    2G  0 part /home
+└─mmcblk0p4  179:4    0  5.2G  0 part /
+mmcblk0boot0 179:32   0    4M  1 disk 
+mmcblk0boot1 179:64   0    4M  1 disk 
+mmcblk2      179:96   0  119G  0 disk 
+└─mmcblk2p1  179:97   0  119G  0 part
+```
+i.e., the SD card should appear as `mmcblk2` and have a partition appearing as `mmcblk2p1`.
+
+When using an SD card to record your EEG signal in CSV format, plug the SD card into your `Portiloop` before powering the `Portiloop` on.
 Your CSV will then be recorded in the SD card under the `workspace` folder.
 Otherwise, your CSV will be recorded in internal memory under `/home/mendel/workspace`
 
 _:warning: Recording large CSV files in internal memory will quickly make your `Portiloop` unusable: the internal memory is quite small and recording CSVs in internal memory should never be done, except for quick testing.
 In case you inadvertently fill up your `Portiloop` internal memory, it will refuse to boot and you will have to reflash and reinstall the entire system._
+
+### Signal recording file
+
+When recording signal, the structure of the output CSV file depends on the number of channels of your Portiloop, on whether detection / stimulation is enabled, and on your specific Detector / Stimulator.
+
+:information_source: _the `stimulation_on` column is `1` when the UI stimulation switch is active and `0` otherwise, while the `stimulation` column contains the stimulus that has been sent if the stimulation switch was active or that would have been sent if the switch were active._
+
+
+### Headphones
+
+To use headphones on the `Portiloop`, plug the headphones in before powering the device.
+Then, when you turn the device on, it should play a sound in the headphones when the light turns green.
 
 ### Power up
 
@@ -91,8 +119,6 @@ When everything goes smoothly, the light close to `USB-C Power` turns off.
 However, it may happen that this light refuses to turn off due to some internal issue.
 In that case, just wait for a couple more seconds before unplugging.
 
-_:warning: Failing to follow these instructions may brick your `Portiloop`, in which case you will have to reflash and reinstall the entire system._
-
 ### Indicator LEDs
 
 The Portiloop system has 3 indicator LEDs:
@@ -102,12 +128,9 @@ The Portiloop system has 3 indicator LEDs:
   - red: the Coral Dev Board Mini is in fastboot mode, ready to flash
   - turned off when the Portiloop is off
 - Portiloop power LED
-  - green: power plugged
-  - turned off when the Portiloop is unplugged
+  - (disabled by default, can be enabled programatically)
 - Portiloop indicator LED
-  - purple: capture in progress
-  - blue: capture in progress with detection and stimulation pipeline enabled
-  - turned off otherwise
+  - (disabled by default, can be enabled programatically)
 
 ### Connect
 
@@ -191,7 +214,7 @@ It defines the three interfaces that developers of custom pipelines must impleme
 - `stimulation.py` defines the `Stimulator` interface, in charge of all response to the detector output.
 
 The Portiloop software is a Python library.
-You may implement the aforementioned interfaces, put these in a `pipeline` dictionary.
+You may implement the aforementioned interfaces, and put your subclasses in a `pipeline` dictionary.
 The `portiloop.custom.custom_pipelines` module defines the `PIPELINES` dictionary, which you can modify to define your custom Portiloop pipeline: just add an entry following the existing template, i.e.:
 
 ```python
