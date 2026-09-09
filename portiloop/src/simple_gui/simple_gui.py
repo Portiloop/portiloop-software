@@ -53,14 +53,13 @@ class ExperimentState:
         self.pipeline_keys = list(self._pipelines.keys())
         self.pipeline_key = self.pipeline_keys[0]
 
+        self.preset_keys = self._get_presets()
+
         self.point_index = 0
         self.len_plot = int(RUN_SETTINGS['frequency'] * LINE_PLOT_WINDOW / LINE_PLOT_STRIDE)
         self.started = False
         self.time_started = datetime.now()
         self.q_msg = Queue()
-
-        # self.run_dict = RUN_SETTINGS
-        # self.run_dict["channel_states"] = ["simple"] * self.run_dict["nb_channels"]  # enable all channels
 
         self.pause_value = Value('b', False)
         self._t_capture = None
@@ -83,9 +82,12 @@ class ExperimentState:
         self.sleep_timeout = 0
         self.select_freq = 250
         self.power_line = 60
-        self.persistent_file_name = STATE_PATH / "simple_gui_state.json"
+        self.persistent_file_name = STATE_PATH / "default.json"
 
         self.run_dict = self._build_run_dict_from_ui_state()
+
+    def _get_presets(self):
+        return [p.stem for p in STATE_PATH.glob("*.json")]
 
     def _build_run_dict_from_ui_state(self):
         run_dict = RUN_SETTINGS
@@ -102,20 +104,6 @@ class ExperimentState:
 
     def save(self):
         state = {
-            # "run_dict": self.run_dict,
-            # "lsl": self.lsl,
-            # "save_local": self.save_local,
-            # "selected_channel": self.selected_channel,
-            # "display_data": self.display_data,
-            # "min_delay": self.min_delay,
-            # "max_delay": self.max_delay,
-            # "inter_stim_delay": self.inter_stim_delay,
-            # "sleep_timeout": self.sleep_timeout,
-            # "select_freq": self.select_freq,
-            # "power_line": self.power_line,
-            # "pipeline_key": self.pipeline_key,
-            # "custom_exp_name": self.custom_exp_name,
-
             "software_version": __version__,
             "nb_channels": NB_CHANNELS,
         }
@@ -125,22 +113,12 @@ class ExperimentState:
         with open(self.persistent_file_name, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
 
-        # with open(self.persistent_file_name, 'wb') as f:
-        #     pkl.dump(state, f)
-
     def load(self):
         if self.persistent_file_name.is_file():
-            # with open(self.persistent_file_name, 'rb') as f:
-            #     state = pkl.load(f)
 
             try:
                 with open(self.persistent_file_name, "r", encoding="utf-8") as f:
                     state = json.load(f)
-
-                # check whether the previous state should be ignored (e.g., version change)
-                # run_dict = state["run_dict"]
-                # if run_dict["nb_channels"] != NB_CHANNELS or run_dict["software_version"] != __version__:
-                #     return
 
                 if state.get("nb_channels") != NB_CHANNELS or state.get("software_version") != __version__:
                     return
@@ -152,26 +130,10 @@ class ExperimentState:
                     else:
                         print(f"Missing field in saved GUI state: {field}")
 
-                # self.run_dict = run_dict
-                # self.lsl = state["lsl"]
-                # self.save_local = state["save_local"]
-                # self.display_data = state["display_data"]
-                # self.min_delay = state["min_delay"]
-                # self.max_delay = state["max_delay"]
-                # self.inter_stim_delay = state["inter_stim_delay"]
-                # self.sleep_timeout = state["sleep_timeout"]
-                # self.select_freq = state["select_freq"]
-                # self.power_line = state["power_line"]
-                # self.selected_channel = state["selected_channel"]
-
-                # if state["pipeline_key"] in self.pipeline_keys:
-                #     self.pipeline_key = state["pipeline_key"]
-
                 # Check that pipeline_key is valid:
                 if self.pipeline_key not in self.pipeline_keys:
                     self.pipeline_key = self.pipeline_keys[0]
 
-                # self.custom_exp_name = state["custom_exp_name"]
             except Exception as e:
                 print(f"Caught exception while loading app state: {e}")
 
@@ -189,9 +151,6 @@ class ExperimentState:
         self.exp_name = f"{prefix}_{time_str}_{stim_str}.csv"
         print(f"Starting recording {self.exp_name.split('.')[0]}")
         print(f"STIMON = {self.stim_on}")
-
-        # self.run_dict['frequency'] = self.select_freq
-        # self.run_dict["filter_settings"]["power_line"] = self.power_line
 
         self.point_index = 0
         self.len_plot = int(self.run_dict['frequency'] * LINE_PLOT_WINDOW / LINE_PLOT_STRIDE)
@@ -216,19 +175,6 @@ class ExperimentState:
 
         volume = mixer.getvolume()[0]  # we will set the same volume on all channels
         self.run_dict['volume'] = volume
-        # self.run_dict['stimulate'] = self.stim_on
-
-        # if self.min_delay != 0:
-        #     self.run_dict['min_delay'] = int(self.min_delay) / 1000
-
-        # if self.max_delay != 0:
-        #     self.run_dict['max_delay'] = int(self.max_delay) / 1000
-
-        # if self.inter_stim_delay != 0:
-        #     self.run_dict['inter_stim_delay'] = int(self.inter_stim_delay) / 1000
-
-        # self.run_dict['lsl'] = self.lsl
-        # self.run_dict['record'] = self.save_local
 
         workspace_dir = CSV_PATH
         self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name.split('.')[0], self.exp_name)
@@ -352,6 +298,9 @@ class SimpleUI:
         def disable_stim_toggle_callback(caller):
             stim_toggle.enable()
 
+        def preset_callback(caller):
+            pass
+
         ui.label('Portiloop 🧠').classes('text-4xl font-mono')
         ui.label('Control Center').classes('text-2xl font-mono')
 
@@ -425,8 +374,13 @@ class SimpleUI:
                         exp_state,
                         'disk_str'
                     ).classes('text-2xl')
+
+                    select_preset = ui.select(exp_state.preset_keys, value=exp_state.preset_key, on_change=preset_callback, label="Preset").bind_value_to(exp_state, 'preset_key')
+                    select_preset.classes('w-3/4')
+
                     select_pipeline = ui.select(exp_state.pipeline_keys, value=exp_state.pipeline_key, on_change=disable_stim_toggle_callback, label="Pipeline").bind_value_to(exp_state, 'pipeline_key')
                     select_pipeline.classes('w-3/4')
+
                     possible_freqs = [50, 100, 250, 500, 1000]
                     select_freq = ui.select(
                         possible_freqs,
