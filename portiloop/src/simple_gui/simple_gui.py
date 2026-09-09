@@ -322,7 +322,6 @@ class SimpleUI:
             try:
                 exp_state.save_preset(exp_state.new_preset_name)
                 select_preset.options = exp_state.preset_keys
-                select_preset.value = exp_state.preset_key
                 select_preset.update()
                 print("Saved preset")
             except Exception as e:
