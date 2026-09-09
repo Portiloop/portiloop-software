@@ -55,6 +55,7 @@ class ExperimentState:
 
         self.preset_keys = self._get_presets()
         self.preset_key = None
+        self.new_preset_name = ""
 
         self.point_index = 0
         self.len_plot = int(RUN_SETTINGS['frequency'] * LINE_PLOT_WINDOW / LINE_PLOT_STRIDE)
@@ -322,7 +323,6 @@ class SimpleUI:
             try:
                 exp_state.save_preset(exp_state.new_preset_name)
                 select_preset.set_options(exp_state.preset_keys, value=exp_state.preset_key)
-                exp_state.new_preset_name = ""
                 print("Saved preset")
             except Exception as e:
                 print(f"WARNING: Caught exception while saving preset: {e}")
@@ -416,8 +416,8 @@ class SimpleUI:
                     select_preset.classes('w-3/4')
 
                     with ui.row().classes('w-3/4'):
-                        preset_name_box = ui.input(value=exp_state.new_preset_name, label="New preset").props('clearable').bind_value(exp_state, 'new_preset_name').classes('flex-1')
-                        ui.button('Add', on_click=add_preset, color='primary')
+                        preset_name_box = ui.input(value=exp_state.new_preset_name, label="Preset name").props('clearable').bind_value(exp_state, 'new_preset_name').classes('flex-1')
+                        ui.button('Save', on_click=add_preset, color='primary')
 
                     select_pipeline = ui.select(exp_state.pipeline_keys, value=exp_state.pipeline_key, on_change=disable_stim_toggle_callback, label="Pipeline").bind_value(exp_state, 'pipeline_key')
                     select_pipeline.classes('w-3/4')
