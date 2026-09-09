@@ -54,6 +54,7 @@ class ExperimentState:
         self.pipeline_key = self.pipeline_keys[0]
 
         self.preset_keys = self._get_presets()
+        self.preset_keys = None
 
         self.point_index = 0
         self.len_plot = int(RUN_SETTINGS['frequency'] * LINE_PLOT_WINDOW / LINE_PLOT_STRIDE)
