@@ -308,9 +308,13 @@ class SimpleUI:
         def preset_callback(caller):
             if exp_state.preset_key is not None:
                 try:
-                    exp_state.load(STATE_PATH / f"{exp_state.preset_key}.json")  # load persistent state
+                    filepath = STATE_PATH / f"{exp_state.preset_key}.json"
+                    exp_state.load(filepath=filepath)  # load persistent state
+                    print(f"Loaded preset {filepath}")
                 except Exception as e:
                     print(f"WARNING: Caught exception while loading preset: {e}")
+            else:
+                print(f"WARNING: Attempted to load a preset but preset_key is None")
 
         ui.label('Portiloop 🧠').classes('text-4xl font-mono')
         ui.label('Control Center').classes('text-2xl font-mono')
