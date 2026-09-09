@@ -321,7 +321,9 @@ class SimpleUI:
         def add_preset():
             try:
                 exp_state.save_preset(exp_state.new_preset_name)
-                select_preset.set_options(exp_state.preset_keys, value=exp_state.preset_key)
+                select_preset.options = exp_state.preset_keys
+                select_preset.value = exp_state.preset_key
+                select_preset.update()
                 print("Saved preset")
             except Exception as e:
                 print(f"WARNING: Caught exception while saving preset: {e}")
@@ -414,10 +416,6 @@ class SimpleUI:
                     select_preset = ui.select(exp_state.preset_keys, value=exp_state.preset_key, on_change=preset_callback, label="Preset").bind_value(exp_state, 'preset_key')
                     select_preset.classes('w-3/4')
 
-                    with ui.row().classes('w-full items-center'):
-                        preset_name_box = ui.input(value=exp_state.new_preset_name, label="Preset name").props('clearable').bind_value(exp_state, 'new_preset_name')
-                        preset_save_button = ui.button('Save', on_click=add_preset, color='primary')
-
                     select_pipeline = ui.select(exp_state.pipeline_keys, value=exp_state.pipeline_key, on_change=disable_stim_toggle_callback, label="Pipeline").bind_value(exp_state, 'pipeline_key')
                     select_pipeline.classes('w-3/4')
 
@@ -443,6 +441,11 @@ class SimpleUI:
                     min_delay = ui.number(value=exp_state.min_delay, label='Min stim delay (ms)').bind_value(exp_state, 'min_delay')
                     max_delay = ui.number(value=exp_state.max_delay, label='Max stim delay (ms)').bind_value(exp_state, 'max_delay')
                     inter_stim_delay = ui.number(value=exp_state.inter_stim_delay, label='Inter-stim delay (ms)').bind_value(exp_state, 'inter_stim_delay')
+
+                    with ui.row():
+                        preset_name_box = ui.input(value=exp_state.new_preset_name, label="New preset name").props('clearable').bind_value(exp_state, 'new_preset_name')
+                        preset_save_button = ui.button('Save', on_click=add_preset, color='primary')
+
                     start_button.bind_enabled_to(lsl_checker)
                     start_button.bind_enabled_to(save_checker)
                     start_button.bind_enabled_to(select_preset)
