@@ -84,7 +84,7 @@ class ExperimentState:
         self.sleep_timeout = 0
         self.select_freq = 250
         self.power_line = 60
-        self.persistent_file_name = STATE_PATH / "Default.json"
+        self.persistent_file_name = STATE_PATH / "Previous run.json"
 
         self.run_dict = self._build_run_dict_from_ui_state()
 
