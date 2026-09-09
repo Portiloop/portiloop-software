@@ -3,8 +3,8 @@ import time
 import os
 import socket
 from datetime import datetime
-# import pickle as pkl
 import json
+from pathlib import Path
 
 import alsaaudio
 from alsaaudio import ALSAAudioError
@@ -83,7 +83,7 @@ class ExperimentState:
         self.sleep_timeout = 0
         self.select_freq = 250
         self.power_line = 60
-        self.persistent_file_name = STATE_PATH / "default.json"
+        self.persistent_file_name = STATE_PATH / "Default.json"
 
         self.run_dict = self._build_run_dict_from_ui_state()
 
@@ -114,11 +114,17 @@ class ExperimentState:
         with open(self.persistent_file_name, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
 
-    def load(self):
-        if self.persistent_file_name.is_file():
+    def load(self, filepath:Path = None):
+
+        # if filepath is None, load from the default path:
+        if filepath is None:
+            filepath = self.persistent_file_name
+
+        # check that the file exists:
+        if filepath.is_file():
 
             try:
-                with open(self.persistent_file_name, "r", encoding="utf-8") as f:
+                with open(filepath, "r", encoding="utf-8") as f:
                     state = json.load(f)
 
                 if state.get("nb_channels") != NB_CHANNELS or state.get("software_version") != __version__:
