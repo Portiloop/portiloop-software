@@ -441,10 +441,9 @@ class SimpleUI:
                     min_delay = ui.number(value=exp_state.min_delay, label='Min stim delay (ms)').bind_value(exp_state, 'min_delay')
                     max_delay = ui.number(value=exp_state.max_delay, label='Max stim delay (ms)').bind_value(exp_state, 'max_delay')
                     inter_stim_delay = ui.number(value=exp_state.inter_stim_delay, label='Inter-stim delay (ms)').bind_value(exp_state, 'inter_stim_delay')
-
-                    with ui.row():
-                        preset_name_box = ui.input(value=exp_state.new_preset_name, label="New preset name").props('clearable').bind_value(exp_state, 'new_preset_name')
-                        preset_save_button = ui.button('Save', on_click=add_preset, color='primary')
+                    ui.separator().classes('w-2/3')
+                    preset_name_box = ui.input(value=exp_state.new_preset_name, label="Preset name").props('clearable').bind_value(exp_state, 'new_preset_name')
+                    preset_save_button = ui.button('Save preset', on_click=add_preset, color='primary')
 
                     start_button.bind_enabled_to(lsl_checker)
                     start_button.bind_enabled_to(save_checker)
