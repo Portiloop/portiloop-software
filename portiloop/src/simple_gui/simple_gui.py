@@ -374,10 +374,10 @@ class SimpleUI:
                     available_channels = [f"Channel {i+1}" for i in range(RUN_SETTINGS['nb_channels'])]
                     val = exp_state.selected_channel if exp_state.selected_channel in available_channels else available_channels[1]
                     select_channel_display = ui.select(available_channels, value=val, label="Display Channel")
-                    select_channel_display.bind_value_to(exp_state, 'selected_channel').classes('w-1/2')
+                    select_channel_display.bind_value(exp_state, 'selected_channel').classes('w-1/2')
 
                     filtered_toggle = ui.toggle(['Raw', 'Filter'], value=exp_state.display_data)
-                    filtered_toggle.bind_value_to(exp_state, 'display_data')
+                    filtered_toggle.bind_value(exp_state, 'display_data')
 
             ############### Advanced Tab #############
             with ui.tab_panel(advanced_tab).classes('w-full items-center'):
@@ -390,34 +390,34 @@ class SimpleUI:
                         'disk_str'
                     ).classes('text-2xl')
 
-                    select_preset = ui.select(exp_state.preset_keys, value=exp_state.preset_key, on_change=preset_callback, label="Preset").bind_value_to(exp_state, 'preset_key')
+                    select_preset = ui.select(exp_state.preset_keys, value=exp_state.preset_key, on_change=preset_callback, label="Preset").bind_value(exp_state, 'preset_key')
                     select_preset.classes('w-3/4')
 
-                    select_pipeline = ui.select(exp_state.pipeline_keys, value=exp_state.pipeline_key, on_change=disable_stim_toggle_callback, label="Pipeline").bind_value_to(exp_state, 'pipeline_key')
+                    select_pipeline = ui.select(exp_state.pipeline_keys, value=exp_state.pipeline_key, on_change=disable_stim_toggle_callback, label="Pipeline").bind_value(exp_state, 'pipeline_key')
                     select_pipeline.classes('w-3/4')
 
                     possible_freqs = [50, 100, 250, 500, 1000]
                     select_freq = ui.select(
                         possible_freqs,
                         value=exp_state.select_freq,
-                        label="Sample frequency (Hz)").bind_value_to(exp_state, 'select_freq').classes('w-3/4')
+                        label="Sample frequency (Hz)").bind_value(exp_state, 'select_freq').classes('w-3/4')
                     ui.separator().classes('w-2/3')
                     possible_notches = [60, 50]
                     select_notch = ui.select(
                         possible_notches,
                         value=exp_state.power_line,
-                        label="Notch filter frequency (Hz)").bind_value_to(exp_state, 'power_line').classes('w-3/4')
+                        label="Notch filter frequency (Hz)").bind_value(exp_state, 'power_line').classes('w-3/4')
                     ui.separator().classes('w-2/3')
-                    sleep_timeout = ui.slider(min=0, max=180, value=exp_state.sleep_timeout).bind_value_to(exp_state, 'sleep_timeout').classes('w-3/4') #.props('label-always')
+                    sleep_timeout = ui.slider(min=0, max=180, value=exp_state.sleep_timeout).bind_value(exp_state, 'sleep_timeout').classes('w-3/4') #.props('label-always')
                     ui.label().bind_text_from(sleep_timeout, 'value', backward=lambda x: f"Stimulation starts after: {x} minutes")
                     sleep_timeout_timer = ui.timer(10, exp_state.check_sleep_timeout)
                     ui.separator().classes('w-2/3')
-                    lsl_checker = ui.checkbox('Stream LSL', value=exp_state.lsl).bind_value_to(exp_state, 'lsl')
-                    save_checker = ui.checkbox('Save recording locally', value=exp_state.save_local).bind_value_to(exp_state, 'save_local')
-                    filename_box = ui.input(value='', label='Recording name').props('clearable').bind_value_to(exp_state, 'custom_exp_name')
-                    min_delay = ui.number(value=exp_state.min_delay, label='Min stim delay (ms)').bind_value_to(exp_state, 'min_delay')
-                    max_delay = ui.number(value=exp_state.max_delay, label='Max stim delay (ms)').bind_value_to(exp_state, 'max_delay')
-                    inter_stim_delay = ui.number(value=exp_state.inter_stim_delay, label='Inter-stim delay (ms)').bind_value_to(exp_state, 'inter_stim_delay')
+                    lsl_checker = ui.checkbox('Stream LSL', value=exp_state.lsl).bind_value(exp_state, 'lsl')
+                    save_checker = ui.checkbox('Save recording locally', value=exp_state.save_local).bind_value(exp_state, 'save_local')
+                    filename_box = ui.input(value='', label='Recording name').props('clearable').bind_value(exp_state, 'custom_exp_name')
+                    min_delay = ui.number(value=exp_state.min_delay, label='Min stim delay (ms)').bind_value(exp_state, 'min_delay')
+                    max_delay = ui.number(value=exp_state.max_delay, label='Max stim delay (ms)').bind_value(exp_state, 'max_delay')
+                    inter_stim_delay = ui.number(value=exp_state.inter_stim_delay, label='Inter-stim delay (ms)').bind_value(exp_state, 'inter_stim_delay')
                     start_button.bind_enabled_to(lsl_checker)
                     start_button.bind_enabled_to(save_checker)
                     start_button.bind_enabled_to(select_pipeline)
