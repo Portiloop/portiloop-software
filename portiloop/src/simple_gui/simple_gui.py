@@ -48,7 +48,7 @@ PERSISTED_FIELDS = (
 
 
 class ExperimentState:
-    def __init__(self, pipelines = PIPELINES):
+    def __init__(self, pipelines=PIPELINES):
         self._pipelines = pipelines
         self.pipeline_keys = list(self._pipelines.keys())
         self.pipeline_key = self.pipeline_keys[0]
@@ -88,7 +88,21 @@ class ExperimentState:
         self.run_dict = self._build_run_dict_from_ui_state()
 
     def _get_presets(self):
-        return [p.stem for p in STATE_PATH.glob("*.json")]
+        return sorted(p.stem for p in STATE_PATH.glob("*.json"))
+
+    def refresh_presets(self):
+        self.preset_keys = self._get_presets()
+
+    def save_preset(self, preset_name: str):
+        preset_name = Path(preset_name.strip()).name.removesuffix(".json")
+        if not preset_name:
+            print("WARNING: Preset name cannot be empty")
+            return
+
+        filepath = STATE_PATH / f"{preset_name}.json"
+        self.save(filepath=filepath)
+        self.refresh_presets()
+        self.preset_key = preset_name
 
     def _build_run_dict_from_ui_state(self):
         run_dict = RUN_SETTINGS
@@ -103,7 +117,10 @@ class ExperimentState:
         run_dict['inter_stim_delay'] = int(self.inter_stim_delay) / 1000 if self.inter_stim_delay is not None else 0
         return run_dict
 
-    def save(self):
+    def save(self, filepath: Path = None):
+        if filepath is None:
+            filepath = self.persistent_file_name
+
         state = {
             "software_version": __version__,
             "nb_channels": NB_CHANNELS,
@@ -111,10 +128,10 @@ class ExperimentState:
         for field in PERSISTED_FIELDS:
             state[field] = getattr(self, field)
 
-        with open(self.persistent_file_name, "w", encoding="utf-8") as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
 
-    def load(self, filepath:Path = None):
+    def load(self, filepath: Path = None):
 
         # if filepath is None, load from the default path:
         if filepath is None:
@@ -281,10 +298,9 @@ class SimpleUI:
             # empty the display queue
             try:
                 while not exp_state.display_q.empty():
-                    # channel = int(exp_state.selected_channel[-1]) - 1
                     channel = int(exp_state.selected_channel.split()[-1]) - 1
                     point = exp_state.display_q.get(block=False)
-                    time, raw_point, filtered_point = point
+                    time_value, raw_point, filtered_point = point
                     if exp_state.display_data == 'Raw':
                         point = raw_point[0][channel]
                     elif exp_state.display_data == 'Filter':
@@ -293,7 +309,7 @@ class SimpleUI:
                         point = 0.0
                     exp_state.point_index += 1
                     if exp_state.point_index % LINE_PLOT_STRIDE == 0:
-                        x.append(time)
+                        x.append(time_value)
                         y.append(point)
             except Exception as e:
                 print(f"Caught exception: {e}")
@@ -301,6 +317,15 @@ class SimpleUI:
             # update the actual plot 
             if len(x) > 0 and len(y) > 0:
                 line_plot.push(x, [y])
+
+        def add_preset():
+            try:
+                exp_state.save_preset(exp_state.new_preset_name)
+                select_preset.set_options(exp_state.preset_keys, value=exp_state.preset_key)
+                exp_state.new_preset_name = ""
+                print("Saved preset")
+            except Exception as e:
+                print(f"WARNING: Caught exception while saving preset: {e}")
 
         def disable_stim_toggle_callback(caller):
             stim_toggle.enable()
@@ -314,7 +339,7 @@ class SimpleUI:
                 except Exception as e:
                     print(f"WARNING: Caught exception while loading preset: {e}")
             else:
-                print(f"WARNING: Attempted to load a preset but preset_key is None")
+                print("WARNING: Attempted to load a preset but preset_key is None")
 
         ui.label('Portiloop 🧠').classes('text-4xl font-mono')
         ui.label('Control Center').classes('text-2xl font-mono')
@@ -332,10 +357,7 @@ class SimpleUI:
             with ui.tab_panel(control_tab).classes('w-full items-center'):
                 ################ Simple Options ################
                 with ui.column().classes('w-full items-center'):
-                    sd_card_checker = ui.checkbox('SD Card').bind_value_from(
-                        exp_state,
-                        'sd_card'
-                    ).disable()
+                    sd_card_checker = ui.checkbox('SD Card').bind_value_from(exp_state, 'sd_card').disable()
 
                     test_sound_button = ui.button('Test Sound 🔊', on_click=test_sound)
 
@@ -392,6 +414,10 @@ class SimpleUI:
 
                     select_preset = ui.select(exp_state.preset_keys, value=exp_state.preset_key, on_change=preset_callback, label="Preset").bind_value(exp_state, 'preset_key')
                     select_preset.classes('w-3/4')
+
+                    with ui.row().classes('w-3/4'):
+                        preset_name_box = ui.input(value=exp_state.new_preset_name, label="New preset").props('clearable').bind_value(exp_state, 'new_preset_name').classes('flex-1')
+                        ui.button('Add', on_click=add_preset, color='primary')
 
                     select_pipeline = ui.select(exp_state.pipeline_keys, value=exp_state.pipeline_key, on_change=disable_stim_toggle_callback, label="Pipeline").bind_value(exp_state, 'pipeline_key')
                     select_pipeline.classes('w-3/4')
