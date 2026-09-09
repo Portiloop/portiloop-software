@@ -306,7 +306,11 @@ class SimpleUI:
             stim_toggle.enable()
 
         def preset_callback(caller):
-            pass
+            if exp_state.preset_key is not None:
+                try:
+                    exp_state.load(STATE_PATH / f"{exp_state.preset_key}.json")  # load persistent state
+                except Exception as e:
+                    print(f"WARNING: Caught exception while loading preset: {e}")
 
         ui.label('Portiloop 🧠').classes('text-4xl font-mono')
         ui.label('Control Center').classes('text-2xl font-mono')
