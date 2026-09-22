@@ -1,5 +1,6 @@
 import csv
 from pathlib import Path
+import time
 
 from portilooplot.jupyter_plot import ProgressPlot
 
@@ -14,12 +15,14 @@ class CSVRecorder:
                  detection_activated=False,
                  stimulation_activated=False,
                  default_detection_value=0,
-                 default_stimulation_value=0):
+                 default_stimulation_value=0,
+                 timestamps=True):
 
         if not (raw_signal or filtered_signal):
             err_str = "At least raw_signal or filtered_signal need to be activated."
             print(err_str)
             raise RuntimeError(err_str)
+        self.timestamps_buffer = [] if timestamps else None
         self.raw_signal_buffer = [] if raw_signal else None
         self.filtered_signal_buffer = [] if filtered_signal else None
         self.detection_signal_buffer = [] if detection_signal else None
@@ -49,6 +52,8 @@ class CSVRecorder:
         self.writing_buffer = []
         self.max_write = 1
 
+        self.init_ts = time.time
+
     def write_header(self, nb_channels):
         line = []
         if self.raw_signal_buffer is not None:
@@ -65,6 +70,8 @@ class CSVRecorder:
             line.append('detection_on')
         if self.stimulation_activated_buffer is not None:
             line.append('stimulation_on')
+        if self.timestamps_buffer is not None:
+            line.append('timestamp')
         self.writer.writerows([line])  # write header
         self.header_written = True
 
@@ -73,6 +80,10 @@ class CSVRecorder:
         Args:
             buffer: list of lists of floats
         """
+        if self.timestamps_buffer is not None:
+            for _ in buffer:
+                self.timestamps_buffer.append(time.time() - self.init_ts)
+
         if self.raw_signal_buffer is not None:
             self.raw_signal_buffer += buffer
 
@@ -121,6 +132,8 @@ class CSVRecorder:
         # self.file.close()
 
     def reset_buffers(self):
+        if self.timestamps_buffer is not None:
+            self.timestamps_buffer = []
         if self.raw_signal_buffer is not None:
             self.raw_signal_buffer = []
         if self.filtered_signal_buffer is not None:
@@ -205,6 +218,8 @@ class CSVRecorder:
                 line.append(int(self.detection_activated_buffer[idx]))  # single float (bool)
             if self.stimulation_activated_buffer is not None:
                 line.append(int(self.stimulation_activated_buffer[idx]))  # single float (bool)
+            if self.timestamps_buffer is not None:
+                line += self.timestamps_buffer[idx]  # timestamps
             lines.append(line)
 
         self.writing_buffer += lines

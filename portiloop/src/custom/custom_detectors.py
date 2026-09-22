@@ -265,28 +265,28 @@ class SlowOscillationDetector(Detector):
                 self.counter_downstate = 0
         
         # valley detection condition:
-        valley_detected = (self.counter_downstate is not None and self.counter_downstate == self.est_t_downstate)
+        # valley_detected = (self.counter_downstate is not None and self.counter_downstate == self.est_t_downstate)
 
-        self.prev_signal = self.prev_signal or tsignal  # previous filtered data point
+        self.prev_signal = self.prev_signal if self.prev_signal is not None else tsignal  # previous filtered data point
 
         if self.prev_signal * tsignal <= 0:  # if the signal crosses 0
 
-            if 0 < self.prev_signal:  # signal is rising (ending downstate)
+            if 0 < self.prev_signal:  # signal is falling (ending upstate)
 
-                if self.counter_downstate is not None:  # if an SO was detected during the currently ending downstate
+                # if self.counter_downstate is not None:  # if an SO was detected during the currently ending downstate
 
-                    # reset the upstate counter
-                    self.counter_upstate = 0
+                #     # reset the upstate counter
+                #     self.counter_upstate = 0
 
-                    # compute how long it took after detection to reach the valley
-                    if self.est_t_downstate is None:
-                        self.est_t_downstate = self.t_downstate
-                    else:
-                        # compute a running average
-                        self.est_t_downstate = int(self.alpha * self.t_downstate + (1 - self.alpha) * self.est_t_downstate)
+                #     # compute how long it took after detection to reach the valley
+                #     if self.est_t_downstate is None:
+                #         self.est_t_downstate = self.t_downstate
+                #     else:
+                #         # compute a running average
+                #         self.est_t_downstate = int(self.alpha * self.t_downstate + (1 - self.alpha) * self.est_t_downstate)
                     
-                    # disable the downstate counter as the downstate has ended
-                    self.counter_downstate = None
+                #     # disable the downstate counter as the downstate has ended
+                #     self.counter_downstate = None
 
                 # reinitialize the SO detection parameters
                 self.max_peak = -1
@@ -296,24 +296,26 @@ class SlowOscillationDetector(Detector):
                 self.duration = 0
                 self.prev_signal = None
 
-            else:  # signal is going below zero (ending upstate)
-                if self.counter_upstate is not None:  # if an SO was detected during the previous downstate
+            # else:  # signal is rising (ending downstate)
+            #     if self.counter_upstate is not None:  # if an SO was detected during the previous downstate
 
-                    # compute how long it took after upward zero-crossing to reach the peak
-                    if self.est_t_upstate is None:
-                        self.est_t_upstate = self.t_upstate
-                    else:
-                        # compute a running average
-                        self.est_t_upstate = int(self.alpha * self.t_upstate + (1 - self.alpha) * self.est_t_upstate)
+            #         # compute how long it took after upward zero-crossing to reach the peak
+            #         if self.est_t_upstate is None:
+            #             self.est_t_upstate = self.t_upstate
+            #         else:
+            #             # compute a running average
+            #             self.est_t_upstate = int(self.alpha * self.t_upstate + (1 - self.alpha) * self.est_t_upstate)
 
-                    # disable the upstate counter as the upstate has ended
-                    self.counter_upstate = None
+            #         # disable the upstate counter as the upstate has ended
+            #         self.counter_upstate = None
 
         self.prev_signal = tsignal  # update previous data point to current
 
-        if self.detection_mode == SODetectionMode.FAST:
-            return so_detected
-        elif self.detection_mode == SODetectionMode.PEAK_DOWN:
-            return self.counter_downstate == self.est_t_downstate
-        else:  # upstate detection
-            return self.counter_upstate == self.est_t_upstate
+        return so_detected
+
+        # if self.detection_mode == SODetectionMode.FAST:
+        #     return so_detected
+        # elif self.detection_mode == SODetectionMode.PEAK_DOWN:
+        #     return self.counter_downstate == self.est_t_downstate
+        # else:  # upstate detection
+        #     return self.counter_upstate == self.est_t_upstate
