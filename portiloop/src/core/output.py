@@ -16,7 +16,7 @@ class CSVRecorder:
                  stimulation_activated=False,
                  default_detection_value=0,
                  default_stimulation_value=0,
-                 timestamps=True):
+                 timestamps=False):
 
         if not (raw_signal or filtered_signal):
             err_str = "At least raw_signal or filtered_signal need to be activated."
