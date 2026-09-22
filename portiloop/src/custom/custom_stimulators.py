@@ -433,4 +433,3 @@ class SlowOscillationStimulator(SleepSpindleRealTimeStimulator):
         elif self.delayer is not None:
             self.delayer.not_detected()  # used by the SO phase delayer
         return res
-

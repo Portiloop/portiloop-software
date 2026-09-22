@@ -8,6 +8,9 @@ The Detector detects patterns of interest in the processed signal.
 The Stimulator produces stimuli depending on what the Detector found.
 """
 
+# FIXME: when activated, the LiveDisplay periodically makes the system stall for ~1s.
+# Change the way of displaying signal in Jupyter for something asynchronous instead.
+
 import json
 import queue  # for exceptions
 import os
@@ -31,7 +34,7 @@ if ADS:
 
 PORTILOOP_ID = f"{socket.gethostname()}-portiloop"
 PROFILE = True
-STALL_THRESHOLD_S = 0.05  # DEBUG: log any stage that takes longer than this
+# STALL_THRESHOLD_S = 0.05
 
 
 def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_msg_in, channel_states):
@@ -284,8 +287,8 @@ def start_capture(
             t1 = time.perf_counter()
             perf["wait msg"][0] += t1 - t00
             perf["wait msg"][1] += 1
-            if t1 - t00 > STALL_THRESHOLD_S:
-                print(f"STALL [wait msg] {1000*(t1 - t00):.1f} ms at sample {sample_count}")
+            # if t1 - t00 > STALL_THRESHOLD_S:
+            #     print(f"STALL [wait msg] {1000*(t1 - t00):.1f} ms at sample {sample_count}")
 
         # Then, we retrieve the data from the capture process
         raw_points = capture_backend.get_data()  # np.array (data series x ads_channels), or None
@@ -295,8 +298,8 @@ def start_capture(
                 t1_1 = time.perf_counter()
                 perf["no data"][0] += t1_1 - t1
                 perf["no data"][1] += 1
-                if t1_1 - t1 > STALL_THRESHOLD_S:
-                    print(f"STALL [no data] {1000*(t1_1 - t1):.1f} ms at sample {sample_count}")
+                # if t1_1 - t1 > STALL_THRESHOLD_S:
+                #     print(f"STALL [no data] {1000*(t1_1 - t1):.1f} ms at sample {sample_count}")
             continue
 
         sample_count += len(raw_points)  # DEBUG
@@ -305,8 +308,8 @@ def start_capture(
             t2 = time.perf_counter()
             perf["got data"][0] += t2 - t1
             perf["got data"][1] += 1
-            if t2 - t1 > STALL_THRESHOLD_S:
-                print(f"STALL [got data] {1000*(t2 - t1):.1f} ms at sample {sample_count}")
+            # if t2 - t1 > STALL_THRESHOLD_S:
+            #     print(f"STALL [got data] {1000*(t2 - t1):.1f} ms at sample {sample_count}")
 
         # Go through filtering pipeline
         if processor is not None:
@@ -322,8 +325,8 @@ def start_capture(
             t3 = time.perf_counter()
             perf["filter"][0] += t3 - t2
             perf["filter"][1] += 1
-            if t3 - t2 > STALL_THRESHOLD_S:
-                print(f"STALL [filter] {1000*(t3 - t2):.1f} ms at sample {sample_count}")
+            # if t3 - t2 > STALL_THRESHOLD_S:
+            #     print(f"STALL [filter] {1000*(t3 - t2):.1f} ms at sample {sample_count}")
 
         # Send both the latest raw and filtered points over LSL
         lsl_streamer.push_raw(raw_points[-1])
@@ -342,8 +345,8 @@ def start_capture(
             t4 = time.perf_counter()
             perf["lsl"][0] += t4 - t3
             perf["lsl"][1] += 1
-            if t4 - t3 > STALL_THRESHOLD_S:
-                print(f"STALL [lsl] {1000*(t4 - t3):.1f} ms at sample {sample_count}")
+            # if t4 - t3 > STALL_THRESHOLD_S:
+            #     print(f"STALL [lsl] {1000*(t4 - t3):.1f} ms at sample {sample_count}")
 
         stimulator_activated = False
         # If detection is on
@@ -356,8 +359,6 @@ def start_capture(
                 t5 = time.perf_counter()
                 perf["detect"][0] += t5 - t4
                 perf["detect"][1] += 1
-                if t5 - t4 > STALL_THRESHOLD_S:
-                    print(f"STALL [detect] {1000*(t5 - t4):.1f} ms at sample {sample_count}")
 
             # Stimulate
             if stimulator is not None:
@@ -368,8 +369,6 @@ def start_capture(
                     t6 = time.perf_counter()
                     perf["stimulate"][0] += t6 - t5
                     perf["stimulate"][1] += 1
-                    if t6 - t5 > STALL_THRESHOLD_S:
-                        print(f"STALL [stimulate] {1000*(t6 - t5):.1f} ms at sample {sample_count}")
 
         if PROFILE:
             t7 = time.perf_counter()
@@ -390,8 +389,6 @@ def start_capture(
             t8 = time.perf_counter()
             perf["buffers"][0] += t8 - t7
             perf["buffers"][1] += 1
-            if t8 - t7 > STALL_THRESHOLD_S:
-                print(f"STALL [buffers] {1000*(t8 - t7):.1f} ms at sample {sample_count}")
 
         if len(raw_signal_buffer) >= 50:  # TODO: make this an argument
             if display_filtered and processor is not None:
@@ -403,8 +400,6 @@ def start_capture(
                 t9 = time.perf_counter()
                 perf["display"][0] += t9 - t8
                 perf["display"][1] += 1
-                if t9 - t8 > STALL_THRESHOLD_S:
-                    print(f"STALL [display] {1000*(t9 - t8):.1f} ms at sample {sample_count}")
 
             csv_recorder.append_raw_signal_buffer(raw_signal_buffer)
             csv_recorder.append_filtered_signal_buffer(filtered_signal_buffer)
@@ -419,8 +414,6 @@ def start_capture(
                 t10 = time.perf_counter()
                 perf["csv"][0] += t10 - t9
                 perf["csv"][1] += 1
-                if t10 - t9 > STALL_THRESHOLD_S:
-                    print(f"STALL [csv] {1000*(t10 - t9):.1f} ms at sample {sample_count}")
 
     if PROFILE:
         t_end = time.perf_counter()
