@@ -184,7 +184,7 @@ class SlowOscillationFilter(Filter):
 
         # Additional FIR used in Serena's original detector
         # FIXME: merge both FIRs
-        so_fir_coeffs = signal.firwin(17, [0.16, 4], fs=sampling_rate, pass_zero="bandpass")
+        so_fir_coeffs = firwin(17, [0.16, 4], fs=sampling_rate, pass_zero="bandpass")
         so_fir = FIR(nb_channels=nb_channels, coefficients=so_fir_coeffs)
 
         self.filter_parts = [fir, notch, dc, so_fir]
