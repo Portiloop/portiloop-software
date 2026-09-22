@@ -2,12 +2,12 @@ import time
 from enum import Enum, auto
 
 import numpy as np
-from scipy import signal
+# from scipy import signal
 
 from portiloop.src.core.detection import Detector
 from portiloop.src.core.constants import DEFAULT_MODEL_PATH
 from portiloop.src.core.utils import Dummy
-from portiloop.src.custom.custom_processors import FIR
+# from portiloop.src.custom.custom_processors import FIR
 
 from portiloop.src import ADS
 if ADS:
@@ -157,13 +157,13 @@ class SlowOscillationDetector(Detector):
         self.record_csv = not isinstance(self.csv_recorder, Dummy) and csv_recorder is not None
 
         fs = config_dict["frequency"]
-        numtaps = 17
+        # numtaps = 17
         verbose = False
         channel = config_dict["channel_detection"]
         record = False
 
         self.fs = fs
-        self.numtaps = numtaps
+        # self.numtaps = numtaps
         self.verbose = verbose
         self.channel = channel
 
@@ -172,7 +172,7 @@ class SlowOscillationDetector(Detector):
         self.min_tNe = 125  # minimum duration spent below 0 (in ms)
         self.max_tNe = 1500  # maximum duration spent below 0 (in ms)
         self.max_tPo = 1000  # maximum duration spent above 0 (in ms)
-        self.fmin_max = [0.16, 4]
+        # self.fmin_max = [0.16, 4]
 
         self.marker = []
         # self.buffer = []
@@ -181,8 +181,8 @@ class SlowOscillationDetector(Detector):
         self.count = 0
         self.record = record
 
-        coefficients = signal.firwin(self.numtaps, self.fmin_max, fs=self.fs, pass_zero="bandpass")
-        self._fir = FIR(nb_channels=1, coefficients=coefficients)
+        # coefficients = signal.firwin(self.numtaps, self.fmin_max, fs=self.fs, pass_zero="bandpass")
+        # self._fir = FIR(nb_channels=1, coefficients=coefficients)
 
         self.max_peak = -1
         self.min_peak = 1000
@@ -205,7 +205,12 @@ class SlowOscillationDetector(Detector):
         results = []
         for point in datapoints:
             self.count += 1
-            result = self.run_detection(point[self.channel - 1])
+
+            # filter signal
+            # tsignal = self._fir.filter(np.array([point[self.channel - 1]]))[0]  # FIXME: this should be done in the processor, not in the detector
+            tsignal = point[self.channel - 1]
+
+            result = self.run_detection(tsignal)
             results.append(result)
             if result and self.record:
                 self.so_results.append(self.count)
@@ -213,16 +218,13 @@ class SlowOscillationDetector(Detector):
             self.csv_recorder.append_detection_signal_buffer([int(r) for r in results])
         return results, datapoints
 
-    def run_detection(self, point):
+    def run_detection(self, tsignal):
 
         # increment counters
         if self.counter_downstate is not None:
             self.counter_downstate += 1
         if self.counter_upstate is not None:
             self.counter_upstate += 1
-        
-        # filter signal
-        tsignal = self._fir.filter(np.array([point]))[0]  # FIXME: this should be done in the processor, not in the detector
 
         # compute historical maximum
         if tsignal > self.max_peak:
