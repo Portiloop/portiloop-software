@@ -219,7 +219,7 @@ class CSVRecorder:
             if self.stimulation_activated_buffer is not None:
                 line.append(int(self.stimulation_activated_buffer[idx]))  # single float (bool)
             if self.timestamps_buffer is not None:
-                line += self.timestamps_buffer[idx]  # timestamps
+                line.append(self.timestamps_buffer[idx])  # timestamps
             lines.append(line)
 
         self.writing_buffer += lines
