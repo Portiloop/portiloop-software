@@ -81,8 +81,8 @@ class CSVRecorder:
             buffer: list of lists of floats
         """
         if self.timestamps_buffer is not None:
-            for _ in buffer:
-                self.timestamps_buffer.append(time.time() - self.init_ts)
+            ts_buf = [time.time() - self.init_ts for _ in buffer]
+            self.timestamps_buffer += ts_buf
 
         if self.raw_signal_buffer is not None:
             self.raw_signal_buffer += buffer
