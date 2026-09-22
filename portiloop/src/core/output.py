@@ -52,7 +52,7 @@ class CSVRecorder:
         self.writing_buffer = []
         self.max_write = 1
 
-        self.init_ts = time.time
+        self.init_ts = time.time()
 
     def write_header(self, nb_channels):
         line = []
