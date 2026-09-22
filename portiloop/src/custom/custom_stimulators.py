@@ -56,98 +56,6 @@ class Delayer(ABC):
         pass
 
 
-# class RandomDelayer(Delayer):
-#     def __init__(self, config_dict, stimulate_fn: callable = None):
-#         """
-#         Randomly delays stimulations between min_delay and max_delay whenever a detection happens.
-#         While delaying a stimulation, no new detection is taken in account.
-
-#         Args:
-#             config_dict: configuration dictionary
-#         """
-#         self.min_delay = config_dict['min_delay']
-#         self.max_delay = config_dict['max_delay']
-#         self.sample_freq = config_dict['frequency']
-
-#         self._t = 0
-#         self._t_next_detection = None
-#         self.stimulate = stimulate_fn
-
-#     def step(self, point):
-#         """
-#         Moves through the state machine
-#         """
-
-#         self._t += 1
-
-#         if self._t_next_detection is None:
-#             return False
-#         else:
-#             if self._t >= self._t_next_detection:
-#                 # Actually stimulate the patient after the delay
-#                 if self.stimulate is not None:
-#                     self.stimulate()
-#                 self._t_next_detection = None
-#                 return True
-#             else:
-#                 return False
-
-#     def detected(self):
-#         """
-#         Defines what happens on detection
-#         """
-#         if self._t_next_detection is None:
-#             delay = np.random.uniform(low=self.min_delay, high=self.max_delay)
-#             delay_steps = int(self.sample_freq * delay)
-#             self._t_next_detection = self._t + delay_steps
-
-
-# class TimingDelayer(Delayer):
-#     def __init__(self, config_dict, stimulate_fn=None):
-#         """
-#         Delays based on the timing.
-
-#         Args:
-#             config_dict: configuration dictionary
-#         """
-#         self.state = TimingStates.READY
-#         self.stimulation_delay = config_dict['min_delay']
-#         self.inter_stim_delay = config_dict['inter_stim_delay']
-#         self.sample_freq = config_dict['frequency']
-
-#         self.stimulate = stimulate_fn
-#         self.waiting_start = time.time()
-#         self.delaying_start = time.time()
-
-#     def step(self, point):
-#         """
-#         Moves through the state machine
-#         """
-#         if self.state == TimingStates.READY:
-#             return False
-#         elif self.state == TimingStates.DELAYING:
-#             if time.time() - self.delaying_start > self.stimulation_delay:
-#                 # Actually stimulate the patient after the delay
-#                 if self.stimulate is not None:
-#                     self.stimulate()
-#                 self.state = TimingStates.WAITING
-#                 self.waiting_start = time.time()
-#                 return True
-#             return False
-#         elif self.state == TimingStates.WAITING:
-#             if time.time() - self.waiting_start > self.inter_stim_delay:
-#                 self.state = TimingStates.READY
-#             return False
-
-#     def detected(self):
-#         """
-#         Defines what happens when a detection comes depending on what state you are in
-#         """
-#         if self.state == TimingStates.READY:
-#             self.state = TimingStates.DELAYING
-#             self.delaying_start = time.time()
-
-
 class RandomTimingDelayer(Delayer):
     def __init__(self, config_dict, stimulate_fn=None):
         """
@@ -206,7 +114,6 @@ class UpStateStates(Enum):
 
 
 # Class that delays stimulation to always stimulate peak or through
-
 # FIXME: this class implementation is losing a lot of time buffering
 class UpStateDelayer(Delayer):
 
@@ -286,95 +193,6 @@ class UpStateDelayer(Delayer):
             print("Average distance between peaks is smaller than the time to last peak, decrease buffer size")
             return (len(buffer) - peaks[-1]) * (1.0 / self.sample_freq)
         return (avg_dist - (len(buffer) - peaks[-1])) * (1.0 / self.sample_freq)
-
-
-# class SOPhaseDelayer(Delayer):  # FIXME: This class is not tested and has memory leaks
-#     def __init__(self,
-#                  config_dict,
-#                  k_p: float = 0.05,
-#                  k_i: float = 5e-8,
-#                  k_0: float = 0.03):
-#         """
-#         Phase Locked Loop for In-Phase Slow Oscillation Detection
-#         params:
-#             config_dict: configuration dictionary
-#             k_p, k_i, k_0: PLL tuning parameters
-#         """
-#         self.k_p = k_p
-#         self.k_i = k_i
-#         self.k_0 = k_0
-#         self.fs = config_dict['frequency']
-
-#         self.target_phase = 0
-
-#         self.sin_out = 0
-#         self.cos_out = 1
-#         self.pd_output = 0      # phase detector output
-#         self.lf_output = 0      # loop filter output
-#         self.integrator = 0
-
-#         self.freq_const = 2 * np.pi * (1/self.fs)
-#         self.init_estimate = 0
-#         self.phase_estimate = self.freq_const
-
-#         self.atol = np.deg2rad(10)
-#         self.channel_idx = config_dict['channel_detection'] - 1
-
-#         self.prev_cos_out = 1
-#         self.cos_outs = []
-#         self.phase_estimates = []
-#         self.phase_indicators = []
-#         self.stimulate_flag = False
-
-#         self.phase_indicator = None
-#         self.stimulate = None
-
-#     def wrap_phase(self, phase):
-#         return np.angle(np.exp(1j * phase))
-
-#     def pll_detect(self, point):
-#         self.pd_output = point * self.sin_out
-
-#         self.integrator += self.k_i * self.pd_output
-#         self.lf_output = self.k_p * self.pd_output + self.integrator
-
-#         next_phase = self.phase_estimate + self.init_estimate
-#         self.init_estimate = self.freq_const + self.k_0 * self.lf_output
-
-#         self.sin_out = -np.sin(self.phase_estimate)
-#         next_cos_out = np.cos(self.phase_estimate)
-
-#         self.phase_indicator = (
-#             (np.isclose(self.wrap_phase(self.phase_estimate), self.target_phase, atol=self.atol)) and
-#             (self.prev_cos_out <= self.cos_out >= next_cos_out)
-#         )
-#         self.cos_outs.append(self.cos_out)
-#         self.phase_estimates.append(self.phase_estimate)
-#         self.phase_indicators.append(self.phase_indicator)
-
-#         self.prev_cos_out = self.cos_out
-#         self.cos_out = next_cos_out
-#         self.phase_estimate = next_phase
-
-#         return self.phase_indicator
-
-#     def step(self, point):
-#         """
-#         Moves through the state machine
-#         """
-#         pll_output = self.pll_detect(point[self.channel_idx])
-#         if self.stimulate_flag and pll_output:
-#             if self.stimulate is not None:
-#                 self.stimulate()
-#             self.stimulate_flag = False
-#             return True
-#         return False
-
-#     def detected(self):
-#         self.stimulate_flag = True
-
-#     def not_detected(self):
-#         self.stimulate_flag = False
 
 
 # ================== STIMULATORS ==================
