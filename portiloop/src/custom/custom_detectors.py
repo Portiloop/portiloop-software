@@ -191,7 +191,6 @@ class SlowOscillationDetector(Detector):
         self.prev_signal = None
 
         self.detection_mode = SODetectionMode.FAST
-        self.counter_since_detection = None
         self.counter_upstate = None
         self.t_upstate = None
         self.est_t_upstate = None
@@ -212,9 +211,7 @@ class SlowOscillationDetector(Detector):
 
     def run_detection(self, tsignal):
 
-        # increment counters
-        if self.counter_since_detection is not None:
-            self.counter_since_detection += 1
+        # increment counter
         if self.counter_upstate is not None:
             self.counter_upstate += 1
 
@@ -250,21 +247,17 @@ class SlowOscillationDetector(Detector):
         )
 
         # SO second peak detection condition:
-        # FIXME: support the case where the SO is detected after zero-crossing but before estimated upstate
         so_upstate_detected = (
             self.est_t_upstate is not None
             and self.counter_upstate is not None
             and self.counter_upstate == self.est_t_upstate
         )
 
-        if so_detected:
-            self.counter_since_detection = 0
-
         self.prev_signal = self.prev_signal if self.prev_signal is not None else tsignal  # previous filtered data point
 
         if self.prev_signal * tsignal <= 0:  # if the signal crosses 0
-            if 0 < self.prev_signal:  # signal is falling (ending upstate)
-                if self.counter_upstate is not None:
+            if 0 < self.prev_signal:  # if the signal is falling (ending upstate)
+                if self.counter_upstate is not None and so_detected:  # if an SO detection is ending here
                     # compute how long it took after upward zero-crossing to reach the peak
                     if self.est_t_upstate is None:
                         self.est_t_upstate = self.t_upstate
@@ -281,13 +274,11 @@ class SlowOscillationDetector(Detector):
                 self.up_duration = 0
                 self.duration = 0
                 self.prev_signal = None
-                self.counter_since_detection = None
 
-            else:  # signal is rising (ending downstate)
-                # enable the upstate counter only if an SO was detected lately
-                if self.counter_since_detection is not None:
-                    self.counter_upstate = 0
-                    self.t_upstate = 0
+            else:  # if the signal is rising (ending downstate)
+                # enable the upstate counter
+                self.counter_upstate = 0
+                self.t_upstate = 0
 
         self.prev_signal = tsignal  # update previous data point to current
 
