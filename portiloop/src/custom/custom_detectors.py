@@ -250,6 +250,7 @@ class SlowOscillationDetector(Detector):
         )
 
         # SO second peak detection condition:
+        # FIXME: support the case where the SO is detected after zero-crossing but before estimated upstate
         so_upstate_detected = (
             self.est_t_upstate is not None
             and self.counter_upstate is not None
