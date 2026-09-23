@@ -44,6 +44,7 @@ PERSISTED_FIELDS = (
     "power_line",
     "pipeline_key",
     "custom_exp_name",
+    "stim_on",
 )
 
 
@@ -361,7 +362,11 @@ class SimpleUI:
 
                     test_sound_button = ui.button('Test Sound 🔊', on_click=test_sound)
 
-                    stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off', on_change=lambda: exp_state.toggle_stim())
+                    stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off').bind_value(
+                        exp_state, 'stim_on',
+                        forward=lambda x: x == 'Stim On',
+                        backward=lambda x: 'Stim On' if x else 'Stim Off'
+                    )
 
                     ui.separator()
 

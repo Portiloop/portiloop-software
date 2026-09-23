@@ -275,7 +275,7 @@ class SlowOscillationDetector(Detector):
                     self.counter_upstate = None
 
                 # reinitialize the SO detection parameters
-                self.max_peak = -1
+                self.max_peak = -1000
                 self.min_peak = 1000
                 self.down_duration = 0
                 self.up_duration = 0
