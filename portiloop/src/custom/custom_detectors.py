@@ -265,8 +265,6 @@ class SlowOscillationDetector(Detector):
                     else:
                         # compute a running average
                         self.est_t_upstate = int(self.alpha * self.t_upstate + (1 - self.alpha) * self.est_t_upstate)
-                    # disable the upstate counter as the upstate has ended
-                    self.counter_upstate = None
 
                 # reinitialize the SO detection parameters
                 self.max_peak = -1000
@@ -275,6 +273,7 @@ class SlowOscillationDetector(Detector):
                 self.up_duration = 0
                 self.duration = 0
                 self.prev_signal = None
+                self.counter_upstate = None
 
             else:  # if the signal is rising (ending downstate)
                 # enable the upstate counter
