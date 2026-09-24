@@ -1,3 +1,4 @@
+import logging
 from multiprocessing import Process, Queue, Value
 import time
 import os
@@ -17,6 +18,8 @@ from portiloop.src.core.utils import DummyAlsaMixer
 from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED, STATE_PATH, NB_CHANNELS
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_pipelines import PIPELINES
+
+logger = logging.getLogger(__name__)
 
 portiloop_ID = socket.gethostname()
 
@@ -97,7 +100,7 @@ class ExperimentState:
 
     def save_preset(self, preset_name: str):
         if not preset_name:
-            print("WARNING: Preset name cannot be empty")
+            logger.warning("Preset name cannot be empty")
             return
 
         filepath = STATE_PATH / f"{preset_name}.json"
@@ -153,14 +156,14 @@ class ExperimentState:
                     if field in state:
                         setattr(self, field, state[field])
                     else:
-                        print(f"Missing field in saved GUI state: {field}")
+                        logger.warning("Missing field in saved GUI state: %s", field)
 
                 # Check that pipeline_key is valid:
                 if self.pipeline_key not in self.pipeline_keys:
                     self.pipeline_key = self.pipeline_keys[0]
 
             except Exception as e:
-                print(f"Caught exception while loading app state: {e}")
+                logger.exception("Caught exception while loading app state")
 
             self.run_dict = self._build_run_dict_from_ui_state()
 
@@ -174,8 +177,8 @@ class ExperimentState:
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
         prefix = self.custom_exp_name or portiloop_ID
         self.exp_name = f"{prefix}_{time_str}_{stim_str}.csv"
-        print(f"Starting recording {self.exp_name.split('.')[0]}")
-        print(f"STIMON = {self.stim_on}")
+        logger.info("Starting recording %s", self.exp_name.split('.')[0])
+        logger.info("STIMON = %s", self.stim_on)
 
         self.point_index = 0
         self.len_plot = int(self.run_dict['frequency'] * LINE_PLOT_WINDOW / LINE_PLOT_STRIDE)
@@ -184,18 +187,17 @@ class ExperimentState:
         if self.sleep_timeout > 0:
             self.time_unpause = self.time_started.timestamp() + self.sleep_timeout * 60
             self.pause_value.value = True
-            print(f"Currently: {self.time_started.timestamp()}, Pausing until: {self.time_unpause}")
+            logger.info("Currently: %s, Pausing until: %s", self.time_started.timestamp(), self.time_unpause)
 
         try:
             mixers = alsaaudio.mixers()
             if len(mixers) <= 0:
-                print(f"No ALSA mixer found.")
+                logger.warning("No ALSA mixer found.")
                 mixer = DummyAlsaMixer()
             else:
                 mixer = alsaaudio.Mixer(control='SoftMaster', device='dmixer')
         except ALSAAudioError as e:
-            print(e)
-            print(f"No ALSA mixer found. Volume control will not be available.")
+            logger.warning("No ALSA mixer found. Volume control will not be available. (%s)", e)
             mixer = DummyAlsaMixer()
 
         volume = mixer.getvolume()[0]  # we will set the same volume on all channels
@@ -213,10 +215,10 @@ class ExperimentState:
                                         self.display_q,
                                         self.pause_value,))
         self._t_capture.start()
-        print(f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
+        logger.info("PID start process: %s. Kill this process if program crashes before end of execution.", self._t_capture.pid)
 
     def stop(self):
-        print("Stopping recording...")
+        logger.info("Stopping recording...")
         self.q_msg.put('STOP')
         assert self._t_capture is not None
         if ENABLE_DISPLAY:
@@ -237,7 +239,7 @@ class ExperimentState:
                 except Exception:
                     break
         self._t_capture = None
-        print("Done.")
+        logger.info("Done.")
 
     def toggle_stim(self):
         self.stim_on = not self.stim_on
@@ -273,7 +275,7 @@ class SimpleUI:
         try:
             exp_state.load()  # load persistent state
         except Exception as e:
-            print(f"WARNING: Caught exception while loading persistent state: {e}")
+            logger.warning("Caught exception while loading persistent state: %s", e)
 
         def start():
             exp_state.start()
@@ -313,7 +315,7 @@ class SimpleUI:
                         x.append(time_value)
                         y.append(point)
             except Exception as e:
-                print(f"Caught exception: {e}")
+                logger.error("Caught exception: %s", e)
 
             # update the actual plot 
             if len(x) > 0 and len(y) > 0:
@@ -324,9 +326,9 @@ class SimpleUI:
                 exp_state.save_preset(exp_state.new_preset_name)
                 select_preset.options = exp_state.preset_keys
                 select_preset.update()
-                print("Saved preset")
+                logger.info("Saved preset")
             except Exception as e:
-                print(f"WARNING: Caught exception while saving preset: {e}")
+                logger.warning("Caught exception while saving preset: %s", e)
 
         def disable_stim_toggle_callback(caller):
             stim_toggle.enable()
@@ -336,11 +338,11 @@ class SimpleUI:
                 try:
                     filepath = STATE_PATH / f"{exp_state.preset_key}.json"
                     exp_state.load(filepath=filepath)  # load persistent state
-                    print(f"Loaded preset {filepath}")
+                    logger.info("Loaded preset %s", filepath)
                 except Exception as e:
-                    print(f"WARNING: Caught exception while loading preset: {e}")
+                    logger.warning("Caught exception while loading preset: %s", e)
             else:
-                print("WARNING: Attempted to load a preset but preset_key is None")
+                logger.warning("Attempted to load a preset but preset_key is None")
 
         ui.label('Portiloop 🧠').classes('text-4xl font-mono')
         ui.label('Control Center').classes('text-2xl font-mono')

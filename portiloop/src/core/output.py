@@ -1,8 +1,11 @@
 import csv
+import logging
 from pathlib import Path
 import time
 
 from portilooplot.jupyter_plot import ProgressPlot
+
+logger = logging.getLogger(__name__)
 
 
 class CSVRecorder:
@@ -20,7 +23,7 @@ class CSVRecorder:
 
         if not (raw_signal or filtered_signal):
             err_str = "At least raw_signal or filtered_signal need to be activated."
-            print(err_str)
+            logger.error(err_str)
             raise RuntimeError(err_str)
         self.timestamps_buffer = [] if timestamps else None
         self.raw_signal_buffer = [] if raw_signal else None
@@ -38,12 +41,12 @@ class CSVRecorder:
         parent_dir = self.filename.parent
         parent_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"INFO: Writing data to {self.filename}")
+        logger.info("Writing data to %s", self.filename)
 
         self.header_written = False
         file_exists = self.filename.exists()
         if file_exists:
-            print(f"INFO: {self.filename} already exists. The writer will append new data.")
+            logger.info("%s already exists. The writer will append new data.", self.filename)
             with open(self.filename, 'r') as f:
                 if f.readline():
                     self.header_written = True
@@ -128,7 +131,7 @@ class CSVRecorder:
             self.stimulation_activated_buffer += buffer
 
     def __del__(self):
-        print(f"Closing")
+        logger.debug("Closing")
         # self.file.close()
 
     def reset_buffers(self):
@@ -157,7 +160,7 @@ class CSVRecorder:
             nb_channels = len(self.raw_signal_buffer[0])
             if self.filtered_signal_buffer is not None and len(self.filtered_signal_buffer) != len_data:
                 err_str = f"raw and filtered buffer sizes mismatch: {len_data} != {len(self.filtered_signal_buffer)}"
-                print(err_str)
+                logger.error(err_str)
                 raise RuntimeError(err_str)
         else:
             len_data = len(self.filtered_signal_buffer)
@@ -189,7 +192,7 @@ class CSVRecorder:
                 self.detection_activated_buffer = [0] * len_data
             elif len_buf != len_data:
                 err_str = f"stimulation activated size mismatch: {len_buf} != {len_data}"
-                print(err_str)
+                logger.error(err_str)
                 raise RuntimeError(err_str)
 
         if self.stimulation_activated_buffer is not None:
@@ -198,7 +201,7 @@ class CSVRecorder:
                 self.stimulation_activated_buffer = [0] * len_data
             elif len_buf != len_data:
                 err_str = f"stimulation activated size mismatch: {len_buf} != {len_data}"
-                print(err_str)
+                logger.error(err_str)
                 raise RuntimeError(err_str)
 
         # generate lines:
@@ -348,7 +351,7 @@ class LSLStreamer:
         self.lsl_outlet_markers.push_sample([text])
 
     def __del__(self):
-        print("Closing LSL streams")
+        logger.debug("Closing LSL streams")
         self.lsl_outlet_raw.__del__()
         if self.streams['filtered']:
             self.lsl_outlet.__del__()

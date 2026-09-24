@@ -12,6 +12,7 @@ The Stimulator produces stimuli depending on what the Detector found.
 # Change the way of displaying signal in Jupyter for something asynchronous instead.
 
 import json
+import logging
 import queue  # for exceptions
 import os
 import time
@@ -30,6 +31,8 @@ from portiloop.src.core.constants import SIGNAL_SAMPLES_FOLDER
 from portiloop.src import ADS
 if ADS:
     from portiloop.src.core.hardware.backend import Backend
+
+logger = logging.getLogger(__name__)
 
 
 PORTILOOP_ID = f"{socket.gethostname()}-portiloop"
@@ -231,7 +234,7 @@ def start_capture(
             with open(metadata_path, "w") as f:
                 json.dump(metadata, f, indent=4)
         except Exception as e:
-            print(f"Could not save metadata: {e}")
+            logger.error("Could not save metadata: %s", e)
  
     # Initialize the variable to keep track of whether we are in a detection state or not for the markers
     prev_pause = pause_value.value
@@ -281,7 +284,7 @@ def start_capture(
             # print(f"msg from child process: {msg}")
             break
         elif msg[0] == 'PRT':
-            print(msg[1])
+            logger.info(msg[1])
 
         if PROFILE:
             t1 = time.perf_counter()
@@ -417,16 +420,16 @@ def start_capture(
 
     if PROFILE:
         t_end = time.perf_counter()
-        print(f"Performance summary:")
+        logger.info("Performance summary:")
         tt = 0
         for k, v in perf.items():
             if v[1] == 0:
                 continue
             tot = v[0]
             avg = tot / v[1]
-            print(f"{k}: {tot} (avg: {avg*1000} ms/call)")
+            logger.info("%s: %s (avg: %s ms/call)", k, tot, avg * 1000)
             tt += tot
-        print(f"total measured time: {tt} vs real: {t_end - t0}")
+        logger.info("total measured time: %s vs real: %s", tt, t_end - t0)
 
     # close the backend
     leds.led1(Color.YELLOW)

@@ -1,3 +1,4 @@
+import logging
 import time
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -14,6 +15,8 @@ from portiloop.src.core.constants import SOUNDS_FOLDER
 from portiloop.src import ADS
 if ADS:
     import alsaaudio
+
+logger = logging.getLogger(__name__)
 
 
 # ================== DELAYERS ==================
@@ -182,7 +185,7 @@ class UpStateDelayer(Delayer):
         peaks, _ = find_peaks(buffer, prominence=1)
 
         if len(peaks) < 2:
-            print("No peaks found, increase buffer size")
+            logger.warning("No peaks found, increase buffer size")
             return (self.sample_freq / 10) * (1.0 / self.sample_freq)
 
         # Compute average distance between each peak
@@ -190,7 +193,7 @@ class UpStateDelayer(Delayer):
 
         # Compute the time until next peak and return it
         if (avg_dist < len(buffer) - peaks[-1]):
-            print("Average distance between peaks is smaller than the time to last peak, decrease buffer size")
+            logger.warning("Average distance between peaks is smaller than the time to last peak, decrease buffer size")
             return (len(buffer) - peaks[-1]) * (1.0 / self.sample_freq)
         return (avg_dist - (len(buffer) - peaks[-1])) * (1.0 / self.sample_freq)
 

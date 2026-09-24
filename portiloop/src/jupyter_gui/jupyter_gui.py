@@ -1,3 +1,4 @@
+import logging
 import warnings
 import time
 from multiprocessing import Process, Queue, Value
@@ -21,6 +22,8 @@ if ADS:
     import alsaaudio
     from alsaaudio import ALSAAudioError
     from portiloop.src.core.hardware.backend import Backend
+
+logger = logging.getLogger(__name__)
 
 
 class JupyterUI:
@@ -118,7 +121,7 @@ class JupyterUI:
                 else:
                     self.mixer = alsaaudio.Mixer(control='SoftMaster', device='dmixer')
             except ALSAAudioError as e:
-                print(e)
+                logger.warning("Caught ALSA error: %s", e)
                 warnings.warn(
                     f"No ALSA mixer found. Volume control will not be available from notebook.\nAvailable mixers were:\n{mixers}")
                 self.mixer = DummyAlsaMixer()
@@ -762,7 +765,7 @@ class JupyterUI:
             pause_value
             """
             self._t_capture.start()
-            print(f"PID start process: {self._t_capture.pid}. Kill this process if program crashes before end of execution.")
+            logger.info("PID start process: %s. Kill this process if program crashes before end of execution.", self._t_capture.pid)
         elif val == 'Stop':
             self.q_msg.put('STOP')
             assert self._t_capture is not None
@@ -995,8 +998,9 @@ class JupyterUI:
             def print_impedance(impedance):
                 names = ["Ref", "Ch2", "Ch3", "Ch4", "Ch5", "Ch6", "Ch7", "Ch8"]
                 vals = [' Y ' if val else ' N ' for val in impedance]
-                print(' '.join(str(name) for name in names))
-                print(' '.join(str(val) for val in vals))
+                logger.info("Impedance check:\n%s\n%s",
+                            ' '.join(str(name) for name in names),
+                            ' '.join(str(val) for val in vals))
 
             print_impedance(impedance_check)
 

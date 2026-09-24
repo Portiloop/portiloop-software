@@ -1,3 +1,4 @@
+import logging
 import time
 from enum import Enum, auto
 
@@ -14,6 +15,8 @@ if ADS:
     from pycoral.utils import edgetpu
 else:
     import tensorflow as tf
+
+logger = logging.getLogger(__name__)
 
 
 class SleepSpindleRealTimeDetector(Detector):
@@ -139,7 +142,7 @@ class SleepSpindleRealTimeDetector(Detector):
         output_data_y = (int(output_data_y) - output_zero_point) * output_scale
 
         if self.verbose:
-            print(f"Computed output {output_data_y} in {end_time - start_time} seconds")
+            logger.info("Computed output %s in %s seconds", output_data_y, end_time - start_time)
 
         return output_data_y, output_data_h
 
