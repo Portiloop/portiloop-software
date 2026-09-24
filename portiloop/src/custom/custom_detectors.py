@@ -183,11 +183,10 @@ class SlowOscillationDetector(Detector):
         # coefficients = signal.firwin(self.numtaps, self.fmin_max, fs=self.fs, pass_zero="bandpass")
         # self._fir = FIR(nb_channels=1, coefficients=coefficients)
 
-        self.max_peak = -1
+        self.max_peak = -1000
         self.min_peak = 1000
         self.down_duration = 0
         self.up_duration = 0
-        self.duration = 0
         self.prev_signal = None
 
         self.detection_mode = SODetectionMode.FAST
@@ -231,8 +230,6 @@ class SlowOscillationDetector(Detector):
         else:
             self.down_duration += 1
 
-        self.duration += 1  # (in samples)
-
         tp2p = abs(self.max_peak - self.min_peak)  # voltage amplitude peak-to-peak
         tneg = abs(self.min_peak)  # amplitude portion below 0
         tne = self.down_duration / self.fs * 1000  # duration spend below zero (in ms)
@@ -271,7 +268,6 @@ class SlowOscillationDetector(Detector):
                 self.min_peak = 1000
                 self.down_duration = 0
                 self.up_duration = 0
-                self.duration = 0
                 self.prev_signal = None
                 self.counter_upstate = None
 
