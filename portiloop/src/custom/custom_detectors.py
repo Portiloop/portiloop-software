@@ -248,7 +248,8 @@ class SlowOscillationDetector(Detector):
 
         # SO second peak detection condition:
         so_upstate_detected = (
-            self.est_t_upstate is not None
+            so_detected
+            and self.est_t_upstate is not None
             and self.counter_upstate is not None
             and self.counter_upstate == self.est_t_upstate
         )
