@@ -1,6 +1,9 @@
+import logging
 from periphery import GPIO
 from spidev import SpiDev
-# from time import sleep
+
+logger = logging.getLogger(__name__)
+
 
 WAKEUP = 0x02
 STANDBY = 0x04
@@ -49,12 +52,16 @@ class Reading:
 class Backend:
     def __init__(self, portiloop_version):
 
+        if portiloop_version < 2:
+            logger.warning(f"Your version ({portiloop_version}) of the Portiloop PCB has known issues and is not supported. Upgrade to Version >= 2.3.")
+
         max_speed = 1000000
 
         if portiloop_version == 1:
             # self.nrst = GPIO("/dev/gpiochip2", 9, "out")
             # self.pwdn = GPIO("/dev/gpiochip2", 12, "out")
             self.drdy = GPIO("/dev/gpiochip3", 28, "in")
+
         elif portiloop_version == 2:
             self.drdy = GPIO("/dev/gpiochip0", 45, "in")
 

@@ -32,6 +32,7 @@ LINE_PLOT_STRIDE = 4  # plot only 1 in N datapoints
 TIMER_READ_DISPLAY_QUEUE = 1.0
 
 TIMER_SD_CARD = 5.0
+TIMER_CHECK_CAPTURE = 2.0
 
 
 PERSISTED_FIELDS = (
@@ -168,6 +169,10 @@ class ExperimentState:
             self.run_dict = self._build_run_dict_from_ui_state()
 
     def start(self):
+        # Clean up possible messages from previous runs
+        while not self.q_msg.empty():
+            self.q_msg.get()
+
         self.run_dict = self._build_run_dict_from_ui_state()
         self.save()
 
@@ -188,6 +193,8 @@ class ExperimentState:
             self.time_unpause = self.time_started.timestamp() + self.sleep_timeout * 60
             self.pause_value.value = True
             logger.info("Currently: %s, Pausing until: %s", self.time_started.timestamp(), self.time_unpause)
+        else:
+            self.pause_value.value = False
 
         try:
             mixers = alsaaudio.mixers()
@@ -241,6 +248,14 @@ class ExperimentState:
         self._t_capture = None
         logger.info("Done.")
 
+    def capture_exitcode(self):
+        """
+        Returns the exit code of the recording process if it has ended, None if it is running or was not started.
+        """
+        if self._t_capture is None or self._t_capture.is_alive():
+            return None
+        return self._t_capture.exitcode
+
     def toggle_stim(self):
         self.stim_on = not self.stim_on
 
@@ -285,10 +300,23 @@ class SimpleUI:
             exp_state.stop()
             start_button.enabled = True
 
+        def check_capture_ended():
+            # Reset the GUI when the recording ends on its own (end of duration or crash)
+            exitcode = exp_state.capture_exitcode()
+            if exitcode is None:
+                return
+            if exitcode != 0:
+                logger.error("Recording process crashed (exit code %s).", exitcode)
+            else:
+                logger.info("Recording ended.")
+            stop()
+
         def test_sound():
-            stimulator = self._pipelines[exp_state.pipeline_key]["stimulator"](RUN_SETTINGS)
-            stimulator.test_stimulus()
-            del stimulator
+            stimulator_cls = self._pipelines[exp_state.pipeline_key]["stimulator"]
+            if stimulator_cls is not None:
+                stimulator = self._pipelines[exp_state.pipeline_key]["stimulator"](RUN_SETTINGS)
+                stimulator.test_stimulus()
+                del stimulator
 
         def update_line_plot():
 
@@ -387,6 +415,7 @@ class SimpleUI:
                         backward=lambda x: f"Current experiment: {x.split('.')[0]}")
                     timer = ui.timer(1.0, lambda: time_label.set_text(f'Timer: {str(datetime.now() - exp_state.time_started).split(".")[0]}'))
                     sd_card_timer = ui.timer(TIMER_SD_CARD, exp_state.check_sd_card)
+                    capture_timer = ui.timer(TIMER_CHECK_CAPTURE, check_capture_ended)
                     start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
 
             ############### Output Tab ####################
@@ -480,5 +509,9 @@ class SimpleUI:
 
 
 if __name__ == "__main__":
-    gui = SimpleUI()
-    gui.run()
+    try:
+        gui = SimpleUI()
+        gui.run()
+    except Exception:
+        logger.exception("Simple GUI crashed.")
+        raise

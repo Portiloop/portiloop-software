@@ -358,9 +358,13 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
                     self._thread.start()
 
     def _t_sound(self):
-        self.play_sound()
-        with self._lock:
-            self._thread = None
+        try:
+            self.play_sound()
+        except Exception as e:
+            logger.exception("Failed to play sound.")
+        finally:
+            with self._lock:
+                self._thread = None
 
     def test_stimulus(self):
         with self._lock:

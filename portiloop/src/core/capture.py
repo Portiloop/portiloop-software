@@ -51,15 +51,15 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         time_msg_in: float: min time between attempts to recv incomming messages
         channel_states: list: list of strings representing channel states ('disabled', 'simple', etc.)
     """
-    if duration <= 0:
-        duration = np.inf
-    
-    sample_time = 1 / frequency
-
-    hardware_version = get_hardware_version()
-    backend = Backend(hardware_version)
-    
     try:
+        if duration <= 0:
+            duration = np.inf
+        
+        sample_time = 1 / frequency
+    
+        hardware_version = get_hardware_version()
+        backend = Backend(hardware_version)
+
         config = BACKEND_CONFIG
         if python_clock:  # set ADS to 2 * frequency
             datarate = 2 * frequency
@@ -112,6 +112,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
 
         p_msg_io.send(("PRT", f"Average frequency: {1 / tot} Hz for {it} samples"))
     except Exception as e:
+        logger.exception("capture_process crashed.")
         p_msg_io.send(("PRT", f"Exception: {e}"))
         raise e
     finally:
@@ -148,298 +149,314 @@ def start_capture(
 
     """
 
-    # Initialize the LED
-    leds = LEDs()
+    leds = None
+    capture_backend = None
 
-    # leds.activate()
+    try:
 
-    if config_dict['stimulate']:
-        leds.led1(Color.CYAN)
-    else:
-        leds.led1(Color.PURPLE)
+        # Initialize the LED
+        leds = LEDs()
 
-    # Initialize data backend
-    signal_sample = SIGNAL_SAMPLES_FOLDER / config_dict["signal_sample"]  # 'test_spindles.csv'  # test_slow_oscillations.csv
-    capture_backend = ADSBackend(
-        duration=config_dict['duration'],
-        frequency=config_dict['frequency'],
-        python_clock=config_dict['python_clock'],
-        channel_states=config_dict['channel_states'],
-        vref=config_dict['vref'],
-        process=capture_process,
-    ) if config_dict['signal_input'] == "ADS" else FileBackend(signal_sample, config_dict['nb_channels'], config_dict['channel_detection'], config_dict['frequency'] * config_dict['offline_speed'])
+        # leds.activate()
 
-    # Initialize detector, LSL streamer and stimulatorif requested
-    streams = {
-        'filtered': config_dict['filter'],
-        'markers': config_dict['detect'],
-    }
-    lsl_streamer = LSLStreamer(streams, config_dict['nb_channels'], config_dict['frequency'], id=PORTILOOP_ID) if config_dict['lsl'] else Dummy()
-    
-    # Launch the capture process
-    capture_backend.init_capture()
-
-    # Initialize display if requested
-    live_disp_activated = config_dict['display']
-    live_disp = LiveDisplay(channel_names=config_dict['signal_labels'], window_len=config_dict['width_display']) if live_disp_activated else Dummy()
-    display_filtered = not config_dict['display_raw']
-
-    create_processor = config_dict['filter'] and processor_cls is not None
-    create_detector = config_dict['detect'] and detector_cls is not None
-    create_stimulator = config_dict['detect'] and stimulator_cls is not None  # FIXME: check that "detect" is right here
-
-    # Initialize recording if requested
-    if config_dict['record']:
-        csv_recorder = CSVRecorder(config_dict['filename'],
-                                   raw_signal=config_dict['record_raw'],
-                                   filtered_signal=config_dict['record_filtered'] and create_processor,  # set to False if you don't want to log the filtered signal
-                                   detection_signal=create_detector,
-                                   stimulation_signal=create_stimulator,
-                                   detection_activated=False,  # stimulation activated is enough
-                                   stimulation_activated=True,
-                                   default_detection_value=0,
-                                   default_stimulation_value=0)
-    else:
-        csv_recorder = Dummy()
-
-    # Pipeline components:
-
-    detector = detector_cls(config_dict, lsl_streamer, csv_recorder) if create_detector else None
-    stimulator = stimulator_cls(config_dict, lsl_streamer, csv_recorder) if create_stimulator else None
-    if create_processor:
-        processor = processor_cls(config_dict, lsl_streamer, csv_recorder)
-    else:
-        processor = None
-
-    # Buffer used for the visualization and the recording
-    raw_signal_buffer = []
-    filtered_signal_buffer = []
-    # detection_signal_buffer = []
-    stimulation_activated_buffer = []
-
-    if config_dict['record']:
-        try:
-            # Get the metadata and save it to a file
-            metadata = config_dict
-            # Split the original path into its components
-            dirname, basename = os.path.split(config_dict['filename'])
-            # Create dir if it doesn't exist
-            Path(dirname).mkdir(parents=True, exist_ok=True)
-            # Split the file name into its name and extension components
-            name, _ = os.path.splitext(basename)
-            # Define the new file name
-            new_name = f"{name}_metadata.json"
-            # Join the components back together into the new file path
-            metadata_path = os.path.join(dirname, new_name)
-            with open(metadata_path, "w") as f:
-                json.dump(metadata, f, indent=4)
-        except Exception as e:
-            logger.error("Could not save metadata: %s", e)
- 
-    # Initialize the variable to keep track of whether we are in a detection state or not for the markers
-    prev_pause = pause_value.value
-
-    if detector is not None:
-        marker_str = LSLStreamer.string_for_detection_activation(prev_pause)
-        lsl_streamer.push_marker(marker_str)
-
-    start_time = time.time()
-
-    if PROFILE:
-        perf = {"wait msg": [0, 0],
-                "no data": [0, 0],
-                "got data": [0, 0],
-                "filter": [0, 0],
-                "lsl": [0, 0],
-                "detect": [0, 0],
-                "stimulate": [0, 0],
-                "buffers": [0, 0],
-                "display": [0, 0],
-                "csv": [0, 0]}
-        t0 = time.perf_counter()
-
-    # Main capture loop
-    sample_count = 0  # DEBUG
-    while True:
-
-        if PROFILE:
-            t00 = time.perf_counter()
-        
-        # First, we send all outgoing messages to the capture process
-        try:
-            if not q_msg.empty():
-                msg = q_msg.get_nowait()
-                capture_backend.send_msg(msg)
-        except queue.Empty as e:
-            pass
-        except queue.ShutDown as e:
-            raise e
-        
-        # Then, we check if we have received a message from the capture process
-        msg = capture_backend.get_msg()
-        # Either we have received a stop message, or a print message.
-        if msg is None:
-            pass
-        elif msg == 'STOP':
-            # print(f"msg from child process: {msg}")
-            break
-        elif msg[0] == 'PRT':
-            logger.info(msg[1])
-
-        if PROFILE:
-            t1 = time.perf_counter()
-            perf["wait msg"][0] += t1 - t00
-            perf["wait msg"][1] += 1
-            # if t1 - t00 > STALL_THRESHOLD_S:
-            #     print(f"STALL [wait msg] {1000*(t1 - t00):.1f} ms at sample {sample_count}")
-
-        # Then, we retrieve the data from the capture process
-        raw_points = capture_backend.get_data()  # np.array (data series x ads_channels), or None
-        # If we have no data, we continue to the next iteration
-        if raw_points is None:
-            if PROFILE:
-                t1_1 = time.perf_counter()
-                perf["no data"][0] += t1_1 - t1
-                perf["no data"][1] += 1
-                # if t1_1 - t1 > STALL_THRESHOLD_S:
-                #     print(f"STALL [no data] {1000*(t1_1 - t1):.1f} ms at sample {sample_count}")
-            continue
-
-        sample_count += len(raw_points)  # DEBUG
-
-        if PROFILE:
-            t2 = time.perf_counter()
-            perf["got data"][0] += t2 - t1
-            perf["got data"][1] += 1
-            # if t2 - t1 > STALL_THRESHOLD_S:
-            #     print(f"STALL [got data] {1000*(t2 - t1):.1f} ms at sample {sample_count}")
-
-        # Go through filtering pipeline
-        if processor is not None:
-            filtered_points = processor.filter(raw_points.copy())
+        if config_dict['stimulate']:
+            leds.led1(Color.CYAN)
         else:
-            filtered_points = raw_points.copy()
+            leds.led1(Color.PURPLE)
 
-        # Contains the filtered points (if filtering is off, contains a copy of the raw points)
-        filtered_points = filtered_points.tolist()
-        raw_points = raw_points.tolist()
+        # Initialize detector, LSL streamer and stimulatorif requested
+        streams = {
+            'filtered': config_dict['filter'],
+            'markers': config_dict['detect'],
+        }
+        lsl_streamer = LSLStreamer(streams, config_dict['nb_channels'], config_dict['frequency'], id=PORTILOOP_ID) if config_dict['lsl'] else Dummy()
 
-        if PROFILE:
-            t3 = time.perf_counter()
-            perf["filter"][0] += t3 - t2
-            perf["filter"][1] += 1
-            # if t3 - t2 > STALL_THRESHOLD_S:
-            #     print(f"STALL [filter] {1000*(t3 - t2):.1f} ms at sample {sample_count}")
-
-        # Send both the latest raw and filtered points over LSL
-        lsl_streamer.push_raw(raw_points[-1])
-        if processor is not None:
-            lsl_streamer.push_filtered(filtered_points[-1])
+        # Initialize data backend
+        signal_sample = SIGNAL_SAMPLES_FOLDER / config_dict["signal_sample"]  # 'test_spindles.csv'  # test_slow_oscillations.csv
+        capture_backend = ADSBackend(
+            duration=config_dict['duration'],
+            frequency=config_dict['frequency'],
+            python_clock=config_dict['python_clock'],
+            channel_states=config_dict['channel_states'],
+            vref=config_dict['vref'],
+            process=capture_process,
+        ) if config_dict['signal_input'] == "ADS" else FileBackend(signal_sample, config_dict['nb_channels'], config_dict['channel_detection'], config_dict['frequency'] * config_dict['offline_speed'])
         
-        # Check if detection is on or off
-        pause = pause_value.value
+        # Launch the capture process
+        capture_backend.init_capture()
 
-        # If the state has changed since last iteration, we send a marker
-        if pause != prev_pause and detector is not None:
-            lsl_streamer.push_marker(LSLStreamer.string_for_detection_activation(pause))
-            prev_pause = pause
+        # Initialize display if requested
+        live_disp_activated = config_dict['display']
+        live_disp = LiveDisplay(channel_names=config_dict['signal_labels'], window_len=config_dict['width_display']) if live_disp_activated else Dummy()
+        display_filtered = not config_dict['display_raw']
+
+        create_processor = config_dict['filter'] and processor_cls is not None
+        create_detector = config_dict['detect'] and detector_cls is not None
+        create_stimulator = config_dict['detect'] and config_dict['stimulate'] and stimulator_cls is not None
+
+        # Initialize recording if requested
+        if config_dict['record']:
+            csv_recorder = CSVRecorder(config_dict['filename'],
+                                    raw_signal=config_dict['record_raw'],
+                                    filtered_signal=config_dict['record_filtered'] and create_processor,  # set to False if you don't want to log the filtered signal
+                                    detection_signal=create_detector,
+                                    stimulation_signal=create_stimulator,
+                                    detection_activated=False,  # stimulation activated is enough
+                                    stimulation_activated=True,
+                                    default_detection_value=0,
+                                    default_stimulation_value=0)
+        else:
+            csv_recorder = Dummy()
+
+        # Pipeline components:
+
+        detector = detector_cls(config_dict, lsl_streamer, csv_recorder) if create_detector else None
+        stimulator = stimulator_cls(config_dict, lsl_streamer, csv_recorder) if create_stimulator else None
+        if create_processor:
+            processor = processor_cls(config_dict, lsl_streamer, csv_recorder)
+        else:
+            processor = None
+
+        # Buffer used for the visualization and the recording
+        raw_signal_buffer = []
+        filtered_signal_buffer = []
+        # detection_signal_buffer = []
+        stimulation_activated_buffer = []
+
+        if config_dict['record']:
+            try:
+                # Get the metadata and save it to a file
+                metadata = config_dict
+                # Split the original path into its components
+                dirname, basename = os.path.split(config_dict['filename'])
+                # Create dir if it doesn't exist
+                Path(dirname).mkdir(parents=True, exist_ok=True)
+                # Split the file name into its name and extension components
+                name, _ = os.path.splitext(basename)
+                # Define the new file name
+                new_name = f"{name}_metadata.json"
+                # Join the components back together into the new file path
+                metadata_path = os.path.join(dirname, new_name)
+                with open(metadata_path, "w") as f:
+                    json.dump(metadata, f, indent=4)
+            except Exception as e:
+                logger.error("Could not save metadata: %s", e)
+    
+        # Initialize the variable to keep track of whether we are in a detection state or not for the markers
+        prev_pause = pause_value.value
+
+        if detector is not None:
+            marker_str = LSLStreamer.string_for_detection_activation(prev_pause)
+            lsl_streamer.push_marker(marker_str)
+
+        start_time = time.time()
 
         if PROFILE:
-            t4 = time.perf_counter()
-            perf["lsl"][0] += t4 - t3
-            perf["lsl"][1] += 1
-            # if t4 - t3 > STALL_THRESHOLD_S:
-            #     print(f"STALL [lsl] {1000*(t4 - t3):.1f} ms at sample {sample_count}")
+            perf = {"wait msg": [0, 0],
+                    "no data": [0, 0],
+                    "got data": [0, 0],
+                    "filter": [0, 0],
+                    "lsl": [0, 0],
+                    "detect": [0, 0],
+                    "stimulate": [0, 0],
+                    "buffers": [0, 0],
+                    "display": [0, 0],
+                    "csv": [0, 0]}
+            t0 = time.perf_counter()
 
-        stimulator_activated = False
-        # If detection is on
-        if detector is not None and not pause:
-            # Detect using the latest points
-            # (Note for core developers: detection_signal is arbitrary. Please do not assume anything about it here.)
-            detection_signal = detector.detect(filtered_points)
+        # Main capture loop
+        sample_count = 0  # DEBUG
+        while True:
 
             if PROFILE:
-                t5 = time.perf_counter()
-                perf["detect"][0] += t5 - t4
-                perf["detect"][1] += 1
+                t00 = time.perf_counter()
+            
+            # First, we send all outgoing messages to the capture process
+            try:
+                if not q_msg.empty():
+                    msg = q_msg.get_nowait()
+                    capture_backend.send_msg(msg)
+            except queue.Empty as e:
+                pass
+            
+            # Then, we check if we have received a message from the capture process
+            msg = capture_backend.get_msg()
+            # Either we have received a stop message, or a print message.
+            if msg is None:
+                pass
+            elif msg == 'STOP':
+                # print(f"msg from child process: {msg}")
+                break
+            elif msg[0] == 'PRT':
+                logger.info(msg[1])
 
-            # Stimulate
-            if stimulator is not None:
-                stimulator_activated = True
-                stimulator.stimulate(detection_signal)
+            if PROFILE:
+                t1 = time.perf_counter()
+                perf["wait msg"][0] += t1 - t00
+                perf["wait msg"][1] += 1
+                # if t1 - t00 > STALL_THRESHOLD_S:
+                #     print(f"STALL [wait msg] {1000*(t1 - t00):.1f} ms at sample {sample_count}")
+
+            # Then, we retrieve the data from the capture process
+            raw_points = capture_backend.get_data()  # np.array (data series x ads_channels), or None
+            # If we have no data, we continue to the next iteration
+            if raw_points is None:
+                if PROFILE:
+                    t1_1 = time.perf_counter()
+                    perf["no data"][0] += t1_1 - t1
+                    perf["no data"][1] += 1
+                    # if t1_1 - t1 > STALL_THRESHOLD_S:
+                    #     print(f"STALL [no data] {1000*(t1_1 - t1):.1f} ms at sample {sample_count}")
+                continue
+
+            sample_count += len(raw_points)  # DEBUG
+
+            if PROFILE:
+                t2 = time.perf_counter()
+                perf["got data"][0] += t2 - t1
+                perf["got data"][1] += 1
+                # if t2 - t1 > STALL_THRESHOLD_S:
+                #     print(f"STALL [got data] {1000*(t2 - t1):.1f} ms at sample {sample_count}")
+
+            # Go through filtering pipeline
+            if processor is not None:
+                filtered_points = processor.filter(raw_points.copy())
+            else:
+                filtered_points = raw_points.copy()
+
+            # Contains the filtered points (if filtering is off, contains a copy of the raw points)
+            filtered_points = filtered_points.tolist()
+            raw_points = raw_points.tolist()
+
+            if PROFILE:
+                t3 = time.perf_counter()
+                perf["filter"][0] += t3 - t2
+                perf["filter"][1] += 1
+                # if t3 - t2 > STALL_THRESHOLD_S:
+                #     print(f"STALL [filter] {1000*(t3 - t2):.1f} ms at sample {sample_count}")
+
+            # Send both the latest raw and filtered points over LSL
+            lsl_streamer.push_raw(raw_points[-1])
+            if processor is not None:
+                lsl_streamer.push_filtered(filtered_points[-1])
+            
+            # Check if detection is on or off
+            pause = pause_value.value
+
+            # If the state has changed since last iteration, we send a marker
+            if pause != prev_pause and detector is not None:
+                lsl_streamer.push_marker(LSLStreamer.string_for_detection_activation(pause))
+                prev_pause = pause
+
+            if PROFILE:
+                t4 = time.perf_counter()
+                perf["lsl"][0] += t4 - t3
+                perf["lsl"][1] += 1
+                # if t4 - t3 > STALL_THRESHOLD_S:
+                #     print(f"STALL [lsl] {1000*(t4 - t3):.1f} ms at sample {sample_count}")
+
+            stimulator_activated = False
+            # If detection is on
+            if detector is not None and not pause:
+                # Detect using the latest points
+                # (Note for core developers: detection_signal is arbitrary. Please do not assume anything about it here.)
+                detection_signal = detector.detect(filtered_points)
 
                 if PROFILE:
-                    t6 = time.perf_counter()
-                    perf["stimulate"][0] += t6 - t5
-                    perf["stimulate"][1] += 1
+                    t5 = time.perf_counter()
+                    perf["detect"][0] += t5 - t4
+                    perf["detect"][1] += 1
 
-        if PROFILE:
-            t7 = time.perf_counter()
+                # Stimulate
+                if stimulator is not None:
+                    stimulator_activated = True
+                    stimulator.stimulate(detection_signal)
 
-        # Add point to the buffer to send to viz and recorder
-        raw_signal_buffer += raw_points
-        if processor is not None:
-            filtered_signal_buffer += filtered_points
-        if stimulator is not None:
-            stimulation_activated_buffer += [stimulator_activated] * len(raw_points)
-
-        # Adding the raw point and its timestamp for display
-        timestamp = time.time() - start_time
-        if q_display is not None:
-            q_display.put([timestamp, raw_points, filtered_points])
-
-        if PROFILE:
-            t8 = time.perf_counter()
-            perf["buffers"][0] += t8 - t7
-            perf["buffers"][1] += 1
-
-        if len(raw_signal_buffer) >= 50:  # TODO: make this an argument
-            if display_filtered and processor is not None:
-                live_disp.add_datapoints(filtered_signal_buffer)
-            else:
-                live_disp.add_datapoints(raw_signal_buffer)
+                    if PROFILE:
+                        t6 = time.perf_counter()
+                        perf["stimulate"][0] += t6 - t5
+                        perf["stimulate"][1] += 1
 
             if PROFILE:
-                t9 = time.perf_counter()
-                perf["display"][0] += t9 - t8
-                perf["display"][1] += 1
+                t7 = time.perf_counter()
 
-            csv_recorder.append_raw_signal_buffer(raw_signal_buffer)
-            csv_recorder.append_filtered_signal_buffer(filtered_signal_buffer)
-            csv_recorder.append_stimulation_activated_buffer(stimulation_activated_buffer)
-            csv_recorder.write()
+            # Add point to the buffer to send to viz and recorder
+            raw_signal_buffer += raw_points
+            if processor is not None:
+                filtered_signal_buffer += filtered_points
+            if stimulator is not None:
+                stimulation_activated_buffer += [stimulator_activated] * len(raw_points)
 
-            raw_signal_buffer = []
-            filtered_signal_buffer = []
-            stimulation_activated_buffer = []
+            # Adding the raw point and its timestamp for display
+            timestamp = time.time() - start_time
+            if q_display is not None:
+                q_display.put([timestamp, raw_points, filtered_points])
 
             if PROFILE:
-                t10 = time.perf_counter()
-                perf["csv"][0] += t10 - t9
-                perf["csv"][1] += 1
+                t8 = time.perf_counter()
+                perf["buffers"][0] += t8 - t7
+                perf["buffers"][1] += 1
 
-    if PROFILE:
-        t_end = time.perf_counter()
-        logger.info("Performance summary:")
-        tt = 0
-        for k, v in perf.items():
-            if v[1] == 0:
-                continue
-            tot = v[0]
-            avg = tot / v[1]
-            logger.info("%s: %s (avg: %s ms/call)", k, tot, avg * 1000)
-            tt += tot
-        logger.info("total measured time: %s vs real: %s", tt, t_end - t0)
+            if len(raw_signal_buffer) >= 50:  # TODO: make this an argument
+                if display_filtered and processor is not None:
+                    live_disp.add_datapoints(filtered_signal_buffer)
+                else:
+                    live_disp.add_datapoints(raw_signal_buffer)
 
-    # close the backend
-    leds.led1(Color.YELLOW)
-    capture_backend.close()
-    leds.close()
+                if PROFILE:
+                    t9 = time.perf_counter()
+                    perf["display"][0] += t9 - t8
+                    perf["display"][1] += 1
 
-    del csv_recorder
-    del lsl_streamer
-    del stimulator
-    del detector
+                csv_recorder.append_raw_signal_buffer(raw_signal_buffer)
+                csv_recorder.append_filtered_signal_buffer(filtered_signal_buffer)
+                csv_recorder.append_stimulation_activated_buffer(stimulation_activated_buffer)
+                csv_recorder.write()
+
+                raw_signal_buffer = []
+                filtered_signal_buffer = []
+                stimulation_activated_buffer = []
+
+                if PROFILE:
+                    t10 = time.perf_counter()
+                    perf["csv"][0] += t10 - t9
+                    perf["csv"][1] += 1
+
+        if PROFILE:
+            t_end = time.perf_counter()
+            logger.info("Performance summary:")
+            tt = 0
+            for k, v in perf.items():
+                if v[1] == 0:
+                    continue
+                tot = v[0]
+                avg = tot / v[1]
+                logger.info("%s: %s (avg: %s ms/call)", k, tot, avg * 1000)
+                tt += tot
+            logger.info("total measured time: %s vs real: %s", tt, t_end - t0)
+
+        # cleanup
+        del csv_recorder
+        del lsl_streamer
+        del stimulator
+        del detector
+
+    except Exception:
+        logger.exception("start_capture crashed.")
+        raise
+
+    finally:
+        # close the backend
+        if leds is not None:
+            leds.led1(Color.YELLOW)
+        if capture_backend is not None:
+            try:
+                capture_backend.send_msg('STOP')
+            except (BrokenPipeError, OSError):
+                pass
+            capture_backend.close()
+        if leds is not None:
+            leds.close()
 
 
 if __name__ == "__main__":
