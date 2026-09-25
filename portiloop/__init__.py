@@ -33,7 +33,7 @@ class SizeCappedFileHandler(logging.handlers.RotatingFileHandler):
 LOG_FOLDER = Path.home() / 'workspace' / 'logs'
 LOG_FOLDER.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_FOLDER / 'portiloop.log'
-LOG_MAX_BYTES = 10 * 1024  # 10 * 1024 * 1024
+LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] (%(filename)s:%(lineno)d): %(message)s',
