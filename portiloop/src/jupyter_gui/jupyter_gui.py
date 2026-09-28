@@ -202,6 +202,7 @@ class JupyterUI:
 
         self.b_clock = widgets.ToggleButtons(
             options=['ADS', 'Coral'],
+            value='Coral' if self.python_clock else 'ADS',
             description='Clock:',
             disabled=False,
             button_style='',  # 'success', 'info', 'warning', 'danger' or ''

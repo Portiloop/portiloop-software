@@ -129,3 +129,4 @@ class Backend:
 
     def close(self):
         self.dev.close()
+        self.drdy.close()

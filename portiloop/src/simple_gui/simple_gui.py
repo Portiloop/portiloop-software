@@ -15,6 +15,7 @@ from nicegui import ui
 from portiloop import __version__
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.utils import DummyAlsaMixer
+from portiloop.src.core.hardware.config_hardware import to_ads_frequency
 from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED, STATE_PATH, NB_CHANNELS
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_pipelines import PIPELINES
@@ -49,6 +50,7 @@ PERSISTED_FIELDS = (
     "pipeline_key",
     "custom_exp_name",
     "stim_on",
+    "python_clock",
 )
 
 
@@ -89,6 +91,7 @@ class ExperimentState:
         self.sleep_timeout = 0
         self.select_freq = 250
         self.power_line = 60
+        self.python_clock = RUN_SETTINGS['python_clock']
         self.persistent_file_name = STATE_PATH / "Previous run.json"
 
         self.run_dict = self._build_run_dict_from_ui_state()
@@ -115,6 +118,7 @@ class ExperimentState:
         run_dict['frequency'] = self.select_freq
         run_dict["filter_settings"]["power_line"] = self.power_line
         run_dict['stimulate'] = self.stim_on
+        run_dict['python_clock'] = self.python_clock
         run_dict['lsl'] = self.lsl
         run_dict['record'] = self.save_local
         run_dict['min_delay'] = int(self.min_delay) / 1000 if self.min_delay is not None else 0
@@ -172,6 +176,9 @@ class ExperimentState:
         # Clean up possible messages from previous runs
         while not self.q_msg.empty():
             self.q_msg.get()
+
+        if not self.python_clock:  # ADS clock: force the frequency to an ADS-compatible frequency
+            self.select_freq = to_ads_frequency(self.select_freq)
 
         self.run_dict = self._build_run_dict_from_ui_state()
         self.save()
@@ -466,6 +473,13 @@ class SimpleUI:
                         value=exp_state.power_line,
                         label="Notch filter frequency (Hz)").bind_value(exp_state, 'power_line').classes('w-3/4')
                     ui.separator().classes('w-2/3')
+                    ui.label('Clock:')
+                    clock_toggle = ui.toggle(['ADS', 'Coral'], value='Coral' if exp_state.python_clock else 'ADS').bind_value(
+                        exp_state, 'python_clock',
+                        forward=lambda x: x == 'Coral',
+                        backward=lambda x: 'Coral' if x else 'ADS'
+                    )
+                    ui.separator().classes('w-2/3')
                     sleep_timeout = ui.slider(min=0, max=180, value=exp_state.sleep_timeout).bind_value(exp_state, 'sleep_timeout').classes('w-3/4') #.props('label-always')
                     ui.label().bind_text_from(sleep_timeout, 'value', backward=lambda x: f"Stimulation starts after: {x} minutes")
                     sleep_timeout_timer = ui.timer(10, exp_state.check_sleep_timeout)
@@ -492,6 +506,7 @@ class SimpleUI:
                     start_button.bind_enabled_to(filename_box)
                     start_button.bind_enabled_to(select_freq)
                     start_button.bind_enabled_to(select_notch)
+                    start_button.bind_enabled_to(clock_toggle)
                     start_button.bind_enabled_to(sleep_timeout)
                     start_button.bind_enabled_to(sleep_timeout_timer, 'active', forward=lambda x: not x)
 

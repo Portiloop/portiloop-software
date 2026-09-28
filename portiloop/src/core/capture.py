@@ -51,10 +51,11 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         time_msg_in: float: min time between attempts to recv incomming messages
         channel_states: list: list of strings representing channel states ('disabled', 'simple', etc.)
     """
+    backend = None
     try:
         if duration <= 0:
             duration = np.inf
-        
+
         sample_time = 1 / frequency
 
         hardware_version = get_hardware_version()
@@ -117,6 +118,8 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         p_msg_io.send(("PRT", f"Exception: {e}"))
         raise e
     finally:
+        if backend is not None:
+            backend.close()
         p_msg_io.send('STOP')
         p_msg_io.close()
         p_data_o.close()
