@@ -56,7 +56,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
             duration = np.inf
         
         sample_time = 1 / frequency
-    
+
         hardware_version = get_hardware_version()
         backend = Backend(hardware_version)
 
@@ -71,23 +71,24 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         # data = backend.read_regs(0x00, len(config))
 
         c = True
-
-        it = 0
-        t_start = time.time()
-        t_max = t_start + duration
-        t = t_start
         
         # first sample:
         reading = backend.read()
         datapoint = reading.channels()
         p_data_o.send(datapoint)
+
+        # the first sample is considered the origin of the time axis:
+        t_start = time.perf_counter()
+        t_max = t_start + duration
+        t = t_start
+        it = 0
         
         t_next = t + sample_time
         t_chk_msg = t + time_msg_in
         
         # sampling loop:
         while c and t < t_max:
-            t = time.time()
+            t = time.perf_counter()
             if python_clock:
                 if t <= t_next:
                     time.sleep(t_next - t)
@@ -97,6 +98,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
                 reading = backend.wait_new_data()
             datapoint = reading.channels()
             p_data_o.send(datapoint)
+            it += 1
 
             # Check for messages
             if t >= t_chk_msg:
@@ -106,11 +108,10 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
                     if message == 'STOP':
                         # p_msg_io.send(("PRT", f"msg from parent process: {message}"))
                         c = False
-            it += 1
-        t = time.time()
-        tot = (t - t_start) / it        
-
-        p_msg_io.send(("PRT", f"Average frequency: {1 / tot} Hz for {it} samples"))
+        t = time.perf_counter()
+        total_time = t - t_start
+        nb_steps = it
+        p_msg_io.send(("STT", (total_time, nb_steps)))
     except Exception as e:
         logger.exception("capture_process crashed.")
         p_msg_io.send(("PRT", f"Exception: {e}"))
@@ -119,6 +120,20 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         p_msg_io.send('STOP')
         p_msg_io.close()
         p_data_o.close()
+
+
+def dump_metadata(config_dict, metadata_dict, id_str):
+    if config_dict['record']:
+        try:
+            dirname, basename = os.path.split(config_dict['filename'])
+            Path(dirname).mkdir(parents=True, exist_ok=True)
+            name, _ = os.path.splitext(basename)
+            new_name = f"{name}_{id_str}.json"
+            metadata_path = os.path.join(dirname, new_name)
+            with open(metadata_path, "w") as f:
+                json.dump(metadata_dict, f, indent=4)
+        except Exception as e:
+            logger.error("Could not save metadata: %s", e)
 
 
 def start_capture(
@@ -223,24 +238,7 @@ def start_capture(
         # detection_signal_buffer = []
         stimulation_activated_buffer = []
 
-        if config_dict['record']:
-            try:
-                # Get the metadata and save it to a file
-                metadata = config_dict
-                # Split the original path into its components
-                dirname, basename = os.path.split(config_dict['filename'])
-                # Create dir if it doesn't exist
-                Path(dirname).mkdir(parents=True, exist_ok=True)
-                # Split the file name into its name and extension components
-                name, _ = os.path.splitext(basename)
-                # Define the new file name
-                new_name = f"{name}_metadata.json"
-                # Join the components back together into the new file path
-                metadata_path = os.path.join(dirname, new_name)
-                with open(metadata_path, "w") as f:
-                    json.dump(metadata, f, indent=4)
-            except Exception as e:
-                logger.error("Could not save metadata: %s", e)
+        dump_metadata(config_dict, config_dict, "metadata")
     
         # Initialize the variable to keep track of whether we are in a detection state or not for the markers
         prev_pause = pause_value.value
@@ -289,6 +287,18 @@ def start_capture(
                 break
             elif msg[0] == 'PRT':
                 logger.info(msg[1])
+            elif msg[0] == 'STT':
+                total_time, nb_steps = msg[1]
+                step_duration = total_time / nb_steps
+                avg_frequency = 1 / step_duration
+                logger.info(f"Captured {nb_steps} steps in {total_time} seconds. Sampling rate as per OS clock: {avg_frequency} Hz (i.e., {step_duration} seconds per step).")
+                stats = {
+                    "os_time": total_time,
+                    "nb_steps": nb_steps,
+                    "os_step_duration": step_duration,
+                    "os_sampling_frequency": avg_frequency
+                }
+                dump_metadata(config_dict, stats, "os_time_stats")  # save experiments statistics
 
             if PROFILE:
                 t1 = time.perf_counter()
