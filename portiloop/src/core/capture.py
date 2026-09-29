@@ -70,6 +70,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         
         backend.write_regs(0x00, config)
         # data = backend.read_regs(0x00, len(config))
+        backend.start_conversion()
 
         c = True
         
@@ -119,6 +120,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         raise e
     finally:
         if backend is not None:
+            backend.stop_conversion()
             backend.close()
         p_msg_io.send('STOP')
         p_msg_io.close()
