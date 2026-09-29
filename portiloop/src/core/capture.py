@@ -268,7 +268,6 @@ def start_capture(
             t0 = time.perf_counter()
 
         # Main capture loop
-        sample_count = 0  # DEBUG
         while True:
 
             if PROFILE:
@@ -303,14 +302,12 @@ def start_capture(
                     "os_step_duration": step_duration,
                     "os_sampling_frequency": avg_frequency
                 }
-                dump_metadata(config_dict, stats, "os_time_stats")  # save experiments statistics
+                dump_metadata(config_dict, stats, "stats")  # save experiments statistics
 
             if PROFILE:
                 t1 = time.perf_counter()
                 perf["wait msg"][0] += t1 - t00
                 perf["wait msg"][1] += 1
-                # if t1 - t00 > STALL_THRESHOLD_S:
-                #     print(f"STALL [wait msg] {1000*(t1 - t00):.1f} ms at sample {sample_count}")
 
             # Then, we retrieve the data from the capture process
             raw_points = capture_backend.get_data()  # np.array (data series x ads_channels), or None
@@ -320,18 +317,12 @@ def start_capture(
                     t1_1 = time.perf_counter()
                     perf["no data"][0] += t1_1 - t1
                     perf["no data"][1] += 1
-                    # if t1_1 - t1 > STALL_THRESHOLD_S:
-                    #     print(f"STALL [no data] {1000*(t1_1 - t1):.1f} ms at sample {sample_count}")
                 continue
-
-            sample_count += len(raw_points)  # DEBUG
 
             if PROFILE:
                 t2 = time.perf_counter()
                 perf["got data"][0] += t2 - t1
                 perf["got data"][1] += 1
-                # if t2 - t1 > STALL_THRESHOLD_S:
-                #     print(f"STALL [got data] {1000*(t2 - t1):.1f} ms at sample {sample_count}")
 
             # Go through filtering pipeline
             if processor is not None:
@@ -347,8 +338,6 @@ def start_capture(
                 t3 = time.perf_counter()
                 perf["filter"][0] += t3 - t2
                 perf["filter"][1] += 1
-                # if t3 - t2 > STALL_THRESHOLD_S:
-                #     print(f"STALL [filter] {1000*(t3 - t2):.1f} ms at sample {sample_count}")
 
             # Send both the latest raw and filtered points over LSL
             lsl_streamer.push_raw(raw_points[-1])
@@ -367,8 +356,6 @@ def start_capture(
                 t4 = time.perf_counter()
                 perf["lsl"][0] += t4 - t3
                 perf["lsl"][1] += 1
-                # if t4 - t3 > STALL_THRESHOLD_S:
-                #     print(f"STALL [lsl] {1000*(t4 - t3):.1f} ms at sample {sample_count}")
 
             stimulator_activated = False
             # If detection is on
