@@ -1,4 +1,7 @@
 import io
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_hardware_version():

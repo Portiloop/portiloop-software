@@ -1,7 +1,11 @@
 import csv
+import logging
 from pathlib import Path
+import time
 
 from portilooplot.jupyter_plot import ProgressPlot
+
+logger = logging.getLogger(__name__)
 
 
 class CSVRecorder:
@@ -14,12 +18,14 @@ class CSVRecorder:
                  detection_activated=False,
                  stimulation_activated=False,
                  default_detection_value=0,
-                 default_stimulation_value=0):
+                 default_stimulation_value=0,
+                 timestamps=False):
 
         if not (raw_signal or filtered_signal):
             err_str = "At least raw_signal or filtered_signal need to be activated."
-            print(err_str)
+            logger.error(err_str)
             raise RuntimeError(err_str)
+        self.timestamps_buffer = [] if timestamps else None
         self.raw_signal_buffer = [] if raw_signal else None
         self.filtered_signal_buffer = [] if filtered_signal else None
         self.detection_signal_buffer = [] if detection_signal else None
@@ -35,12 +41,12 @@ class CSVRecorder:
         parent_dir = self.filename.parent
         parent_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"INFO: Writing data to {self.filename}")
+        logger.info("Writing data to %s", self.filename)
 
         self.header_written = False
         file_exists = self.filename.exists()
         if file_exists:
-            print(f"INFO: {self.filename} already exists. The writer will append new data.")
+            logger.info("%s already exists. The writer will append new data.", self.filename)
             with open(self.filename, 'r') as f:
                 if f.readline():
                     self.header_written = True
@@ -48,6 +54,8 @@ class CSVRecorder:
         self.writer = csv.writer(self.file)
         self.writing_buffer = []
         self.max_write = 1
+
+        self.init_ts = time.time()
 
     def write_header(self, nb_channels):
         line = []
@@ -65,6 +73,8 @@ class CSVRecorder:
             line.append('detection_on')
         if self.stimulation_activated_buffer is not None:
             line.append('stimulation_on')
+        if self.timestamps_buffer is not None:
+            line.append('timestamp')
         self.writer.writerows([line])  # write header
         self.header_written = True
 
@@ -73,6 +83,10 @@ class CSVRecorder:
         Args:
             buffer: list of lists of floats
         """
+        if self.timestamps_buffer is not None:
+            ts_buf = [time.time() - self.init_ts for _ in buffer]
+            self.timestamps_buffer += ts_buf
+
         if self.raw_signal_buffer is not None:
             self.raw_signal_buffer += buffer
 
@@ -117,10 +131,12 @@ class CSVRecorder:
             self.stimulation_activated_buffer += buffer
 
     def __del__(self):
-        print(f"Closing")
+        logger.debug("Closing")
         # self.file.close()
 
     def reset_buffers(self):
+        if self.timestamps_buffer is not None:
+            self.timestamps_buffer = []
         if self.raw_signal_buffer is not None:
             self.raw_signal_buffer = []
         if self.filtered_signal_buffer is not None:
@@ -144,7 +160,7 @@ class CSVRecorder:
             nb_channels = len(self.raw_signal_buffer[0])
             if self.filtered_signal_buffer is not None and len(self.filtered_signal_buffer) != len_data:
                 err_str = f"raw and filtered buffer sizes mismatch: {len_data} != {len(self.filtered_signal_buffer)}"
-                print(err_str)
+                logger.error(err_str)
                 raise RuntimeError(err_str)
         else:
             len_data = len(self.filtered_signal_buffer)
@@ -176,7 +192,7 @@ class CSVRecorder:
                 self.detection_activated_buffer = [0] * len_data
             elif len_buf != len_data:
                 err_str = f"stimulation activated size mismatch: {len_buf} != {len_data}"
-                print(err_str)
+                logger.error(err_str)
                 raise RuntimeError(err_str)
 
         if self.stimulation_activated_buffer is not None:
@@ -185,7 +201,7 @@ class CSVRecorder:
                 self.stimulation_activated_buffer = [0] * len_data
             elif len_buf != len_data:
                 err_str = f"stimulation activated size mismatch: {len_buf} != {len_data}"
-                print(err_str)
+                logger.error(err_str)
                 raise RuntimeError(err_str)
 
         # generate lines:
@@ -205,53 +221,14 @@ class CSVRecorder:
                 line.append(int(self.detection_activated_buffer[idx]))  # single float (bool)
             if self.stimulation_activated_buffer is not None:
                 line.append(int(self.stimulation_activated_buffer[idx]))  # single float (bool)
+            if self.timestamps_buffer is not None:
+                line.append(self.timestamps_buffer[idx])  # timestamps
             lines.append(line)
 
         self.writing_buffer += lines
         if len(self.writing_buffer) >= self.max_write:
             self.writer.writerows(self.writing_buffer)
             self.reset_buffers()
-
-    # def add_recording_data(self, points, detection_info, detection_on, stim_on):
-    #     """
-    #     Deprecated
-    #     """
-    #     stim_label = 2 if stim_on else 1
-    #
-    #     #detection_info = (np.array(detection_info).astype(int) * stim_label).tolist()
-    #     # No need to bother np arrays
-    #     detection_info = [stim_label*x for x in detection_info]
-    #
-    #     # If detection is on but we do not have any points, we add 0s
-    #     if detection_on and len(detection_info) == 0:
-    #         for point in points:
-    #             point.append(0)
-    #     # If detection is not on we simply pass
-    #     elif not detection_on:
-    #         pass
-    #     # If detection_info has points
-    #     elif len(detection_info) > 0:
-    #         # This takes care of the case when detection is turned on by unpausing between two saves
-    #         diff_points = len(points) - len(detection_info)
-    #
-    #         if diff_points != 0:
-    #             detection_info = [0.0] * diff_points + detection_info
-    #
-    #         assert len(points) == len(detection_info)
-    #         for idx, point in enumerate(points):
-    #             point.append(detection_info[idx])
-    #
-    #     data = points
-    #     self.writing_buffer += data
-    #     # write to file
-    #
-    #     if len(self.writing_buffer) >= self.max_write:
-    #         if self.out_format == 'csv':
-    #             self.writer.writerows(self.writing_buffer)
-    #             # np.savetxt(self.file, np.array(self.writing_buffer), delimiter=',')
-    #         elif self.out_format == 'npy':
-    #             np.save(self.file, np.array(self.writing_buffer))
-    #         self.writing_buffer = []
 
 
 class LiveDisplay:
@@ -333,7 +310,7 @@ class LSLStreamer:
         self.lsl_outlet_markers.push_sample([text])
 
     def __del__(self):
-        print("Closing LSL streams")
+        logger.debug("Closing LSL streams")
         self.lsl_outlet_raw.__del__()
         if self.streams['filtered']:
             self.lsl_outlet.__del__()

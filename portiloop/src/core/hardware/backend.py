@@ -1,6 +1,9 @@
+import logging
 from periphery import GPIO
 from spidev import SpiDev
-# from time import sleep
+
+logger = logging.getLogger(__name__)
+
 
 WAKEUP = 0x02
 STANDBY = 0x04
@@ -49,14 +52,24 @@ class Reading:
 class Backend:
     def __init__(self, portiloop_version):
 
+        if portiloop_version < 2:
+            logger.warning(f"Your version ({portiloop_version}) of the Portiloop PCB has known issues and is not supported. Upgrade to Version >= 2.3.")
+
         max_speed = 1000000
 
+        self.start_gpio = None
         if portiloop_version == 1:
             # self.nrst = GPIO("/dev/gpiochip2", 9, "out")
             # self.pwdn = GPIO("/dev/gpiochip2", 12, "out")
             self.drdy = GPIO("/dev/gpiochip3", 28, "in")
+
         elif portiloop_version == 2:
             self.drdy = GPIO("/dev/gpiochip0", 45, "in")
+            # GPIO37 (header pin 35) is SW1's other branch to the ADS1299 START pin.
+            # In the supported (non-stackable) switch position it's disconnected from START,
+            # but we still hold it low defensively in case that branch is closed instead.
+            self.start_gpio = GPIO("/dev/gpiochip0", 37, "out")
+            self.start_gpio.write(False)
 
         self.drdy.edge = "falling"
         self.dev = SpiDev()
@@ -114,11 +127,21 @@ class Backend:
 
     def is_ready(self):
         return not self.drdy.read()
-    
+
     def wait_new_data(self):
         self.drdy.poll(timeout=None)  # poll the falling edge event
         self.drdy.read_event()  # consume the event
         return self.read()  # read SPI with RDATA
 
+    def start_conversion(self):
+        if self.start_gpio is not None:
+            self.start_gpio.write(False)  # ensure START pin is low, in case SW1's GPIO37 branch is closed
+        self.dev.xfer([START])
+    
+    def stop_conversion(self):
+        self.dev.xfer([STOP])
+
     def close(self):
+        if self.start_gpio is not None:
+            self.start_gpio.close()
         self.dev.close()

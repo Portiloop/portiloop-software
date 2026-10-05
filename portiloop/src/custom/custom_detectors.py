@@ -1,18 +1,22 @@
+import logging
 import time
+from enum import Enum, auto
 
 import numpy as np
-from scipy import signal
+# from scipy import signal
 
 from portiloop.src.core.detection import Detector
 from portiloop.src.core.constants import DEFAULT_MODEL_PATH
 from portiloop.src.core.utils import Dummy
-from portiloop.src.custom.custom_processors import FIR
+# from portiloop.src.custom.custom_processors import FIR
 
 from portiloop.src import ADS
 if ADS:
     from pycoral.utils import edgetpu
 else:
     import tensorflow as tf
+
+logger = logging.getLogger(__name__)
 
 
 class SleepSpindleRealTimeDetector(Detector):
@@ -138,9 +142,14 @@ class SleepSpindleRealTimeDetector(Detector):
         output_data_y = (int(output_data_y) - output_zero_point) * output_scale
 
         if self.verbose:
-            print(f"Computed output {output_data_y} in {end_time - start_time} seconds")
+            logger.info("Computed output %s in %s seconds", output_data_y, end_time - start_time)
 
         return output_data_y, output_data_h
+
+
+class SODetectionMode(Enum):
+    FAST = auto()
+    SECOND_UPSTATE = auto()
 
 
 class SlowOscillationDetector(Detector):
@@ -150,22 +159,22 @@ class SlowOscillationDetector(Detector):
         self.record_csv = not isinstance(self.csv_recorder, Dummy) and csv_recorder is not None
 
         fs = config_dict["frequency"]
-        numtaps = 17
+        # numtaps = 17
         verbose = False
         channel = config_dict["channel_detection"]
         record = False
 
         self.fs = fs
-        self.numtaps = numtaps
+        # self.numtaps = numtaps
         self.verbose = verbose
         self.channel = channel
 
-        self.th_PaP = 75
-        self.th_Neg = 40
-        self.min_tNe = 125
-        self.max_tNe = 1500
-        self.max_tPo = 1000
-        self.fmin_max = [0.16, 4]
+        self.th_PaP = 75  # total amplitude threshold
+        self.th_Neg = 40  # negative amplitude threshold
+        self.min_tNe = 125  # minimum duration spent below 0 (in ms)
+        self.max_tNe = 1500  # maximum duration spent below 0 (in ms)
+        self.max_tPo = 1000  # maximum duration spent above 0 (in ms)
+        # self.fmin_max = [0.16, 4]
 
         self.marker = []
         # self.buffer = []
@@ -174,31 +183,27 @@ class SlowOscillationDetector(Detector):
         self.count = 0
         self.record = record
 
-        coefficients = signal.firwin(self.numtaps, self.fmin_max, fs=self.fs, pass_zero="bandpass")
-        self._fir = FIR(nb_channels=1, coefficients=coefficients)
+        # coefficients = signal.firwin(self.numtaps, self.fmin_max, fs=self.fs, pass_zero="bandpass")
+        # self._fir = FIR(nb_channels=1, coefficients=coefficients)
 
-        self.max_peak = None
-        self.min_peak = None
-        self.down_duration = None
-        self.up_duration = None
-        self.duration = None
-        self.prev_signal = None
-
-        self.init_segment()
-
-    def init_segment(self):
-        self.max_peak = -1
+        self.max_peak = -1000
         self.min_peak = 1000
         self.down_duration = 0
         self.up_duration = 0
-        self.duration = 0
         self.prev_signal = None
+
+        self.detection_mode = SODetectionMode.FAST
+        self.counter_upstate = None
+        self.t_upstate = None
+        self.est_t_upstate = None
+        self.alpha = 0.1
 
     def detect(self, datapoints):
         results = []
         for point in datapoints:
             self.count += 1
-            result = self.detect_point(point[self.channel - 1])
+            tsignal = point[self.channel - 1]
+            result = self.run_detection(tsignal)
             results.append(result)
             if result and self.record:
                 self.so_results.append(self.count)
@@ -206,38 +211,83 @@ class SlowOscillationDetector(Detector):
             self.csv_recorder.append_detection_signal_buffer([int(r) for r in results])
         return results, datapoints
 
-    def detect_point(self, point):
-        tsignal = self._fir.filter(np.array([point]))[0]  # FIXME: this should be done in the processor, not in the detector
+    def run_detection(self, tsignal):
+
+        # increment counter
+        if self.counter_upstate is not None:
+            self.counter_upstate += 1
+
+        # compute historical maximum
         if tsignal > self.max_peak:
             self.max_peak = tsignal
+            if self.counter_upstate is not None:
+                self.t_upstate = self.counter_upstate
+        
+        # compute historical minimum
         if tsignal < self.min_peak:
             self.min_peak = tsignal
-
+        
+        # compute the durations spent above and below 0 (in samples)
         if tsignal >= 0:
             self.up_duration += 1
         else:
             self.down_duration += 1
 
-        self.duration += 1
+        tp2p = abs(self.max_peak - self.min_peak)  # voltage amplitude peak-to-peak
+        tneg = abs(self.min_peak)  # amplitude portion below 0
+        tne = self.down_duration / self.fs * 1000  # duration spend below zero (in ms)
+        tpo = self.up_duration / self.fs * 1000  # duration spent above zero (in ms)
 
-        tp2p = abs(self.max_peak - self.min_peak)
-        tneg = abs(self.min_peak)
-        tne = self.down_duration / self.fs * 1000
-        tpo = self.up_duration / self.fs * 1000
-        # tmfr = self.fs / self.duration
+        # SO detection condition:
+        so_detected = (
+            tp2p > self.th_PaP  # peak-to-peak > amplitude threshold
+            and tneg > self.th_Neg  # amplitude portion below 0 > negative amplitude threshold
+            and self.min_tNe < tne < self.max_tNe  # the duration spent below 0 is within range
+            and tpo < self.max_tPo  # duration spent above zero < maximum duration above zero
+        )
 
-        self.prev_signal = self.prev_signal or tsignal
+        # SO second peak detection condition:
+        so_upstate_detected = (
+            so_detected
+            and self.est_t_upstate is not None
+            and self.counter_upstate is not None
+            and self.counter_upstate == self.est_t_upstate
+        )
 
-        if self.prev_signal * tsignal <= 0 < self.prev_signal:
-            self.init_segment()
+        self.prev_signal = self.prev_signal if self.prev_signal is not None else tsignal  # previous filtered data point
 
-        self.prev_signal = tsignal
+        if self.prev_signal * tsignal <= 0:  # if the signal crosses 0
+            if 0 < self.prev_signal:  # if the signal is falling (ending upstate)
+                if self.counter_upstate is not None and so_detected:  # if an SO detection is ending here
+                    # compute how long it took after upward zero-crossing to reach the peak
+                    if self.est_t_upstate is None:
+                        self.est_t_upstate = self.t_upstate
+                    else:
+                        # compute a running average
+                        self.est_t_upstate = int(self.alpha * self.t_upstate + (1 - self.alpha) * self.est_t_upstate)
 
-        if (
-            tp2p > self.th_PaP
-            and tneg > self.th_Neg
-            and self.min_tNe < tne < self.max_tNe
-            and tpo < self.max_tPo
-        ):
-            return True
-        return False
+                # reinitialize the SO detection parameters
+                self.max_peak = -1000
+                self.min_peak = 1000
+                self.down_duration = 0
+                self.up_duration = 0
+                self.prev_signal = None
+                self.counter_upstate = None
+
+            else:  # if the signal is rising (ending downstate)
+                # enable the upstate counter
+                self.counter_upstate = 0
+                self.t_upstate = 0
+
+        self.prev_signal = tsignal  # update previous data point to current
+
+        if self.detection_mode == SODetectionMode.FAST:
+            return so_detected
+        else:  # upstate detection
+            return so_upstate_detected
+    
+
+class SOUpstateDetector(SlowOscillationDetector):
+    def __init__(self, config_dict, lsl_streamer=None, csv_recorder=None):
+        super().__init__(config_dict, lsl_streamer, csv_recorder)
+        self.detection_mode = SODetectionMode.SECOND_UPSTATE

@@ -1,4 +1,5 @@
 import csv
+import logging
 import multiprocessing as mp
 import time
 from abc import ABC, abstractmethod
@@ -6,6 +7,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 from portiloop.src.core.hardware.config_hardware import ADS_LSB
+
+logger = logging.getLogger(__name__)
 
 
 class CaptureBackend(ABC):
@@ -72,7 +75,7 @@ class ADSBackend(CaptureBackend):
         self._p_capture.start()
         self.capture_started = True
         # If any issue arises, we want to kill this process
-        print(f"PID capture: {self._p_capture.pid}. Kill this process if program crashes before end of execution.")
+        logger.info("PID capture: %s. Kill this process if program crashes before end of execution.", self._p_capture.pid)
 
     def send_msg(self, msg):
         """
@@ -123,7 +126,7 @@ class FileBackend(CaptureBackend):
         Backend that reads from a csv file. Mostly used for debugging.
         """
         self.filename = filename
-        print(f"Reading from file {filename}")
+        logger.info("Reading from file %s", filename)
         self.stop_msg = False
         self.num_channels = num_channels
         self.channel_detect = channel_detect
