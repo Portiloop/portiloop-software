@@ -348,10 +348,13 @@ class SleepSpindleRealTimeStimulator(DelayedStimulator):
         return res
 
     def send_stimulation(self, lsl_text, sound):
+        stim_enabled = self.config_dict.get('stimulate', True) if self.config_dict is not None else True
+        if not stim_enabled and sound:
+            lsl_text = "SHAM_STIM"
         # Send lsl marker
         self.lsl_streamer.push_marker(lsl_text)
         # Send sound to patient
-        if sound:
+        if sound and stim_enabled:
             with self._lock:
                 if self._thread is None:
                     self._thread = Thread(target=self._t_sound, daemon=True)

@@ -256,6 +256,7 @@ class PortiloopSimulator:
         min_delay: Optional[float] = None,
         max_delay: Optional[float] = None,
         inter_stim_delay: Optional[float] = None,
+        sleep_timeout: Optional[float] = None,
         lsl: bool = False,
         quiet: bool = False,
     ):
@@ -280,6 +281,7 @@ class PortiloopSimulator:
             min_delay=min_delay,
             max_delay=max_delay,
             inter_stim_delay=inter_stim_delay,
+            sleep_timeout=sleep_timeout,
             lsl=lsl,
         )
 
@@ -307,6 +309,7 @@ class PortiloopSimulator:
         min_delay: Optional[float],
         max_delay: Optional[float],
         inter_stim_delay: Optional[float],
+        sleep_timeout: Optional[float],
         lsl: bool,
     ) -> Dict[str, Any]:
         config = dict(DEFAULT_CONFIG_DICT)
@@ -347,6 +350,12 @@ class PortiloopSimulator:
             config["max_delay"] = float(max_delay) / 1000.0 if float(max_delay) > 1.0 else float(max_delay)
         if inter_stim_delay is not None:
             config["inter_stim_delay"] = float(inter_stim_delay) / 1000.0 if float(inter_stim_delay) > 1.0 else float(inter_stim_delay)
+        if sleep_timeout is not None:
+            config["sleep_timeout"] = float(sleep_timeout)
+        elif "sleep_timeout" in config:
+            config["sleep_timeout"] = float(config["sleep_timeout"])
+        else:
+            config["sleep_timeout"] = 0.0
         config["lsl"] = bool(lsl)
         config["filter"] = True
         config["detect"] = True
@@ -442,6 +451,9 @@ class PortiloopSimulator:
         frequency = self.config["frequency"]
         dt = 1.0 / frequency if frequency > 0 else 0.004
 
+        sleep_timeout_min = float(self.config.get("sleep_timeout", 0.0))
+        sleep_timeout_sec = sleep_timeout_min * 60.0
+
         if not self.quiet:
             logger.info("==================================================")
             logger.info("Portiloop Simulator")
@@ -451,6 +463,10 @@ class PortiloopSimulator:
             logger.info("Detection Channel:   %d", det_channel)
             cond_str = "Condition B (STIM)" if self.config["stimulate"] else "Condition A (NOSTIM)"
             logger.info("Condition:           %s", cond_str)
+            if sleep_timeout_min > 0:
+                logger.info("Sleep Timeout:       %.1f minutes (skipping first %d s)", sleep_timeout_min, int(sleep_timeout_sec))
+            else:
+                logger.info("Sleep Timeout:       None (immediate detection)")
             logger.info("LSL Streaming:       %s", self.lsl)
             logger.info("Mapped channels:     %s", {f"ch{k+1}": f"col_{v}" for k, v in channel_col_map.items()})
             logger.info("==================================================")
@@ -506,8 +522,14 @@ class PortiloopSimulator:
             if detector_cls is not None:
                 detector = detector_cls(self.config, lsl_streamer, csv_recorder)
 
-            if stimulator_cls is not None and self.config["stimulate"]:
+            if stimulator_cls is not None:
                 stimulator = stimulator_cls(self.config, lsl_streamer, csv_recorder)
+
+            # Determine initial sleep timeout pause state
+            is_paused = (sleep_timeout_sec > 0.0)
+            if self.lsl and detector is not None:
+                from portiloop.src.core.output import LSLStreamer
+                lsl_streamer.push_marker(LSLStreamer.string_for_detection_activation(is_paused))
 
             # Replay data loop
             with open(self.input_path, "r", encoding="utf-8") as f:
@@ -516,7 +538,6 @@ class PortiloopSimulator:
                     next(reader, None)  # skip header row
 
                 last_progress_t = time.perf_counter()
-                stim_on_flag = 1 if self.config["stimulate"] else 0
 
                 for row in reader:
                     if not row:
@@ -532,6 +553,21 @@ class PortiloopSimulator:
                         sim_t = total_samples * dt
 
                     self.sim_clock.set_time(sim_t)
+
+                    # Check if sleep timeout elapsed in simulated recording time
+                    sim_elapsed = total_samples * dt
+                    if is_paused and sim_elapsed >= sleep_timeout_sec:
+                        is_paused = False
+                        if self.lsl and detector is not None:
+                            from portiloop.src.core.output import LSLStreamer
+                            lsl_streamer.push_marker(LSLStreamer.string_for_detection_activation(False))
+                        if not self.quiet:
+                            logger.info(
+                                "\n[Sleep Timeout Elapsed] Resumed detection and stimulation at simulated time %.1fs",
+                                sim_elapsed
+                            )
+
+                    stim_on_flag = 0 if is_paused else 1
 
                     # Extract raw channels
                     raw_point = np.zeros(nb_channels, dtype=np.float64)
@@ -558,9 +594,9 @@ class PortiloopSimulator:
                         if processor is not None:
                             lsl_streamer.push_filtered(filtered_list[0])
 
-                    # 2. Detection
+                    # 2. Detection (skipped during sleep timeout)
                     det_signal = None
-                    if detector is not None:
+                    if detector is not None and not is_paused:
                         det_signal = detector.detect(filtered_list)
                         # Check detection result count
                         if isinstance(det_signal, tuple) and len(det_signal) > 0:
@@ -568,8 +604,8 @@ class PortiloopSimulator:
                             if any(res_list):
                                 total_detections += 1
 
-                    # 3. Stimulation
-                    if stimulator is not None and det_signal is not None:
+                    # 3. Stimulation (skipped during sleep timeout)
+                    if stimulator is not None and not is_paused and det_signal is not None:
                         stimulator.stimulate(det_signal)
 
                     # 4. Record to CSV
@@ -677,6 +713,7 @@ def main():
     parser.add_argument("--min-delay", type=float, default=None, help="Minimum stimulation delay in ms.")
     parser.add_argument("--max-delay", type=float, default=None, help="Maximum stimulation delay in ms.")
     parser.add_argument("--inter-stim-delay", type=float, default=None, help="Inter-stimulation delay in ms.")
+    parser.add_argument("--sleep-timeout", type=float, default=None, help="Sleep timeout in minutes (skip detections for initial duration). Defaults to metadata or 0.")
     parser.add_argument("--lsl", action="store_true", default=False, help="Enable streaming raw, filtered, and markers over LSL.")
     parser.add_argument("-q", "--quiet", action="store_true", default=False, help="Suppress real-time progress updates.")
 
@@ -702,6 +739,7 @@ def main():
         min_delay=args.min_delay,
         max_delay=args.max_delay,
         inter_stim_delay=args.inter_stim_delay,
+        sleep_timeout=args.sleep_timeout,
         lsl=args.lsl,
         quiet=args.quiet,
     )

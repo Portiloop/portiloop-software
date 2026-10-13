@@ -212,7 +212,7 @@ def start_capture(
 
         create_processor = config_dict['filter'] and processor_cls is not None
         create_detector = config_dict['detect'] and detector_cls is not None
-        create_stimulator = config_dict['detect'] and config_dict['stimulate'] and stimulator_cls is not None
+        create_stimulator = config_dict['detect'] and stimulator_cls is not None
 
         # Initialize recording if requested
         if config_dict['record']:
