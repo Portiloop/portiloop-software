@@ -122,6 +122,9 @@ class ExperimentState:
         run_dict['frequency'] = self.select_freq
         run_dict["filter_settings"]["power_line"] = self.power_line
         run_dict['channel_detection'] = int(self.channel_detection)
+        run_dict['pipeline_name'] = self.pipeline_key
+        run_dict['pipeline'] = self.pipeline_key
+        run_dict['sleep_timeout'] = self.sleep_timeout
         run_dict['stimulate'] = self.stim_on
         run_dict['python_clock'] = self.python_clock
         run_dict['lsl'] = self.lsl
@@ -190,7 +193,7 @@ class ExperimentState:
 
         # Set the variables for the experiment
         self.time_started = datetime.now()
-        stim_str = "CONDA" if self.stim_on else "CONDB"
+        stim_str = "CONDB" if self.stim_on else "CONDA"
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
         prefix = self.custom_exp_name or portiloop_ID
         self.exp_name = f"{prefix}_{time_str}_{stim_str}.csv"
@@ -470,10 +473,10 @@ class SimpleUI:
 
                     test_sound_button = ui.button('Test Sound 🔊', on_click=test_sound)
 
-                    stim_toggle = ui.toggle(['Cond B', 'Cond A'], value='Cond B').bind_value(
+                    stim_toggle = ui.toggle(['Cond A', 'Cond B'], value='Cond B' if exp_state.stim_on else 'Cond A').bind_value(
                         exp_state, 'stim_on',
-                        forward=lambda x: x == 'Cond A',
-                        backward=lambda x: 'Cond A' if x else 'Cond B'
+                        forward=lambda x: x == 'Cond B',
+                        backward=lambda x: 'Cond B' if x else 'Cond A'
                     )
 
                     ui.separator()
