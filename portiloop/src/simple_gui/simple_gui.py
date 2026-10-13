@@ -185,7 +185,7 @@ class ExperimentState:
 
         # Set the variables for the experiment
         self.time_started = datetime.now()
-        stim_str = "STIMON" if self.stim_on else "STIMOFF"
+        stim_str = "CONDA" if self.stim_on else "CONDB"
         time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
         prefix = self.custom_exp_name or portiloop_ID
         self.exp_name = f"{prefix}_{time_str}_{stim_str}.csv"
@@ -399,10 +399,10 @@ class SimpleUI:
 
                     test_sound_button = ui.button('Test Sound 🔊', on_click=test_sound)
 
-                    stim_toggle = ui.toggle(['Stim Off', 'Stim On'], value='Stim Off').bind_value(
+                    stim_toggle = ui.toggle(['Cond B', 'Cond A'], value='Cond B').bind_value(
                         exp_state, 'stim_on',
-                        forward=lambda x: x == 'Stim On',
-                        backward=lambda x: 'Stim On' if x else 'Stim Off'
+                        forward=lambda x: x == 'Cond A',
+                        backward=lambda x: 'Cond A' if x else 'Cond B'
                     )
 
                     ui.separator()
