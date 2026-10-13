@@ -1,8 +1,10 @@
+import asyncio
 import logging
 from multiprocessing import Process, Queue, Value
 import time
 import os
 import socket
+import subprocess
 from datetime import datetime
 import json
 from pathlib import Path
@@ -10,13 +12,13 @@ from pathlib import Path
 import alsaaudio
 from alsaaudio import ALSAAudioError
 import psutil
-from nicegui import ui
+from nicegui import app, ui
 
 from portiloop import __version__
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.utils import DummyAlsaMixer
 from portiloop.src.core.hardware.config_hardware import to_ads_frequency
-from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED, STATE_PATH, NB_CHANNELS
+from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED, STATE_PATH, NB_CHANNELS, DEFAULT_CONFIG_DICT
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_pipelines import PIPELINES
 
@@ -47,6 +49,7 @@ PERSISTED_FIELDS = (
     "sleep_timeout",
     "select_freq",
     "power_line",
+    "channel_detection",
     "pipeline_key",
     "custom_exp_name",
     "stim_on",
@@ -91,6 +94,7 @@ class ExperimentState:
         self.sleep_timeout = 0
         self.select_freq = 250
         self.power_line = 60
+        self.channel_detection = DEFAULT_CONFIG_DICT.get('channel_detection', 6)
         self.python_clock = RUN_SETTINGS['python_clock']
         self.persistent_file_name = STATE_PATH / "Previous run.json"
 
@@ -117,6 +121,7 @@ class ExperimentState:
         run_dict["channel_states"] = ["simple"] * NB_CHANNELS  # enable all channels
         run_dict['frequency'] = self.select_freq
         run_dict["filter_settings"]["power_line"] = self.power_line
+        run_dict['channel_detection'] = int(self.channel_detection)
         run_dict['stimulate'] = self.stim_on
         run_dict['python_clock'] = self.python_clock
         run_dict['lsl'] = self.lsl
@@ -379,6 +384,72 @@ class SimpleUI:
             else:
                 logger.warning("Attempted to load a preset but preset_key is None")
 
+        async def sync_clock(client=None, force=False):
+            # Avoid changing the system clock during an active recording to prevent timestamp jumps
+            if exp_state._t_capture is not None and exp_state._t_capture.is_alive():
+                logger.info("Recording in progress, skipping clock synchronization.")
+                return
+
+            try:
+                if client is not None and hasattr(client, 'connected'):
+                    try:
+                        await asyncio.wait_for(client.connected(), timeout=5.0)
+                    except Exception:
+                        pass
+
+                if client is not None and hasattr(client, 'run_javascript'):
+                    browser_time = await client.run_javascript('Date.now() / 1000', timeout=5.0)
+                else:
+                    browser_time = await ui.run_javascript('Date.now() / 1000', timeout=5.0)
+
+                if browser_time is None:
+                    return
+
+                browser_time = float(browser_time)
+                device_time = time.time()
+                diff = browser_time - device_time
+
+                # If the difference is negligible (< 1.5s) and not forced, consider it already in sync
+                if not force and abs(diff) < 1.5:
+                    logger.debug("Portiloop clock is already in sync with browser (delta: %.2fs).", diff)
+                    return
+
+                logger.info("Synchronizing Portiloop clock with browser (delta: %.2fs)...", diff)
+                res = subprocess.run(
+                    ['sudo', 'date', '-u', '-s', f'@{browser_time:.3f}'],
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                logger.info("System clock set via date: %s", res.stdout.strip())
+
+                # Persist to hardware RTC if available
+                try:
+                    subprocess.run(['sudo', 'hwclock', '-w'], check=False)
+                except Exception:
+                    pass
+
+                logger.info("System clock successfully synchronized to: %s", datetime.now())
+                msg = f"Portiloop clock synchronized with browser ({datetime.now().strftime('%H:%M:%S')})"
+                if client is not None:
+                    try:
+                        with client:
+                            ui.notify(msg, type='positive')
+                    except Exception:
+                        ui.notify(msg, type='positive')
+                else:
+                    ui.notify(msg, type='positive')
+            except Exception as e:
+                err = e.stderr.strip() if hasattr(e, 'stderr') and e.stderr else str(e)
+                logger.warning("Could not synchronize clock with browser: %s", err)
+                if force:
+                    ui.notify(f"Failed to sync clock: {err}", type='warning')
+
+        app.on_connect(sync_clock)
+
+        async def manual_sync():
+            await sync_clock(force=True)
+
         ui.label('Portiloop 🧠').classes('text-4xl font-mono')
         ui.label('Control Center').classes('text-2xl font-mono')
 
@@ -473,12 +544,19 @@ class SimpleUI:
                         value=exp_state.power_line,
                         label="Notch filter frequency (Hz)").bind_value(exp_state, 'power_line').classes('w-3/4')
                     ui.separator().classes('w-2/3')
+                    possible_channels = [i + 1 for i in range(RUN_SETTINGS['nb_channels'])]
+                    select_channel_detect = ui.select(
+                        possible_channels,
+                        value=exp_state.channel_detection,
+                        label="Detection channel").bind_value(exp_state, 'channel_detection').classes('w-3/4')
+                    ui.separator().classes('w-2/3')
                     ui.label('Clock:')
                     clock_toggle = ui.toggle(['ADS', 'Coral'], value='Coral' if exp_state.python_clock else 'ADS').bind_value(
                         exp_state, 'python_clock',
                         forward=lambda x: x == 'Coral',
                         backward=lambda x: 'Coral' if x else 'ADS'
                     )
+                    sync_clock_btn = ui.button('Sync Clock with Browser 🕒', on_click=manual_sync)
                     ui.separator().classes('w-2/3')
                     sleep_timeout = ui.slider(min=0, max=180, value=exp_state.sleep_timeout).bind_value(exp_state, 'sleep_timeout').classes('w-3/4') #.props('label-always')
                     ui.label().bind_text_from(sleep_timeout, 'value', backward=lambda x: f"Stimulation starts after: {x} minutes")
@@ -506,7 +584,9 @@ class SimpleUI:
                     start_button.bind_enabled_to(filename_box)
                     start_button.bind_enabled_to(select_freq)
                     start_button.bind_enabled_to(select_notch)
+                    start_button.bind_enabled_to(select_channel_detect)
                     start_button.bind_enabled_to(clock_toggle)
+                    start_button.bind_enabled_to(sync_clock_btn)
                     start_button.bind_enabled_to(sleep_timeout)
                     start_button.bind_enabled_to(sleep_timeout_timer, 'active', forward=lambda x: not x)
 

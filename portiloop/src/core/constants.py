@@ -72,7 +72,7 @@ DEFAULT_CONFIG_DICT = {
     "python_clock": True,
     "signal_labels": [f"ch{i+1}" for i in range(NB_CHANNELS)],
     "channel_states": ["disabled" for _ in range(NB_CHANNELS)],
-    "channel_detection": 2,
+    "channel_detection": 6,
     "detection_sound": "15msPN_48kHz_norm_stereo.wav",
     "stim_delay_mode": "Time",  # possible values: 'Time', 'Peak', 'Valley'
     "min_delay": 0.0,
