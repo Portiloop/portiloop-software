@@ -47,6 +47,7 @@ PERSISTED_FIELDS = (
     "max_delay",
     "inter_stim_delay",
     "sleep_timeout",
+    "volume",
     "select_freq",
     "power_line",
     "channel_detection",
@@ -98,7 +99,34 @@ class ExperimentState:
         self.python_clock = RUN_SETTINGS['python_clock']
         self.persistent_file_name = STATE_PATH / "Previous run.json"
 
+        self._init_mixer()
+        try:
+            self.volume = int(self.mixer.getvolume()[0])
+        except Exception:
+            self.volume = DEFAULT_CONFIG_DICT.get('volume', 100)
+
         self.run_dict = self._build_run_dict_from_ui_state()
+
+    def _init_mixer(self):
+        try:
+            mixers = alsaaudio.mixers()
+            if len(mixers) <= 0:
+                logger.warning("No ALSA mixer found.")
+                self.mixer = DummyAlsaMixer()
+            else:
+                self.mixer = alsaaudio.Mixer(control='SoftMaster', device='dmixer')
+        except Exception as e:
+            logger.warning("No ALSA mixer found. Volume control will not be available. (%s)", e)
+            self.mixer = DummyAlsaMixer()
+
+    def set_volume(self, val):
+        self.volume = int(val)
+        if not hasattr(self, 'mixer') or self.mixer is None:
+            self._init_mixer()
+        try:
+            self.mixer.setvolume(self.volume)
+        except Exception as e:
+            logger.warning("Failed to set ALSA volume: %s", e)
 
     def _get_presets(self):
         return sorted(p.stem for p in STATE_PATH.glob("*.json"))
@@ -125,6 +153,7 @@ class ExperimentState:
         run_dict['pipeline_name'] = self.pipeline_key
         run_dict['pipeline'] = self.pipeline_key
         run_dict['sleep_timeout'] = self.sleep_timeout
+        run_dict['volume'] = int(self.volume)
         run_dict['stimulate'] = self.stim_on
         run_dict['python_clock'] = self.python_clock
         run_dict['lsl'] = self.lsl
@@ -175,6 +204,9 @@ class ExperimentState:
                 if self.pipeline_key not in self.pipeline_keys:
                     self.pipeline_key = self.pipeline_keys[0]
 
+                if hasattr(self, 'volume'):
+                    self.set_volume(self.volume)
+
             except Exception as e:
                 logger.exception("Caught exception while loading app state")
 
@@ -211,19 +243,8 @@ class ExperimentState:
         else:
             self.pause_value.value = False
 
-        try:
-            mixers = alsaaudio.mixers()
-            if len(mixers) <= 0:
-                logger.warning("No ALSA mixer found.")
-                mixer = DummyAlsaMixer()
-            else:
-                mixer = alsaaudio.Mixer(control='SoftMaster', device='dmixer')
-        except ALSAAudioError as e:
-            logger.warning("No ALSA mixer found. Volume control will not be available. (%s)", e)
-            mixer = DummyAlsaMixer()
-
-        volume = mixer.getvolume()[0]  # we will set the same volume on all channels
-        self.run_dict['volume'] = volume
+        self.set_volume(self.volume)
+        self.run_dict['volume'] = int(self.volume)
 
         workspace_dir = CSV_PATH
         self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name.split('.')[0], self.exp_name)
@@ -327,6 +348,7 @@ class SimpleUI:
             stop()
 
         def test_sound():
+            exp_state.set_volume(exp_state.volume)
             stimulator_cls = self._pipelines[exp_state.pipeline_key]["stimulator"]
             if stimulator_cls is not None:
                 stimulator = self._pipelines[exp_state.pipeline_key]["stimulator"](RUN_SETTINGS)
@@ -565,6 +587,9 @@ class SimpleUI:
                     ui.label().bind_text_from(sleep_timeout, 'value', backward=lambda x: f"Stimulation starts after: {x} minutes")
                     sleep_timeout_timer = ui.timer(10, exp_state.check_sleep_timeout)
                     ui.separator().classes('w-2/3')
+                    volume_slider = ui.slider(min=0, max=100, step=1, value=exp_state.volume, on_change=lambda e: exp_state.set_volume(e.value)).bind_value(exp_state, 'volume').classes('w-3/4')
+                    ui.label().bind_text_from(volume_slider, 'value', backward=lambda x: f"Sound output volume: {int(x)}%")
+                    ui.separator().classes('w-2/3')
                     lsl_checker = ui.checkbox('Stream LSL', value=exp_state.lsl).bind_value(exp_state, 'lsl')
                     save_checker = ui.checkbox('Save recording locally', value=exp_state.save_local).bind_value(exp_state, 'save_local')
                     filename_box = ui.input(value='', label='Recording name').props('clearable').bind_value(exp_state, 'custom_exp_name')
@@ -592,6 +617,7 @@ class SimpleUI:
                     start_button.bind_enabled_to(sync_clock_btn)
                     start_button.bind_enabled_to(sleep_timeout)
                     start_button.bind_enabled_to(sleep_timeout_timer, 'active', forward=lambda x: not x)
+                    start_button.bind_enabled_to(volume_slider)
 
         if ENABLE_DISPLAY:
             line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)
