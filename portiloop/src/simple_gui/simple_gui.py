@@ -5,6 +5,7 @@ import time
 import os
 import socket
 import subprocess
+import threading
 from datetime import datetime
 import json
 from pathlib import Path
@@ -16,8 +17,11 @@ from nicegui import app, ui
 
 from portiloop import __version__
 from portiloop.src.core.capture import start_capture
-from portiloop.src.core.utils import DummyAlsaMixer
+from portiloop.src.core.utils import DummyAlsaMixer, get_hardware_version
+from portiloop.src.core.hardware.backend import Backend
 from portiloop.src.core.hardware.config_hardware import to_ads_frequency
+from portiloop.src.core.hardware.impedance import ImpedanceMeter, results_to_metadata, NOT_CHECKED
+from portiloop.src.core.impedance_display import results_html
 from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED, STATE_PATH, NB_CHANNELS, DEFAULT_CONFIG_DICT
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_pipelines import PIPELINES
@@ -36,6 +40,7 @@ TIMER_READ_DISPLAY_QUEUE = 1.0
 
 TIMER_SD_CARD = 5.0
 TIMER_CHECK_CAPTURE = 2.0
+TIMER_IMPEDANCE_DISPLAY = 0.5
 
 
 PERSISTED_FIELDS = (
@@ -61,6 +66,15 @@ PERSISTED_FIELDS = (
 class ExperimentState:
     def __init__(self, pipelines=PIPELINES):
         self._pipelines = pipelines
+
+        # Impedance check (the last results are saved in the metadata of the next recordings)
+        self.impedance_results = None  # {channel (0-indexed): ImpedanceResult} of the last check, None if no check
+        self.impedance_time = None  # datetime of the last check
+        self.impedance_error = None
+        self.impedance_version = 0  # incremented at each new result or error, to refresh the display
+        self._impedance_thread = None
+        self._impedance_stop = threading.Event()
+
         self.pipeline_keys = list(self._pipelines.keys())
         self.pipeline_key = self.pipeline_keys[0]
 
@@ -161,6 +175,8 @@ class ExperimentState:
         run_dict['min_delay'] = int(self.min_delay) / 1000 if self.min_delay is not None else 0
         run_dict['max_delay'] = int(self.max_delay) / 1000 if self.max_delay is not None else 0
         run_dict['inter_stim_delay'] = int(self.inter_stim_delay) / 1000 if self.inter_stim_delay is not None else 0
+        run_dict['impedances_kohm'] = results_to_metadata(self.impedance_results, NB_CHANNELS)
+        run_dict['impedance_check_time'] = self.impedance_time.isoformat(timespec='seconds') if self.impedance_time else NOT_CHECKED
         return run_dict
 
     def save(self, filepath: Path = None):
@@ -212,7 +228,61 @@ class ExperimentState:
 
             self.run_dict = self._build_run_dict_from_ui_state()
 
+    def impedance_check_running(self):
+        return self._impedance_thread is not None and self._impedance_thread.is_alive()
+
+    def start_impedance_check(self, live):
+        """
+        Measures the electrode impedances in a background thread, once or until stop_impedance_check (live).
+        """
+        if self.impedance_check_running() or self._t_capture is not None:
+            return
+        self._impedance_stop.clear()
+        self.impedance_error = None
+        self._impedance_thread = threading.Thread(target=self._impedance_worker, args=(live,), daemon=True)
+        self._impedance_thread.start()
+
+    def stop_impedance_check(self):
+        """
+        Stops the impedance check and waits until the ADS1299 is released.
+        """
+        self._impedance_stop.set()
+        if self._impedance_thread is not None:
+            self._impedance_thread.join()
+            self._impedance_thread = None
+
+    def _impedance_worker(self, live):
+        backend = None
+        meter = None
+        try:
+            backend = Backend(get_hardware_version())
+            meter = ImpedanceMeter(backend, NB_CHANNELS, vref=RUN_SETTINGS['vref'])
+            meter.configure(range(NB_CHANNELS))
+            while not self._impedance_stop.is_set():
+                results = meter.measure_electrodes(stop_event=self._impedance_stop)
+                if results is None:  # interrupted
+                    break
+                self.impedance_results = results
+                self.impedance_time = datetime.now()
+                self.impedance_version += 1
+                if not live:
+                    break
+        except Exception as e:
+            logger.exception("Impedance check failed.")
+            self.impedance_error = str(e)
+            self.impedance_version += 1
+        finally:
+            try:
+                if meter is not None:
+                    meter.close()
+            finally:
+                if backend is not None:
+                    backend.close()
+
     def start(self):
+        # The impedance check and the recording cannot use the ADS1299 at the same time
+        self.stop_impedance_check()
+
         # Clean up possible messages from previous runs
         while not self.q_msg.empty():
             self.q_msg.get()
@@ -475,6 +545,37 @@ class SimpleUI:
         async def manual_sync():
             await sync_clock(force=True)
 
+        def toggle_live_impedance(e):
+            if e.value:
+                exp_state.start_impedance_check(live=True)
+            else:
+                exp_state.stop_impedance_check()
+
+        displayed_impedance_version = [-1]
+
+        def refresh_impedance():
+            recording = exp_state._t_capture is not None
+            running = exp_state.impedance_check_running()
+            check_button.enabled = not (recording or running)
+            live_switch.enabled = not recording
+            if live_switch.value and not running:  # stopped by a recording or an error
+                live_switch.value = False
+            if displayed_impedance_version[0] != exp_state.impedance_version:
+                displayed_impedance_version[0] = exp_state.impedance_version
+                if exp_state.impedance_results is not None:
+                    impedance_html.content = results_html(exp_state.impedance_results)
+            if recording:
+                status = "Unavailable during a recording."
+            elif exp_state.impedance_error is not None:
+                status = f"Error: {exp_state.impedance_error}"
+            elif running:
+                status = "Measuring..."
+            elif exp_state.impedance_time is not None:
+                status = f"Last check: {exp_state.impedance_time.strftime('%H:%M:%S')} (saved with the next recording)"
+            else:
+                status = "No check performed yet."
+            impedance_status.set_text(status)
+
         ui.label('Portiloop 🧠').classes('text-4xl font-mono')
         ui.label('Control Center').classes('text-2xl font-mono')
 
@@ -483,6 +584,7 @@ class SimpleUI:
 
         with ui.tabs().classes('w-full') as tabs:
             control_tab = ui.tab('Control', icon='home')
+            check_tab = ui.tab('Check', icon='electrical_services')
             output_tab = ui.tab('Output', icon='timeline')
             advanced_tab = ui.tab('Advanced', icon='settings')
 
@@ -520,6 +622,19 @@ class SimpleUI:
                     sd_card_timer = ui.timer(TIMER_SD_CARD, exp_state.check_sd_card)
                     capture_timer = ui.timer(TIMER_CHECK_CAPTURE, check_capture_ended)
                     start_button.bind_enabled_to(timer, 'active', forward=lambda x: not x)
+
+            ############### Check Tab ####################
+            with ui.tab_panel(check_tab).classes('w-full items-center'):
+                with ui.column().classes('w-full items-center'):
+                    ui.label('Electrode impedance check').classes('text-2xl')
+                    with ui.row().classes('items-center'):
+                        check_button = ui.button('Check ⚡', on_click=lambda: exp_state.start_impedance_check(live=False)).classes('text-xl')
+                        live_switch = ui.switch('Live', on_change=toggle_live_impedance)
+                    impedance_html = ui.html('')
+                    impedance_status = ui.label()
+                    ui.label("chN is the electrode on pin N of the connector. "
+                             "The impedance of the reference cannot be measured, only its connection.").classes('text-sm')
+                    ui.timer(TIMER_IMPEDANCE_DISPLAY, refresh_impedance)
 
             ############### Output Tab ####################
             with ui.tab_panel(output_tab).classes('w-full items-center'):

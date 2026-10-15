@@ -14,7 +14,7 @@ from portiloop.src.core.constants import CSV_PATH, SIGNAL_SAMPLES_FOLDER
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_pipelines import PIPELINES, DEFAULT_PIPELINE_KEY
 from portiloop.src.custom.custom_processors import SpindleFilter
-from portiloop.src.jupyter_gui.impedance_gui import results_html
+from portiloop.src.core.impedance_display import results_html
 
 from IPython.display import clear_output, display
 import ipywidgets as widgets

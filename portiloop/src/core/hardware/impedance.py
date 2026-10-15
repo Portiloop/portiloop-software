@@ -352,6 +352,34 @@ def reference_connected(results):
     return not all(r.railed for r in connected)
 
 
+NOT_CHECKED = '?'
+
+
+def results_to_metadata(results, nb_channels):
+    """
+    JSON-serializable summary of an impedance check, for the recording metadata.
+
+    Args:
+        results: dict {channel (0-indexed): ImpedanceResult} from ImpedanceMeter.measure_electrodes,
+            or None if no check was performed
+        nb_channels: int: number of channels of the ADS
+    Returns:
+        dict {"ch1": impedance in kOhm (rounded to 0.1) or "OFF" or "?", ..., "REF": "connected" or "OFF" or "?"}
+    """
+    metadata = {}
+    for ch in range(nb_channels):
+        r = results.get(ch) if results is not None else None
+        if r is None or r.railed or (not r.off and math.isnan(r.impedance)):
+            metadata[f"ch{ch + 1}"] = NOT_CHECKED
+        elif r.off:
+            metadata[f"ch{ch + 1}"] = "OFF"
+        else:
+            metadata[f"ch{ch + 1}"] = round(r.impedance / 1e3, 1)
+    reference = reference_connected(results) if results else None
+    metadata["REF"] = {True: "connected", False: "OFF"}.get(reference, NOT_CHECKED)
+    return metadata
+
+
 class _SimulatedReading:
     def __init__(self, channels, loff_statp=0x00, loff_statn=0x00):
         self._channels = channels
