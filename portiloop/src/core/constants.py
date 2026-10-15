@@ -4,12 +4,14 @@ from portiloop import __version__
 from portiloop.src.core.hardware.backend import Backend
 from portiloop.src.core.utils import get_hardware_version
 
+backend = None
 try:
     HARDWARE_VERSION = get_hardware_version()
     backend = Backend(HARDWARE_VERSION)
     NB_CHANNELS = backend.get_nb_channels()
 finally:
-    backend.close()
+    if backend is not None:
+        backend.close()
     del backend
 
 

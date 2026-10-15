@@ -6,13 +6,15 @@ import os
 
 from portiloop.src import ADS
 from portiloop.src.core.capture import start_capture
-from portiloop.src.core.hardware.config_hardware import to_ads_frequency, LEADOFF_CONFIG
+from portiloop.src.core.hardware.config_hardware import to_ads_frequency
+from portiloop.src.core.hardware.impedance import ImpedanceMeter, SimulatedADS
 from portiloop.src.core.utils import get_hardware_version, DummyAlsaMixer
 from portiloop.src.core.constants import CSV_PATH, SIGNAL_SAMPLES_FOLDER
 
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_pipelines import PIPELINES, DEFAULT_PIPELINE_KEY
 from portiloop.src.custom.custom_processors import SpindleFilter
+from portiloop.src.jupyter_gui.impedance_gui import results_html
 
 from IPython.display import clear_output, display
 import ipywidgets as widgets
@@ -444,8 +446,9 @@ class JupyterUI:
             description='Impedance Check',
             disabled=False,
             button_style='',  # 'success', 'info', 'warning', 'danger' or ''
-            tooltip='Check if electrodes are properly connected'
+            tooltip='Measure the impedance of the electrodes (enabled channels, or all channels if none is enabled)'
         )
+        self.impedance_display = widgets.HTML()
 
         self.b_min_delay = widgets.FloatSlider(
             value=self.min_delay,
@@ -612,7 +615,7 @@ class JupyterUI:
                               self.b_lsl,
                               widgets.HBox([self.b_record, self.b_record_raw, self.b_record_filtered]),
                               self.b_filename,
-                              self.b_test_impedance,
+                              widgets.HBox([self.b_test_impedance, self.impedance_display]),
                               self.b_display,
                               self.b_disp_type,
                               self.b_capture,
@@ -977,35 +980,27 @@ class JupyterUI:
             del stimulator_instance
 
     def run_impedance_test(self):
-        backend = Backend(portiloop_version=2)
-
-        def is_set(x, n):
-            return x & 1 << n != 0
-
+        """
+        Measures the electrode impedances once (see examples/impedance_check.ipynb for a continuous check).
+        """
+        channels = [i for i, state in enumerate(self.channel_states) if state != 'disabled']
+        if len(channels) == 0:
+            channels = list(range(self.nb_channels))
+        self.impedance_display.value = "<i>Measuring impedances...</i>"
+        backend = None
+        meter = None
         try:
-            backend.write_regs(0x00, LEADOFF_CONFIG)
-            # backend.start()
-            start_time = time.time()
-            current_time = time.time()
-            while current_time - start_time < 2:
-                current_time = time.time()
-            reading = backend.read()
-
-            # Check if any of the negative bits are set and initialize the impedance array
-            # impedance_check = [any([is_set(leadoff_n, i) for i in range(2, 9)])]
-            impedance_check = [any([reading.loff_n(i) for i in range(7)])]
-
-            for i in range(7):
-                impedance_check.append(reading.loff_p(i))
-
-            def print_impedance(impedance):
-                names = ["Ref", "Ch2", "Ch3", "Ch4", "Ch5", "Ch6", "Ch7", "Ch8"]
-                vals = [' Y ' if val else ' N ' for val in impedance]
-                logger.info("Impedance check:\n%s\n%s",
-                            ' '.join(str(name) for name in names),
-                            ' '.join(str(val) for val in vals))
-
-            print_impedance(impedance_check)
-
+            backend = Backend(self.hardware_version) if ADS else SimulatedADS(nb_channels=self.nb_channels)
+            meter = ImpedanceMeter(backend, self.nb_channels, vref=self.vref)
+            meter.configure(channels)
+            self.impedance_display.value = results_html(meter.measure_electrodes())
+        except Exception as e:
+            logger.exception("Impedance check failed.")
+            self.impedance_display.value = f"<i>Impedance check failed: {e}</i>"
         finally:
-            backend.close()
+            try:
+                if meter is not None:
+                    meter.close()
+            finally:
+                if backend is not None:
+                    backend.close()

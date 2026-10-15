@@ -28,10 +28,96 @@ COLORS = {
 }
 REFERENCE = 'REF'
 NOT_MEASURED = 'not measured'
+DEFAULT_THRESHOLDS_KOHM = (10, 25)
+
+
+def result_color(result, thresholds_kohm):
+    """
+    Color of an electrode tile from its ImpedanceResult (None if not measured yet).
+    """
+    if result is None or result.railed:
+        return 'grey'
+    if result.off or math.isnan(result.impedance):
+        return 'red'
+    low, high = thresholds_kohm
+    kohm = result.impedance / 1e3
+    if kohm < low:
+        return 'green'
+    if kohm < high:
+        return 'yellow'
+    return 'red'
+
+
+def result_text(result):
+    if result is None:
+        return '-'
+    if result.off:
+        return 'OFF'
+    if result.railed or math.isnan(result.impedance):
+        return '?'
+    return f"{result.impedance / 1e3:.1f} kΩ"
+
+
+def reference_color_text(reference):
+    """
+    The impedance of the reference cannot be measured on Portiloop, only its connection.
+
+    Args:
+        reference: result of reference_connected, or NOT_MEASURED
+    """
+    if reference is True:
+        return 'green', 'connected'
+    if reference is False:
+        return 'red', 'OFF'
+    if reference is None:
+        return 'grey', '?'
+    return 'grey', '-'
+
+
+def tile_html(name, color, text):
+    background, foreground = COLORS[color]
+    return (f"<div style='background:{background}; color:{foreground}; width:100px; height:70px; margin:4px;"
+            f" border-radius:8px; display:flex; flex-direction:column; align-items:center;"
+            f" justify-content:center; font-family:sans-serif;'>"
+            f"<div style='font-weight:bold; font-size:16px;'>{name}</div>"
+            f"<div style='font-size:14px;'>{text}</div></div>")
+
+
+def legend_html(results, reference, thresholds_kohm):
+    """
+    Color legend, with a hint when the reference or all electrodes are off.
+
+    Args:
+        results: list of the displayed ImpedanceResult
+        reference: result of reference_connected, or NOT_MEASURED
+    """
+    low, high = thresholds_kohm
+    hint = ""
+    if reference is False:
+        hint = "<br><b>The reference electrode is off: reconnect it to measure the electrodes.</b>"
+    elif len(results) > 0 and all(r.off for r in results):
+        hint = "<br><b>All electrodes are off: check the ground (bias) electrode first.</b>"
+    return (f"<span style='color:{COLORS['green'][0]}'>&#9632;</span> &lt; {low:.0f} kΩ &nbsp; "
+            f"<span style='color:{COLORS['yellow'][0]}'>&#9632;</span> {low:.0f}-{high:.0f} kΩ &nbsp; "
+            f"<span style='color:{COLORS['red'][0]}'>&#9632;</span> &gt; {high:.0f} kΩ or OFF{hint}")
+
+
+def results_html(results, thresholds_kohm=DEFAULT_THRESHOLDS_KOHM):
+    """
+    Tiles and legend for the results of a single ImpedanceMeter.measure_electrodes call.
+
+    Args:
+        results: dict {channel (0-indexed): ImpedanceResult}
+    """
+    reference = reference_connected(results)
+    tiles = [tile_html(f"ch{ch + 1}", result_color(r, thresholds_kohm), result_text(r)) for ch, r in sorted(results.items())]
+    tiles.append(tile_html(REFERENCE, *reference_color_text(reference)))
+    return (f"<div style='display:flex; flex-wrap:wrap;'>{''.join(tiles)}</div>"
+            + legend_html(list(results.values()), reference, thresholds_kohm))
 
 
 class ImpedanceCheckUI:
-    def __init__(self, thresholds_kohm=(10, 25), current=6e-9, duration=1.0, vref=4.5,
+    def __init__(self, thresholds_kohm=DEFAULT_THRESHOLDS_KOHM, current=6e-9, duration=1.0, vref=4.5,
                  series_resistance=PORTILOOP_SERIES_RESISTANCE, simulate=None):
         """
         Args:
@@ -109,72 +195,22 @@ class ImpedanceCheckUI:
     def _selected_channels(self):
         return [i for i, b in enumerate(self.b_channels) if b.value]
 
-    def _color(self, result):
-        if result is None or result.railed:
-            return 'grey'
-        if result.off or math.isnan(result.impedance):
-            return 'red'
-        low, high = self.b_thresholds.value
-        kohm = result.impedance / 1e3
-        if kohm < low:
-            return 'green'
-        if kohm < high:
-            return 'yellow'
-        return 'red'
-
-    @staticmethod
-    def _text(result):
-        if result is None:
-            return '-'
-        if result.off:
-            return 'OFF'
-        if result.railed or math.isnan(result.impedance):
-            return '?'
-        return f"{result.impedance / 1e3:.1f} kΩ"
-
     def _build_tiles(self):
         names = [f"ch{i + 1}" for i in self._selected_channels()] + [REFERENCE]
         self.tiles = {name: widgets.HTML() for name in names}
         self.tile_box.children = list(self.tiles.values())
         self._refresh()
 
-    def _reference_tile(self):
-        """
-        The impedance of the reference cannot be measured on Portiloop, only its connection.
-        """
-        if self._reference is True:
-            return 'green', 'connected'
-        if self._reference is False:
-            return 'red', 'OFF'
-        if self._reference is None:
-            return 'grey', '?'
-        return 'grey', '-'
-
     def _refresh(self):
         for name, tile in self.tiles.items():
             if name == REFERENCE:
-                color, text = self._reference_tile()
+                color, text = reference_color_text(self._reference)
             else:
                 result = self._results.get(name)
-                color, text = self._color(result), self._text(result)
-            background, foreground = COLORS[color]
-            tile.value = (
-                f"<div style='background:{background}; color:{foreground}; width:100px; height:70px; margin:4px;"
-                f" border-radius:8px; display:flex; flex-direction:column; align-items:center;"
-                f" justify-content:center; font-family:sans-serif;'>"
-                f"<div style='font-weight:bold; font-size:16px;'>{name}</div>"
-                f"<div style='font-size:14px;'>{text}</div></div>")
-        low, high = self.b_thresholds.value
-        hint = ""
+                color, text = result_color(result, self.b_thresholds.value), result_text(result)
+            tile.value = tile_html(name, color, text)
         measured = [r for name, r in self._results.items() if name in self.tiles]
-        if self._reference is False:
-            hint = "<br><b>The reference electrode is off: reconnect it to measure the electrodes.</b>"
-        elif len(measured) > 0 and all(r.off for r in measured):
-            hint = "<br><b>All electrodes are off: check the ground (bias) electrode first.</b>"
-        self.legend.value = (
-            f"<span style='color:{COLORS['green'][0]}'>&#9632;</span> &lt; {low:.0f} kΩ &nbsp; "
-            f"<span style='color:{COLORS['yellow'][0]}'>&#9632;</span> {low:.0f}-{high:.0f} kΩ &nbsp; "
-            f"<span style='color:{COLORS['red'][0]}'>&#9632;</span> &gt; {high:.0f} kΩ or OFF{hint}")
+        self.legend.value = legend_html(measured, self._reference, self.b_thresholds.value)
 
     def _set_status(self, text):
         self.status.value = f"<i>{text}</i>"
