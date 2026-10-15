@@ -101,5 +101,6 @@ DEFAULT_CONFIG_DICT = {
     "record_filtered": False,
     "signal_sample": str(SIGNAL_SAMPLES_FOLDER / "test_spindles.csv"),
     "offline_speed": 1.0,
-    "vref": 4.5  # Valid only after Portiloop 2.3
+    "vref": 4.5,  # Valid only after Portiloop 2.3
+    "leadoff_detection": True,  # remove fallen electrodes from the bias loop during recordings (core/leadoff.py)
 }

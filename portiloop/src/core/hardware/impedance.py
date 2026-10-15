@@ -60,7 +60,7 @@ MIN_SERIES_FRACTION = 0.7
 
 SETTLING_TIME = 0.25  # s, discarded after each (re)start of the conversions
 LEADOFF_CHECK_SAMPLES = 25  # samples waited before reading the DC lead-off comparators
-LEADOFF_PRECHARGE_SAMPLES = 250  # samples of the first DC lead-off check, see ImpedanceMeter.configure
+LEADOFF_PRECHARGE_SAMPLES = 500  # samples of the first DC lead-off check, see ImpedanceMeter.configure
 # The DC lead-off check uses 24 nA whatever the AC excitation current: an open input on Portiloop is a 4.7 nF
 # filter capacitor, which the current must charge by ~2.25 V (from mid-supply to the 95 % threshold):
 LEADOFF_DC_ILEAD_OFF = LEADOFF_CURRENTS[24e-9]
@@ -188,7 +188,7 @@ class ImpedanceMeter:
         Writes the impedance configuration for the given 0-indexed channels.
 
         A first, longer DC lead-off check charges the filter capacitors of the open inputs to the comparator
-        threshold (~0.45 s at 24 nA from mid-supply): with the short checks of measure_electrodes only, open inputs
+        threshold (up to ~1.2 s at 24 nA from the negative rail): with the short checks of measure_electrodes only, open inputs
         would pass the check (and be excited) during the first measurements. Open inputs then stay at the rail,
         as they are not excited anymore.
         """

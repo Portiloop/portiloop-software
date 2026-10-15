@@ -19,6 +19,7 @@ import time
 import numpy as np
 from copy import deepcopy
 import socket
+from datetime import datetime
 from pathlib import Path
 
 from portiloop.src.core.hardware.leds import Color, LEDs
@@ -27,6 +28,8 @@ from portiloop.src.core.utils import Dummy, get_hardware_version
 from portiloop.src.core.output import CSVRecorder, LiveDisplay, LSLStreamer
 from portiloop.src.core.capture_backend import ADSBackend, FileBackend
 from portiloop.src.core.constants import SIGNAL_SAMPLES_FOLDER
+from portiloop.src.core.leadoff import (LeadoffMonitor, NOT_CONNECTED_AT_START, DISABLED, REFERENCE_OR_BIAS_OFF,
+                                        REFERENCE_OR_BIAS_RECOVERED)
 
 from portiloop.src import ADS
 if ADS:
@@ -40,7 +43,8 @@ PROFILE = True
 # STALL_THRESHOLD_S = 0.05
 
 
-def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_msg_in, channel_states):
+def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_msg_in, channel_states,
+                    vref=4.5, leadoff_detection=False):
     """
     Args:
         p_data_o: multiprocessing.Pipe: captured datapoints are put here
@@ -50,6 +54,9 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         python_clock: bool: if True, the Coral clock is used, otherwise, the ADS interrupts are used
         time_msg_in: float: min time between attempts to recv incomming messages
         channel_states: list: list of strings representing channel states ('disabled', 'simple', etc.)
+        vref: float: ADS reference voltage
+        leadoff_detection: bool: if True, fallen electrodes are removed from the bias loop (see core/leadoff.py),
+            and the lead-off events are sent to the parent process as ("LOFF", event)
     """
     backend = None
     try:
@@ -72,12 +79,21 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         # data = backend.read_regs(0x00, len(config))
         backend.start_conversion()
 
+        leadoff = None
+        if leadoff_detection:
+            leadoff = LeadoffMonitor(backend, frequency, in_use=config[13], nb_channels=len(channel_states), vref=vref)
+            for event in leadoff.initial_check():
+                p_msg_io.send(("LOFF", event))
+
         c = True
         
         # first sample:
         reading = backend.read()
         datapoint = reading.channels()
         p_data_o.send(datapoint)
+        if leadoff is not None:
+            for event in leadoff.update(reading):
+                p_msg_io.send(("LOFF", event))
 
         # the first sample is considered the origin of the time axis:
         t_start = time.perf_counter()
@@ -101,6 +117,9 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
             datapoint = reading.channels()
             p_data_o.send(datapoint)
             it += 1
+            if leadoff is not None:
+                for event in leadoff.update(reading):
+                    p_msg_io.send(("LOFF", event))
 
             # Check for messages
             if t >= t_chk_msg:
@@ -199,6 +218,7 @@ def start_capture(
             python_clock=config_dict['python_clock'],
             channel_states=config_dict['channel_states'],
             vref=config_dict['vref'],
+            leadoff_detection=config_dict.get('leadoff_detection', True),
             process=capture_process,
         ) if config_dict['signal_input'] == "ADS" else FileBackend(signal_sample, config_dict['nb_channels'], config_dict['channel_detection'], config_dict['frequency'] * config_dict['offline_speed'])
         
@@ -244,6 +264,14 @@ def start_capture(
         stimulation_activated_buffer = []
 
         dump_metadata(config_dict, config_dict, "metadata")
+
+        # Lead-off detection: detection and stimulation are paused while the detection electrode is off (for the
+        # rest of the recording), or while the reference or bias electrode seems off
+        leadoff_events = []
+        detection_electrode_off = False
+        reference_or_bias_off = False
+        if config_dict['signal_input'] == "ADS" and config_dict.get('leadoff_detection', True):
+            dump_metadata(config_dict, {"events": leadoff_events}, "leadoff")
     
         # Initialize the variable to keep track of whether we are in a detection state or not for the markers
         prev_pause = pause_value.value
@@ -291,6 +319,18 @@ def start_capture(
                 break
             elif msg[0] == 'PRT':
                 logger.info(msg[1])
+            elif msg[0] == 'LOFF':
+                event = dict(msg[1], time=datetime.fromtimestamp(msg[1]['time']).isoformat(timespec='milliseconds'))
+                logger.warning("Lead-off event: %s, channels %s (sample %s).", event['event'], event['channels'], event['sample'])
+                if event['event'] in (NOT_CONNECTED_AT_START, DISABLED) and config_dict['channel_detection'] in event['channels']:
+                    detection_electrode_off = True
+                    logger.warning("The detection electrode is off: detection and stimulation are paused.")
+                elif event['event'] == REFERENCE_OR_BIAS_OFF:
+                    reference_or_bias_off = True
+                elif event['event'] == REFERENCE_OR_BIAS_RECOVERED:
+                    reference_or_bias_off = False
+                leadoff_events.append(event)
+                dump_metadata(config_dict, {"events": leadoff_events}, "leadoff")
             elif msg[0] == 'STT':
                 total_time, nb_steps = msg[1]
                 step_duration = total_time / nb_steps
@@ -359,7 +399,7 @@ def start_capture(
 
             stimulator_activated = False
             # If detection is on
-            if detector is not None and not pause:
+            if detector is not None and not pause and not detection_electrode_off and not reference_or_bias_off:
                 # Detect using the latest points
                 # (Note for core developers: detection_signal is arbitrary. Please do not assume anything about it here.)
                 detection_signal = detector.detect(filtered_points)

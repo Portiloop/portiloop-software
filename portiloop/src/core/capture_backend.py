@@ -37,12 +37,13 @@ class CaptureBackend(ABC):
 
 
 class ADSBackend(CaptureBackend):
-    def __init__(self, duration, frequency, python_clock, channel_states, vref, process):
+    def __init__(self, duration, frequency, python_clock, channel_states, vref, process, leadoff_detection=False):
         """
         duration (float): duration of the capture in seconds
         frequency (float): sampling frequency in Hz
         python_clock (bool): if True, use the python clock to time the capture
         channel_states (list): list of channel states
+        leadoff_detection (bool): if True, the capture process detects fallen electrodes (see core/leadoff.py)
         """
         # Initialize the variables
         self.duration = duration
@@ -50,6 +51,7 @@ class ADSBackend(CaptureBackend):
         self.python_clock = python_clock
         self.channel_states = channel_states
         self.vref = vref
+        self.leadoff_detection = leadoff_detection
 
         # Initialize The data pipes to talk to the data process
         self.capture_started = False
@@ -70,7 +72,9 @@ class ADSBackend(CaptureBackend):
                                            self.frequency,
                                            self.python_clock,
                                            1.0,
-                                           self.channel_states)
+                                           self.channel_states,
+                                           self.vref,
+                                           self.leadoff_detection)
                                      )
         self._p_capture.start()
         self.capture_started = True
