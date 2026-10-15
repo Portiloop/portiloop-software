@@ -584,7 +584,7 @@ class SimpleUI:
 
         with ui.tabs().classes('w-full') as tabs:
             control_tab = ui.tab('Control', icon='home')
-            check_tab = ui.tab('Check', icon='electrical_services')
+            check_tab = ui.tab('Check', icon='Ω')  # not in Material Icons: rendered with a fallback font
             output_tab = ui.tab('Output', icon='timeline')
             advanced_tab = ui.tab('Advanced', icon='settings')
 
