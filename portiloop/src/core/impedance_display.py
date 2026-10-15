@@ -4,7 +4,7 @@ HTML rendering of the electrode impedance check results, shared by the Jupyter a
 
 import math
 
-from portiloop.src.core.hardware.impedance import reference_connected
+from portiloop.src.core.hardware.impedance import reference_connected, RESOLUTION
 
 
 COLORS = {
@@ -22,7 +22,7 @@ def result_color(result, thresholds_kohm):
     """
     Color of an electrode tile from its ImpedanceResult (None if not measured yet).
     """
-    if result is None or result.railed:
+    if result is None or result.railed or result.below_resolution():  # grey: uncertain
         return 'grey'
     if result.off or math.isnan(result.impedance):
         return 'red'
@@ -42,6 +42,8 @@ def result_text(result):
         return 'OFF'
     if result.railed or math.isnan(result.impedance):
         return '?'
+    if result.below_resolution():
+        return f"&lt; {RESOLUTION / 1e3:.0f} kΩ"
     return f"{result.impedance / 1e3:.1f} kΩ"
 
 
@@ -86,7 +88,9 @@ def legend_html(results, reference, thresholds_kohm):
         hint = "<br><b>All electrodes are off: check the ground (bias) electrode first.</b>"
     return (f"<span style='color:{COLORS['green'][0]}'>&#9632;</span> &lt; {low:.0f} kΩ &nbsp; "
             f"<span style='color:{COLORS['yellow'][0]}'>&#9632;</span> {low:.0f}-{high:.0f} kΩ &nbsp; "
-            f"<span style='color:{COLORS['red'][0]}'>&#9632;</span> &gt; {high:.0f} kΩ or OFF{hint}")
+            f"<span style='color:{COLORS['red'][0]}'>&#9632;</span> &gt; {high:.0f} kΩ or OFF &nbsp; "
+            f"<span style='color:{COLORS['grey'][0]}'>&#9632;</span> uncertain (&lt; {RESOLUTION / 1e3:.0f} kΩ"
+            f" is below the accuracy){hint}")
 
 
 def results_html(results, thresholds_kohm=DEFAULT_THRESHOLDS_KOHM):

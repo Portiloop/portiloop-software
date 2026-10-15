@@ -57,6 +57,9 @@ PORTILOOP_SERIES_RESISTANCE = 5e3  # Ohm, R12 to R19 between the electrode conne
 # A connected electrode cannot measure less than the series resistance: below this fraction of it
 # (allowing for the +/- 20 % accuracy of the lead-off current), the excitation current is not flowing:
 MIN_SERIES_FRACTION = 0.7
+# Below this impedance, the electrode is within the measurement uncertainty (+/- 20 % of the series resistance):
+RESOLUTION = 1e3  # Ohm
+BELOW_RESOLUTION = f"<{RESOLUTION / 1e3:.0f}"  # in kOhm, for the metadata
 
 SETTLING_TIME = 0.25  # s, discarded after each (re)start of the conversions
 LEADOFF_CHECK_SAMPLES = 25  # samples waited before reading the DC lead-off comparators
@@ -81,6 +84,9 @@ class ImpedanceResult:
     impedance: float  # Ohm (nan if unknown)
     off: bool  # True if the electrode is disconnected (DC lead-off comparator)
     railed: bool = False  # True if the electrode is connected but the channel saturates (reference off)
+
+    def below_resolution(self):
+        return not (self.off or self.railed or math.isnan(self.impedance)) and self.impedance < RESOLUTION
 
 
 def impedance_config(channels, nb_channels, current=6e-9):
@@ -364,7 +370,7 @@ def results_to_metadata(results, nb_channels):
             or None if no check was performed
         nb_channels: int: number of channels of the ADS
     Returns:
-        dict {"ch1": impedance in kOhm (rounded to 0.1) or "OFF" or "?", ..., "REF": "connected" or "OFF" or "?"}
+        dict {"ch1": impedance in kOhm (rounded to 0.1) or "<1" or "OFF" or "?", ..., "REF": "connected" or "OFF" or "?"}
     """
     metadata = {}
     for ch in range(nb_channels):
@@ -373,6 +379,8 @@ def results_to_metadata(results, nb_channels):
             metadata[f"ch{ch + 1}"] = NOT_CHECKED
         elif r.off:
             metadata[f"ch{ch + 1}"] = "OFF"
+        elif r.below_resolution():
+            metadata[f"ch{ch + 1}"] = BELOW_RESOLUTION
         else:
             metadata[f"ch{ch + 1}"] = round(r.impedance / 1e3, 1)
     reference = reference_connected(results) if results else None
