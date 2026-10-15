@@ -85,6 +85,10 @@ class LeadoffMonitor:
 
         self.window = int(SCREEN_WINDOW * self.frequency)
         self.buffer = np.zeros((self.window, nb_channels))
+        # Hann-windowed mains kernels, scaled to peak amplitudes (computed once: the screening runs in the capture loop)
+        w = np.hanning(self.window)
+        t = np.arange(self.window) / self.frequency
+        self.mains_kernels = np.array([w * np.exp(-2j * np.pi * f * t) * 2 / w.sum() for f in MAINS_FREQUENCIES])
         self.n = 0  # samples received
         self.suspect_counts = [0] * nb_channels
         self.cooldown_until = [0.0] * nb_channels
@@ -161,9 +165,7 @@ class LeadoffMonitor:
         codes = np.where(codes >= 2 ** 23, codes - 2 ** 24, codes)  # two's complement
         saturated = np.mean(np.abs(codes) >= self.full_scale_code, axis=0)
         x = (codes - codes.mean(axis=0)) * self.uv_per_code
-        w = np.hanning(self.window)
-        t = np.arange(self.window) / self.frequency
-        mains = np.max([np.abs((w * np.exp(-2j * np.pi * f * t)) @ x) * 2 / w.sum() for f in MAINS_FREQUENCIES], axis=0)
+        mains = np.abs(self.mains_kernels @ x).max(axis=0)
         self.last_screening = {ch: (float(mains[ch]), float(saturated[ch])) for ch in range(self.nb_channels)}
 
         in_use = _channels(self.in_use, self.nb_channels)

@@ -101,7 +101,7 @@ When recording signal, the structure of the output CSV file depends on the numbe
 
 The CSV file comes with JSON files of the same name:
 - `_metadata.json`: the settings of the recording. With the Simple GUI, `impedances_kohm` and `impedance_check_time` contain the last impedance check of the `Check` tab (`"?"` if no check was performed, `"<1"` for an electrode below 1 kΩ, which is within the accuracy of the measurement). The electrodes that were `"OFF"` at that check (except the detection channel) are `"disabled"` in `channel_states`: their channel is powered down and records `0`.
-- `_stats.json`: the sampling statistics of the recording.
+- `_stats.json`: the sampling statistics of the recording. `lost_samples` lists the CSV rows (`0` for the first sample) that repeat the previous sample because a conversion was missed (the capture process was late), and `nb_lost_samples` their number.
 - `_leadoff.json`: the lead-off events of the recording. Electrodes without contact are removed from the bias loop (at the start of the recording, or when they fall off during the night) so that they do not degrade the other channels. While the detection electrode is off, or while the reference or bias electrode seems off, detection and stimulation are paused (`stimulation_on` is `0`). See `portiloop/src/core/leadoff.py` for details.
 
 

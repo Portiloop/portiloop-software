@@ -76,6 +76,7 @@ class Backend:
         self.dev.open(0, 0)
         self.dev.max_speed_hz = max_speed
         self.dev.mode = 0b01
+        self._nb_channels = None  # read once, at the first reading
 
         self.stop_continuous()
 
@@ -112,8 +113,10 @@ class Backend:
         self.dev.xfer([WREG | (start & 0x1F), (len(values) - 1) & 0x1F] + values)
 
     def read(self):
+        if self._nb_channels is None:
+            self._nb_channels = self.get_nb_channels()
         values = self.dev.xfer([RDATA] + [0x00] * 27)
-        return Reading(values[1:], self.get_nb_channels())
+        return Reading(values[1:], self._nb_channels)
 
     def start_continuous(self):
         self.dev.xfer([RDATAC])
@@ -129,9 +132,20 @@ class Backend:
         return not self.drdy.read()
 
     def wait_new_data(self):
+        """
+        Waits for the next conversion and reads it with RDATA.
+
+        Returns:
+            (Reading, int): the latest conversion, and the number of conversions missed since the previous call
+                (DRDY events still pending when the caller is late: RDATA only returns the latest conversion)
+        """
         self.drdy.poll(timeout=None)  # poll the falling edge event
         self.drdy.read_event()  # consume the event
-        return self.read()  # read SPI with RDATA
+        missed = 0
+        while self.drdy.poll(0):
+            self.drdy.read_event()
+            missed += 1
+        return self.read(), missed  # read SPI with RDATA
 
     def start_conversion(self):
         if self.start_gpio is not None:

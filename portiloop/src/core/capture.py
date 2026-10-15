@@ -41,6 +41,19 @@ logger = logging.getLogger(__name__)
 PORTILOOP_ID = f"{socket.gethostname()}-portiloop"
 PROFILE = True
 # STALL_THRESHOLD_S = 0.05
+CAPTURE_RT_PRIORITY = 10  # SCHED_FIFO priority of the capture process, allowed by LimitRTPRIO in simplegui.service
+
+
+def raise_priority():
+    """
+    Gives the capture process a real-time priority if allowed, so that it keeps up with the ADS1299 when the system is
+    busy: the ADS1299 does not buffer its conversions.
+    """
+    try:
+        os.sched_setscheduler(0, os.SCHED_FIFO, os.sched_param(CAPTURE_RT_PRIORITY))
+        logger.info("Capture process running with real-time priority %s.", CAPTURE_RT_PRIORITY)
+    except (AttributeError, OSError) as e:
+        logger.info("Capture process running with normal priority (%s).", e)
 
 
 def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_msg_in, channel_states,
@@ -57,9 +70,13 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         vref: float: ADS reference voltage
         leadoff_detection: bool: if True, fallen electrodes are removed from the bias loop (see core/leadoff.py),
             and the lead-off events are sent to the parent process as ("LOFF", event)
+
+    Lost samples (conversions missed because the process was late, or read twice with the Python clock) repeat the
+    previous sample, their indices are sent to the parent process with the statistics.
     """
     backend = None
     try:
+        raise_priority()
         if duration <= 0:
             duration = np.inf
 
@@ -87,39 +104,46 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
 
         c = True
         
+        def send_sample(reading):
+            p_data_o.send(reading.channels())
+            if leadoff is not None:
+                for event in leadoff.update(reading):
+                    p_msg_io.send(("LOFF", event))
+
         # first sample:
         reading = backend.read()
-        datapoint = reading.channels()
-        p_data_o.send(datapoint)
-        if leadoff is not None:
-            for event in leadoff.update(reading):
-                p_msg_io.send(("LOFF", event))
+        send_sample(reading)
+        nb_samples = 1
+        lost = []  # indices of the samples that repeat the previous one
 
         # the first sample is considered the origin of the time axis:
         t_start = time.perf_counter()
         t_max = t_start + duration
         t = t_start
-        it = 0
-        
+
         t_next = t + sample_time
         t_chk_msg = t + time_msg_in
         
         # sampling loop:
         while c and t < t_max:
             t = time.perf_counter()
+            previous = reading
             if python_clock:
                 if t <= t_next:
                     time.sleep(t_next - t)
                 t_next += sample_time
                 reading = backend.read()
+                # the same conversion read twice (the ADS runs at twice the frequency, but the timer can be late):
+                if reading.channels() == previous.channels() and any(reading.channels()):
+                    lost.append(nb_samples)
             else:
-                reading = backend.wait_new_data()
-            datapoint = reading.channels()
-            p_data_o.send(datapoint)
-            it += 1
-            if leadoff is not None:
-                for event in leadoff.update(reading):
-                    p_msg_io.send(("LOFF", event))
+                reading, missed = backend.wait_new_data()
+                for _ in range(missed):  # conversions missed while late are held at the previous value
+                    send_sample(previous)
+                    lost.append(nb_samples)
+                    nb_samples += 1
+            send_sample(reading)
+            nb_samples += 1
 
             # Check for messages
             if t >= t_chk_msg:
@@ -131,8 +155,8 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
                         c = False
         t = time.perf_counter()
         total_time = t - t_start
-        nb_steps = it
-        p_msg_io.send(("STT", (total_time, nb_steps)))
+        nb_steps = nb_samples - 1  # sample periods since the first sample
+        p_msg_io.send(("STT", (total_time, nb_steps, lost)))
     except Exception as e:
         logger.exception("capture_process crashed.")
         p_msg_io.send(("PRT", f"Exception: {e}"))
@@ -296,6 +320,7 @@ def start_capture(
             t0 = time.perf_counter()
 
         # Main capture loop
+        stopping = False
         while True:
 
             if PROFILE:
@@ -315,8 +340,10 @@ def start_capture(
             if msg is None:
                 pass
             elif msg == 'STOP':
-                # print(f"msg from child process: {msg}")
-                break
+                # The capture process has sent all its samples: those still in the pipe are recorded before stopping
+                if not isinstance(capture_backend, ADSBackend):
+                    break
+                stopping = True
             elif msg[0] == 'PRT':
                 logger.info(msg[1])
             elif msg[0] == 'LOFF':
@@ -332,15 +359,19 @@ def start_capture(
                 leadoff_events.append(event)
                 dump_metadata(config_dict, {"events": leadoff_events}, "leadoff")
             elif msg[0] == 'STT':
-                total_time, nb_steps = msg[1]
+                total_time, nb_steps, lost = msg[1]
                 step_duration = total_time / nb_steps
                 avg_frequency = 1 / step_duration
                 logger.info(f"Captured {nb_steps} steps in {total_time} seconds. Sampling rate as per OS clock: {avg_frequency} Hz (i.e., {step_duration} seconds per step).")
+                if lost:
+                    logger.warning("%s lost samples (repeating the previous sample).", len(lost))
                 stats = {
                     "os_time": total_time,
                     "nb_steps": nb_steps,
                     "os_step_duration": step_duration,
-                    "os_sampling_frequency": avg_frequency
+                    "os_sampling_frequency": avg_frequency,
+                    "nb_lost_samples": len(lost),
+                    "lost_samples": lost,  # indices of the CSV rows (0 for the first sample)
                 }
                 dump_metadata(config_dict, stats, "stats")  # save experiments statistics
 
@@ -351,6 +382,8 @@ def start_capture(
 
             # Then, we retrieve the data from the capture process
             raw_points = capture_backend.get_data()  # np.array (data series x ads_channels), or None
+            if raw_points is None and stopping:
+                break
             # If we have no data, we continue to the next iteration
             if raw_points is None:
                 if PROFILE:
@@ -399,7 +432,8 @@ def start_capture(
 
             stimulator_activated = False
             # If detection is on
-            if detector is not None and not pause and not detection_electrode_off and not reference_or_bias_off:
+            if (detector is not None and not pause and not detection_electrode_off and not reference_or_bias_off
+                    and not stopping):
                 # Detect using the latest points
                 # (Note for core developers: detection_signal is arbitrary. Please do not assume anything about it here.)
                 detection_signal = detector.detect(filtered_points)
@@ -463,6 +497,13 @@ def start_capture(
                     t10 = time.perf_counter()
                     perf["csv"][0] += t10 - t9
                     perf["csv"][1] += 1
+
+        # Last samples (less than a full buffer)
+        if len(raw_signal_buffer) > 0:
+            csv_recorder.append_raw_signal_buffer(raw_signal_buffer)
+            csv_recorder.append_filtered_signal_buffer(filtered_signal_buffer)
+            csv_recorder.append_stimulation_activated_buffer(stimulation_activated_buffer)
+            csv_recorder.write()
 
         if PROFILE:
             t_end = time.perf_counter()

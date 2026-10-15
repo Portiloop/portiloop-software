@@ -9,6 +9,8 @@ Type=exec
 ExecStart=/bin/bash -c "~/miniforge3/envs/portiloop/bin/python /home/mendel/portiloop-software/portiloop/src/simple_gui/simple_gui.py"
 User=mendel
 Group=mendel
+# Allows the capture process to run with a real-time priority (CAPTURE_RT_PRIORITY in core/capture.py)
+LimitRTPRIO=10
 Restart=on-failure
 RestartSec=60s
 
