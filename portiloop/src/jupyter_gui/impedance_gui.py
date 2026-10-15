@@ -10,7 +10,8 @@ import ipywidgets as widgets
 from IPython.display import display
 
 from portiloop.src import ADS
-from portiloop.src.core.hardware.impedance import ImpedanceMeter, SimulatedADS
+from portiloop.src.core.hardware.impedance import (ImpedanceMeter, SimulatedADS, PORTILOOP_SERIES_RESISTANCE,
+                                                   reference_connected)
 from portiloop.src.core.utils import get_hardware_version
 
 if ADS:
@@ -26,16 +27,17 @@ COLORS = {
     'grey': ('#bdbdbd', 'black'),
 }
 REFERENCE = 'REF'
+NOT_MEASURED = 'not measured'
 
 
 class ImpedanceCheckUI:
-    def __init__(self, thresholds_kohm=(10, 25), current=6e-9, duration=1.0, vref=4.5, series_resistance=0.0,
-                 simulate=None):
+    def __init__(self, thresholds_kohm=(10, 25), current=6e-9, duration=1.0, vref=4.5,
+                 series_resistance=PORTILOOP_SERIES_RESISTANCE, simulate=None):
         """
         Args:
             thresholds_kohm: (float, float): impedances (kOhm) above which an electrode is yellow, then red
             current: float: lead-off excitation current in A (6e-9 or 24e-9)
-            duration: float: measurement window of each phase in seconds
+            duration: float: measurement window in seconds
             vref: float: ADS reference voltage
             series_resistance: float: resistance in series with each electrode on the PCB (Ohm), subtracted from the result
             simulate: bool: use a simulated ADS1299 (defaults to True when not running on a Portiloop)
@@ -48,6 +50,7 @@ class ImpedanceCheckUI:
         self._thread = None
         self._stop_event = threading.Event()
         self._results = {}  # name -> ImpedanceResult
+        self._reference = NOT_MEASURED  # True if connected, False if off, None if unknown (see reference_connected)
 
         self.b_channels = [widgets.ToggleButton(value=True, description=f"ch{i + 1}",
                                                 layout=widgets.Layout(width='60px'))
@@ -107,7 +110,7 @@ class ImpedanceCheckUI:
         return [i for i, b in enumerate(self.b_channels) if b.value]
 
     def _color(self, result):
-        if result is None:
+        if result is None or result.railed:
             return 'grey'
         if result.off or math.isnan(result.impedance):
             return 'red'
@@ -125,7 +128,7 @@ class ImpedanceCheckUI:
             return '-'
         if result.off:
             return 'OFF'
-        if math.isnan(result.impedance):
+        if result.railed or math.isnan(result.impedance):
             return '?'
         return f"{result.impedance / 1e3:.1f} kΩ"
 
@@ -135,20 +138,38 @@ class ImpedanceCheckUI:
         self.tile_box.children = list(self.tiles.values())
         self._refresh()
 
+    def _reference_tile(self):
+        """
+        The impedance of the reference cannot be measured on Portiloop, only its connection.
+        """
+        if self._reference is True:
+            return 'green', 'connected'
+        if self._reference is False:
+            return 'red', 'OFF'
+        if self._reference is None:
+            return 'grey', '?'
+        return 'grey', '-'
+
     def _refresh(self):
         for name, tile in self.tiles.items():
-            result = self._results.get(name)
-            background, foreground = COLORS[self._color(result)]
+            if name == REFERENCE:
+                color, text = self._reference_tile()
+            else:
+                result = self._results.get(name)
+                color, text = self._color(result), self._text(result)
+            background, foreground = COLORS[color]
             tile.value = (
                 f"<div style='background:{background}; color:{foreground}; width:100px; height:70px; margin:4px;"
                 f" border-radius:8px; display:flex; flex-direction:column; align-items:center;"
                 f" justify-content:center; font-family:sans-serif;'>"
                 f"<div style='font-weight:bold; font-size:16px;'>{name}</div>"
-                f"<div style='font-size:14px;'>{self._text(result)}</div></div>")
+                f"<div style='font-size:14px;'>{text}</div></div>")
         low, high = self.b_thresholds.value
         hint = ""
         measured = [r for name, r in self._results.items() if name in self.tiles]
-        if len(measured) > 0 and all(r.off for r in measured):
+        if self._reference is False:
+            hint = "<br><b>The reference electrode is off: reconnect it to measure the electrodes.</b>"
+        elif len(measured) > 0 and all(r.off for r in measured):
             hint = "<br><b>All electrodes are off: check the ground (bias) electrode first.</b>"
         self.legend.value = (
             f"<span style='color:{COLORS['green'][0]}'>&#9632;</span> &lt; {low:.0f} kΩ &nbsp; "
@@ -200,17 +221,12 @@ class ImpedanceCheckUI:
             iteration = 0
             while not self._stop_event.is_set():
                 iteration += 1
-                self._set_status(f"Measuring electrodes... (measurement {iteration})")
+                self._set_status(f"Measuring... (measurement {iteration})")
                 electrodes = meter.measure_electrodes(self.b_duration.value, self._stop_event)
                 if electrodes is None:
                     break
                 self._results.update({f"ch{ch + 1}": r for ch, r in electrodes.items()})
-                self._refresh()
-                self._set_status(f"Measuring reference... (measurement {iteration})")
-                reference = meter.measure_reference(self.b_duration.value, self._stop_event)
-                if reference is None:
-                    break
-                self._results[REFERENCE] = reference
+                self._reference = reference_connected(electrodes)
                 self._refresh()
                 if not continuous:
                     break

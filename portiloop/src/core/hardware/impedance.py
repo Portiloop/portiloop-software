@@ -1,25 +1,29 @@
 """
 Electrode impedance measurement with the ADS1299 AC lead-off excitation.
 
-The ADS1299 can inject a small square-wave current (6 nA or 24 nA) at
-fCLK / 2**16 = 31.25 Hz into the positive (INxP) or negative (INxN) input of
-each channel. The current flows through the electrode into the scalp and back
-through the bias (ground) electrode. The electrode on the other side of the
-differential pair carries no current, so the channel only sees I * Z of the
-excited electrode.
+The ADS1299 injects a small square-wave current (6 nA or 24 nA) at
+fCLK / 2**16 = 31.25 Hz into the positive input (INxP) of every selected channel.
+The current flows through the electrode into the scalp and back through the bias
+(ground) electrode. The reference electrode (SRB1) carries no current, so each
+channel only sees I * Z of its own electrode. At 250 SPS the excitation is exactly
+fDR / 8 (both derive from the same clock), i.e. one period spans exactly 8 samples.
 
-Electrodes reported as off by the DC lead-off comparators of the ADS1299 are displayed as such
-(on Portiloop, an open input does not necessarily saturate under the AC excitation).
+Electrodes are first checked with the DC lead-off comparators of the ADS1299 (on Portiloop, an open input does
+not necessarily saturate under the AC excitation). Only the connected ones are then excited: on Portiloop, the
+current injected in an open input flows through its 4.7 nF filter capacitor into SRB1 and out through the
+reference electrode, which would add a multiple of the reference impedance to every other channel.
 
-The measurement is done in two phases:
-1. the current is injected in INxP of every selected channel at once:
-   each channel measures the impedance of its own electrode;
-2. the current is injected in INxN of a single channel: on Portiloop, all INxN
-   are tied to the reference electrode through SRB1, so every channel measures
-   the impedance of the reference electrode.
+The bias amplifier does not sense any channel during the measurement: it simply holds the body at mid-supply
+through the bias electrode, so that floating (disconnected) inputs cannot drive it to a rail.
 
-At 250 SPS the excitation is exactly fDR / 8 (both derive from the same clock),
-i.e. one excitation period spans exactly 8 samples.
+On Portiloop (v2.3), the impedance of the reference electrode cannot be measured: it only reaches the
+ADS1299 through SRB1, which has no lead-off current source (all INxN pins are unconnected). Its connection
+is inferred instead: when the reference is unplugged, SRB1 floats and the channels whose electrode passes the
+DC lead-off check saturate.
+
+Each electrode is in series with a 5 kOhm resistor on the PCB (R12 to R19), which is subtracted from the
+measurements. The 4.7 nF filter capacitors between INxP and SRB1 shunt the excitation by less than 1 %
+below a few hundred kOhm, and are ignored.
 """
 
 import logging
@@ -49,16 +53,34 @@ REG_LOFF = 0x04
 REG_LOFF_SENSP = 0x0F
 REG_LOFF_SENSN = 0x10
 
+PORTILOOP_SERIES_RESISTANCE = 5e3  # Ohm, R12 to R19 between the electrode connector and INxP (Portiloop v2.3)
+# A connected electrode cannot measure less than the series resistance: below this fraction of it
+# (allowing for the +/- 20 % accuracy of the lead-off current), the excitation current is not flowing:
+MIN_SERIES_FRACTION = 0.7
+
 SETTLING_TIME = 0.25  # s, discarded after each (re)start of the conversions
 LEADOFF_CHECK_SAMPLES = 25  # samples waited before reading the DC lead-off comparators
+LEADOFF_PRECHARGE_SAMPLES = 250  # samples of the first DC lead-off check, see ImpedanceMeter.configure
+# The DC lead-off check uses 24 nA whatever the AC excitation current: an open input on Portiloop is a 4.7 nF
+# filter capacitor, which the current must charge by ~2.25 V (from mid-supply to the 95 % threshold):
+LEADOFF_DC_ILEAD_OFF = LEADOFF_CURRENTS[24e-9]
+FILTER_CAPACITANCE = 4.7e-9  # F, between INxP and SRB1 on Portiloop v2.3 (C19 to C26)
 RAIL_FRACTION = 0.95  # fraction of the full scale above which a sample is considered railed
 MAINS_FREQUENCIES = (50.0, 60.0, 100.0, 120.0)  # Hz, fitted as nuisance terms
 
 
 @dataclass
+class SignalFit:
+    excitation: float  # peak amplitude of the 31.25 Hz excitation (uV)
+    mains: float  # peak amplitude of the strongest mains fundamental (50 or 60 Hz) (uV)
+    residual: float  # standard deviation of what the model does not explain (uV)
+
+
+@dataclass
 class ImpedanceResult:
     impedance: float  # Ohm (nan if unknown)
-    off: bool  # True if the electrode is disconnected (DC lead-off comparator or saturated input)
+    off: bool  # True if the electrode is disconnected (DC lead-off comparator)
+    railed: bool = False  # True if the electrode is connected but the channel saturates (reference off)
 
 
 def impedance_config(channels, nb_channels, current=6e-9):
@@ -76,6 +98,8 @@ def impedance_config(channels, nb_channels, current=6e-9):
     channel_states = ['simple' if i in channels else 'disabled' for i in range(nb_channels)]
     config = mod_config(list(BACKEND_CONFIG), IMPEDANCE_DATARATE, channel_states)
     config[2] = 0xC0  # CONFIG2: no internal test signal
+    config[13] = 0x00  # BIAS_SENSP: the bias amplifier holds the body at mid-supply without feedback
+    config[14] = 0x00  # BIAS_SENSN
     config[REG_LOFF] = LEADOFF_CURRENTS[current] << 2 | FLEAD_OFF_31HZ
     config[REG_LOFF_SENSP] = 0x00
     config[REG_LOFF_SENSN] = 0x00
@@ -103,9 +127,9 @@ def volts_per_ohm(current):
     return current * 4 / math.pi * sinc3_gain(EXCITATION_FREQUENCY, IMPEDANCE_DATARATE)
 
 
-def excitation_amplitude(indices, signal, datarate=IMPEDANCE_DATARATE):
+def fit_signal(indices, signal, datarate=IMPEDANCE_DATARATE):
     """
-    Peak amplitude of the 31.25 Hz excitation in a signal.
+    Fits the 31.25 Hz excitation and the mains interference in a signal.
 
     A least-squares fit is used instead of an FFT so that dropped samples (gaps in indices) are handled.
     The model contains a quadratic drift, the harmonics of the 8-sample excitation period, and mains interference.
@@ -115,7 +139,7 @@ def excitation_amplitude(indices, signal, datarate=IMPEDANCE_DATARATE):
         signal: array of float: signal values
         datarate: float: actual sampling rate (Hz), used for the mains terms
     Returns:
-        float: peak amplitude of the 31.25 Hz component, in the unit of signal
+        SignalFit, amplitudes in the unit of signal
     """
     n = np.asarray(indices, dtype=float)
     t = (n - n.mean()) / max(np.ptp(n), 1.0)
@@ -128,12 +152,19 @@ def excitation_amplitude(indices, signal, datarate=IMPEDANCE_DATARATE):
         if f < datarate / 2:
             w = 2 * np.pi * f / datarate
             columns += [np.cos(w * n), np.sin(w * n)]
-    coefficients, *_ = np.linalg.lstsq(np.column_stack(columns), np.asarray(signal, dtype=float), rcond=None)
-    return float(np.hypot(coefficients[3], coefficients[4]))
+    design = np.column_stack(columns)
+    signal = np.asarray(signal, dtype=float)
+    coefficients, *_ = np.linalg.lstsq(design, signal, rcond=None)
+    mains = [float(np.hypot(coefficients[i], coefficients[i + 1]))
+             for i, f in zip(range(10, len(coefficients), 2), [f for f in MAINS_FREQUENCIES if f < datarate / 2])
+             if f in (50.0, 60.0)]
+    return SignalFit(excitation=float(np.hypot(coefficients[3], coefficients[4])),
+                     mains=max(mains, default=0.0),
+                     residual=float(np.std(signal - design @ coefficients)))
 
 
 class ImpedanceMeter:
-    def __init__(self, backend, nb_channels, current=6e-9, vref=4.5, series_resistance=0.0):
+    def __init__(self, backend, nb_channels, current=6e-9, vref=4.5, series_resistance=PORTILOOP_SERIES_RESISTANCE):
         """
         Args:
             backend: Backend: opened ADS1299 backend (or SimulatedADS)
@@ -149,19 +180,26 @@ class ImpedanceMeter:
         self.series_resistance = series_resistance
         self.full_scale_uv = vref / ADS_GAIN * 1e6
         self.channels = []
-        self._off_channels = set()  # channels whose INxP electrode was off at the last measurement
+        self._statp = 0x00  # LOFF_STATP of the last DC lead-off check
+        self.last_fits = {}  # {channel: (SignalFit, railed)} of the last electrode measurement
 
     def configure(self, channels):
         """
         Writes the impedance configuration for the given 0-indexed channels.
+
+        A first, longer DC lead-off check charges the filter capacitors of the open inputs to the comparator
+        threshold (~0.45 s at 24 nA from mid-supply): with the short checks of measure_electrodes only, open inputs
+        would pass the check (and be excited) during the first measurements. Open inputs then stay at the rail,
+        as they are not excited anymore.
         """
         self.channels = sorted(channels)
         self.backend.stop_conversion()
         self.backend.write_regs(0x00, impedance_config(self.channels, self.nb_channels, self.current))
+        self._statp = self._leads_off(sum(1 << ch for ch in self.channels), LEADOFF_PRECHARGE_SAMPLES)
 
-    def _set_excitation(self, sensp, sensn):
+    def _set_excitation(self, sensp):
         self.backend.stop_conversion()
-        self.backend.write_regs(REG_LOFF_SENSP, [sensp, sensn])
+        self.backend.write_regs(REG_LOFF_SENSP, [sensp, 0x00])  # LOFF_SENSP, LOFF_SENSN
 
     def _wait_samples(self, n_samples):
         drdy = self.backend.drdy
@@ -176,23 +214,23 @@ class ImpedanceMeter:
         self.backend.stop_conversion()
         return reading
 
-    def _leads_off(self, sensp, sensn):
+    def _leads_off(self, sensp, n_samples=LEADOFF_CHECK_SAMPLES):
         """
-        Checks the connection of the given inputs with the DC lead-off comparators.
+        Checks the connection of the given positive inputs with the DC lead-off comparators.
 
         Returns:
-            (int, int): LOFF_STATP and LOFF_STATN (bit set = input off)
+            int: LOFF_STATP (bit set = input off)
         """
         loff_ac = impedance_config([], self.nb_channels, self.current)[REG_LOFF]
         self.backend.stop_conversion()
-        self.backend.write_regs(REG_LOFF, [loff_ac & ~0x03])  # same current, DC lead-off
-        self._set_excitation(sensp, sensn)
+        self.backend.write_regs(REG_LOFF, [(loff_ac & ~0x0F) | LEADOFF_DC_ILEAD_OFF << 2])  # DC lead-off
+        self._set_excitation(sensp)
         try:
-            reading = self._wait_samples(LEADOFF_CHECK_SAMPLES)
+            reading = self._wait_samples(n_samples)
         finally:
-            self._set_excitation(0x00, 0x00)
+            self._set_excitation(0x00)
             self.backend.write_regs(REG_LOFF, [loff_ac])
-        return reading.loff_statp & sensp, reading.loff_statn & sensn
+        return reading.loff_statp & sensp
 
     def _acquire(self, duration, stop_event=None):
         """
@@ -235,75 +273,83 @@ class ImpedanceMeter:
         data = bin_to_microvolt(np.array(data), self.vref)
         return indices, data, 1.0 / period
 
-    def _channel_amplitudes(self, acquisition):
+    def _channel_fits(self, acquisition):
         """
-        Returns {channel: (amplitude in uV, railed)} for the configured channels, railed meaning saturated.
+        Returns {channel: (SignalFit in uV, railed)} for the configured channels, railed meaning saturated.
         """
         indices, data, datarate = acquisition
-        amplitudes = {}
+        fits = {}
         for ch in self.channels:
             x = data[:, ch]
             railed = bool(np.mean(np.abs(x) >= RAIL_FRACTION * self.full_scale_uv) > 0.05)
-            amplitudes[ch] = (excitation_amplitude(indices, x, datarate), railed)
-        return amplitudes
+            fits[ch] = (fit_signal(indices, x, datarate), railed)
+        return fits
 
     def _to_impedance(self, amplitude_uv):
-        return max(0.0, amplitude_uv * 1e-6 / volts_per_ohm(self.current) - self.series_resistance)
+        """
+        Returns nan when the measured impedance is implausibly below the series resistance (no excitation current).
+        """
+        total = amplitude_uv * 1e-6 / volts_per_ohm(self.current)
+        if total < MIN_SERIES_FRACTION * self.series_resistance:
+            return math.nan
+        return max(0.0, total - self.series_resistance)
 
     def measure_electrodes(self, duration=1.0, stop_event=None):
         """
         Measures the impedance of the electrode connected to INxP of each configured channel.
+        Only the electrodes that pass the DC lead-off check are excited (see the module docstring).
 
         Returns:
             dict {channel (0-indexed): ImpedanceResult}, or None if interrupted
         """
         sensp = sum(1 << ch for ch in self.channels)
-        statp, _ = self._leads_off(sensp, 0x00)
-        self._set_excitation(sensp, 0x00)
+        statp = self._leads_off(sensp)
+        if self._statp & ~statp:
+            # Inputs that were off now pass the check: this also happens to open inputs when a step on SRB1
+            # (e.g., reconnecting the reference) is coupled through the filter capacitors, so check longer
+            statp = self._leads_off(sensp, LEADOFF_PRECHARGE_SAMPLES)
+        self._statp = statp
+        connected = sensp & ~statp
+        if connected == 0:
+            self.last_fits = {}
+            return {ch: ImpedanceResult(math.nan, True) for ch in self.channels}
+        self._set_excitation(connected)
         acquisition = self._acquire(duration, stop_event)
-        self._set_excitation(0x00, 0x00)
+        self._set_excitation(0x00)
         if acquisition is None:
             return None
         results = {}
-        for ch, (amplitude, railed) in self._channel_amplitudes(acquisition).items():
-            off = railed or bool(statp >> ch & 0x01)
-            results[ch] = ImpedanceResult(math.nan if off else self._to_impedance(amplitude), off)
-        self._off_channels = {ch for ch, r in results.items() if r.off}
+        self.last_fits = self._channel_fits(acquisition)
+        for ch, (fit, railed) in self.last_fits.items():
+            off = not connected >> ch & 0x01
+            valid = not (off or railed)
+            results[ch] = ImpedanceResult(self._to_impedance(fit.excitation) if valid else math.nan, off, railed and not off)
         return results
-
-    def measure_reference(self, duration=1.0, stop_event=None):
-        """
-        Measures the impedance of the reference electrode (SRB1, shared by all INxN).
-        The excitation is injected through the first configured channel and measured on all of them,
-        except those whose own electrode was off at the last call to measure_electrodes.
-
-        Returns:
-            ImpedanceResult, or None if interrupted
-        """
-        sensn = 1 << self.channels[0]
-        _, statn = self._leads_off(0x00, sensn)
-        if statn:
-            return ImpedanceResult(math.nan, True)
-        self._set_excitation(0x00, sensn)
-        acquisition = self._acquire(duration, stop_event)
-        self._set_excitation(0x00, 0x00)
-        if acquisition is None:
-            return None
-        amplitudes = [a for ch, (a, railed) in self._channel_amplitudes(acquisition).items()
-                      if not railed and ch not in self._off_channels]
-        if len(amplitudes) == 0:  # no electrode to measure the reference against
-            return ImpedanceResult(math.nan, False)
-        return ImpedanceResult(self._to_impedance(float(np.median(amplitudes))), False)
 
     def close(self):
         """
         Switches the excitation current off and stops the conversions.
         """
         try:
-            self._set_excitation(0x00, 0x00)
+            self._set_excitation(0x00)
             self.backend.write_regs(REG_LOFF, [0x00])
         finally:
             self.backend.stop_conversion()
+
+
+def reference_connected(results):
+    """
+    Infers the connection of the reference electrode from the results of ImpedanceMeter.measure_electrodes.
+
+    Returns:
+        True if at least one electrode is connected and does not saturate,
+        False if all the connected electrodes saturate (SRB1 is floating),
+        None if all electrodes are off (the bias or all electrodes may be unplugged)
+    """
+    connected = [r for r in results.values() if not r.off]
+    if len(connected) == 0:
+        return None
+    return not all(r.railed for r in connected)
 
 
 class _SimulatedReading:
@@ -342,6 +388,7 @@ class SimulatedADS:
         """
         Args:
             impedances: list of float: impedance of each electrode (Ohm), math.inf for a disconnected electrode
+            reference_impedance: float: math.inf for a disconnected reference (the connected channels then saturate)
         """
         self.nb_channels = nb_channels
         self.rng = np.random.default_rng(seed)
@@ -359,6 +406,7 @@ class SimulatedADS:
         self.t0 = 0.0
         self.pending = 0
         self.drdy = _SimulatedDRDY(self)
+        self.open_voltages = [0.0] * nb_channels  # V from mid-supply on the filter capacitor of each open input
 
     def get_nb_channels(self):
         return self.nb_channels
@@ -395,6 +443,14 @@ class SimulatedADS:
 
     def _read_event(self):
         self.pending -= 1
+        if self.regs[REG_LOFF] & 0x03 == 0:  # DC lead-off: the current sources charge the open inputs
+            current = [6e-9, 24e-9, 6e-6, 24e-6][(self.regs[REG_LOFF] >> 2) & 0x03]
+            for ch in range(self.nb_channels):
+                if self.regs[REG_LOFF_SENSP] >> ch & 0x01 and math.isinf(self.impedances[ch]):
+                    self.open_voltages[ch] += current / FILTER_CAPACITANCE / IMPEDANCE_DATARATE
+        for ch in range(self.nb_channels):
+            if not math.isinf(self.impedances[ch]):  # a connected electrode holds its input at the body potential
+                self.open_voltages[ch] = 0.0
         self.n += 1
         return _SimulatedEvent(int((self.t0 + self.n / IMPEDANCE_DATARATE) * 1e9))
 
@@ -405,21 +461,21 @@ class SimulatedADS:
         excitation = 0.0
         if self.regs[REG_LOFF] & 0x03:
             excitation = volts_per_ohm(current) * math.cos(2 * math.pi * (n - 1.5) / EXCITATION_PERIOD)
-        sensp, sensn = self.regs[REG_LOFF_SENSP], self.regs[REG_LOFF_SENSN]
+        sensp = self.regs[REG_LOFF_SENSP]
         full_scale = 4.5 / ADS_GAIN
         common = self.mains_uv * 1e-6 * math.sin(2 * math.pi * 60 * n / IMPEDANCE_DATARATE)
-        if sensn:
-            common -= excitation * self.reference_impedance
+        reference_off = math.isinf(self.reference_impedance)
+        n_open_excited = sum(1 for ch in range(self.nb_channels) if sensp >> ch & 0x01 and math.isinf(self.impedances[ch]))
+        common -= n_open_excited * excitation * (self.reference_impedance + PORTILOOP_SERIES_RESISTANCE)
         values = []
         for ch in range(self.nb_channels):
             v = common + self.noise_uv * 1e-6 * self.rng.standard_normal() + 20e-6 * n / IMPEDANCE_DATARATE
-            if sensp >> ch & 0x01:
-                z = self.impedances[ch]
-                v = full_scale if math.isinf(z) else v + excitation * z
-            elif math.isinf(self.impedances[ch]):
-                v = full_scale
+            z = self.impedances[ch]
+            if math.isinf(z) or reference_off:
+                v = full_scale  # open input, or floating SRB1
+            elif sensp >> ch & 0x01:
+                v += excitation * (z + PORTILOOP_SERIES_RESISTANCE)
             code = int(round(max(-full_scale, min(full_scale * (1 - 2 ** -23), v)) / full_scale * 2 ** 23))
             values.append(code & 0xFFFFFF)
-        statp = sum(1 << ch for ch in range(self.nb_channels) if math.isinf(self.impedances[ch]))
-        statn = 0xFF if math.isinf(self.reference_impedance) else 0x00
-        return _SimulatedReading(values, statp, statn)
+        statp = sum(1 << ch for ch in range(self.nb_channels) if self.open_voltages[ch] >= 2.25)
+        return _SimulatedReading(values, statp)
