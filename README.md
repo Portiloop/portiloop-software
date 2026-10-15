@@ -100,7 +100,7 @@ When recording signal, the structure of the output CSV file depends on the numbe
 :information_source: _the `stimulation_on` column is `1` when the UI stimulation switch is active and `0` otherwise, while the `stimulation` column contains the stimulus that has been sent if the stimulation switch was active or that would have been sent if the switch were active._
 
 The CSV file comes with JSON files of the same name:
-- `_metadata.json`: the settings of the recording. With the Simple GUI, `impedances_kohm` and `impedance_check_time` contain the last impedance check of the `Check` tab (`"?"` if no check was performed, `"<1"` for an electrode below 1 kΩ, which is within the accuracy of the measurement).
+- `_metadata.json`: the settings of the recording. With the Simple GUI, `impedances_kohm` and `impedance_check_time` contain the last impedance check of the `Check` tab (`"?"` if no check was performed, `"<1"` for an electrode below 1 kΩ, which is within the accuracy of the measurement). The electrodes that were `"OFF"` at that check (except the detection channel) are `"disabled"` in `channel_states`: their channel is powered down and records `0`.
 - `_stats.json`: the sampling statistics of the recording.
 - `_leadoff.json`: the lead-off events of the recording. Electrodes without contact are removed from the bias loop (at the start of the recording, or when they fall off during the night) so that they do not degrade the other channels. While the detection electrode is off, or while the reference or bias electrode seems off, detection and stimulation are paused (`stimulation_on` is `0`). See `portiloop/src/core/leadoff.py` for details.
 

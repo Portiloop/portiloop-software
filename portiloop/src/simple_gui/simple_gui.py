@@ -158,9 +158,23 @@ class ExperimentState:
         self.refresh_presets()
         self.preset_key = preset_name
 
+    def _channel_states(self):
+        """
+        Enables all the channels, except the electrodes that were OFF at the last impedance check (powered down, they
+        record 0). The detection channel is always enabled: if its electrode is off, lead-off detection pauses the
+        stimulation. If all the electrodes were OFF, the bias electrode was probably off and all channels are enabled.
+        """
+        states = ["simple"] * NB_CHANNELS
+        results = self.impedance_results or {}
+        if results and not all(r.off for r in results.values()):
+            for ch, r in results.items():
+                if r.off and ch + 1 != int(self.channel_detection):
+                    states[ch] = "disabled"
+        return states
+
     def _build_run_dict_from_ui_state(self):
         run_dict = RUN_SETTINGS
-        run_dict["channel_states"] = ["simple"] * NB_CHANNELS  # enable all channels
+        run_dict["channel_states"] = self._channel_states()
         run_dict['frequency'] = self.select_freq
         run_dict["filter_settings"]["power_line"] = self.power_line
         run_dict['channel_detection'] = int(self.channel_detection)
@@ -633,7 +647,9 @@ class SimpleUI:
                     impedance_html = ui.html('')
                     impedance_status = ui.label()
                     ui.label("chN is the electrode on pin N of the connector. "
-                             "The impedance of the reference cannot be measured, only its connection.").classes('text-sm')
+                             "The impedance of the reference cannot be measured, only its connection. "
+                             "Electrodes OFF at the last check are disabled in the next recording "
+                             "(except the detection channel).").classes('text-sm')
                     ui.timer(TIMER_IMPEDANCE_DISPLAY, refresh_impedance)
 
             ############### Output Tab ####################
