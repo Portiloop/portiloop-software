@@ -42,6 +42,7 @@ PORTILOOP_ID = f"{socket.gethostname()}-portiloop"
 PROFILE = True
 # STALL_THRESHOLD_S = 0.05
 CAPTURE_RT_PRIORITY = 10  # SCHED_FIFO priority of the capture process, allowed by LimitRTPRIO in simplegui.service
+UNINFORMATIVE_CODES = (0x000000, 0x7FFFFF, 0x800000)  # powered-down channel, positive and negative full scale
 
 
 def raise_priority():
@@ -133,8 +134,10 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
                     time.sleep(t_next - t)
                 t_next += sample_time
                 reading = backend.read()
-                # the same conversion read twice (the ADS runs at twice the frequency, but the timer can be late):
-                if reading.channels() == previous.channels() and any(reading.channels()):
+                # the same conversion read twice (the ADS runs at twice the frequency, but the timer can be late),
+                # only detectable when a channel is neither powered down nor saturated:
+                if (reading.channels() == previous.channels()
+                        and any(code not in UNINFORMATIVE_CODES for code in reading.channels())):
                     lost.append(nb_samples)
             else:
                 reading, missed = backend.wait_new_data()
