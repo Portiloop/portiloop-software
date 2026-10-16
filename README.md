@@ -63,6 +63,15 @@ If some issues arise, make sure your PC is connected to the same network as the 
 - Run `make` and follow the instructions when prompted. Reboot when complete.
 - :information_source: `make` usually fails just before the last step (when attempting to play a test sound). Whenever it does, just call `make` again.
 - :information_source: The first time you reboot after completing `make`, the device may fail to shutdown. In that situation, just wait for a few seconds after pressing the power button and unplug the power cable.
+- :information_source: The capture process runs with a real-time priority, so that the rest of the system does not delay the readings of the `ADS1299`. `make` allows it in the Jupyter and Simple GUI services (`LimitRTPRIO`) and in login shells (`/etc/security/limits.d/portiloop.conf`). On a Portiloop installed before, update these files with:
+  ```
+  cd ~/portiloop-software/portiloop/setup_files
+  sudo cp miniforge_jupyter.service /etc/systemd/system/jupyter.service
+  sudo cp simplegui.service /etc/systemd/system/simplegui.service
+  sudo cp limits.conf /etc/security/limits.d/portiloop.conf
+  sudo systemctl daemon-reload && sudo systemctl restart jupyter.service simplegui.service
+  ```
+  Otherwise, the capture process runs with a normal priority (see the log of the recording).
 
 That's it! Your Jupyter server should now be up and running, listening on IP address `192.168.4.1` and port `8080`, and automatically starting whenever the system boots up. You can now access it by typing `192.168.4.1:8080` in your browser. This should lead you to a login page where you'll be prompted for your password. If any issue arises, try with a different web browser.
 Similarly, the `Simple UI` can be accessed by typing `192.168.4.1:8081` in your browser. 

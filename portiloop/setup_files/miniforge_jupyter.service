@@ -9,6 +9,8 @@ Type=exec
 ExecStart=/bin/bash -c "XDG_RUNTIME_DIR=/run/user/`id -u` /home/mendel/miniforge3/bin/conda run -n portiloop jupyter notebook --no-browser --ip 192.168.4.1 --port 8080 --notebook-dir=/home/mendel"
 User=mendel
 Group=mendel
+# Allows the capture process to run with a real-time priority (CAPTURE_RT_PRIORITY in core/capture.py)
+LimitRTPRIO=10
 Restart=on-failure
 RestartSec=60s
 

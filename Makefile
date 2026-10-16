@@ -94,6 +94,7 @@ step5.temp: step4.temp
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp create_login_folder.service /etc/systemd/system/create_login_folder.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp miniforge_jupyter.service /etc/systemd/system/jupyter.service
 	cd ~/portiloop-software/portiloop/setup_files && sudo cp simplegui.service /etc/systemd/system/simplegui.service
+	cd ~/portiloop-software/portiloop/setup_files && sudo cp limits.conf /etc/security/limits.d/portiloop.conf
 	touch step5.temp
 
 step6.temp: step5.temp
