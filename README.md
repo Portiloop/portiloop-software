@@ -95,8 +95,11 @@ mmcblk2      179:96   0  119G  0 disk
 ```
 i.e., the SD card should appear as `mmcblk2` and have a partition appearing as `mmcblk2p1`.
 
-When using an SD card to record your EEG signal in CSV format, plug the SD card into your `Portiloop` before powering the `Portiloop` on.
+When using an SD card to record your EEG signal in CSV format, plug the SD card into your `Portiloop`, either before powering the `Portiloop` on or at any time afterwards: it is mounted under `/media/sd_card` when it is inserted (`/etc/udev/rules.d/99-portiloop-sd-card.rules`, installed by `make`).
+The software checks for the SD card at the start of each recording (and the Simple GUI's `SD Card` box is updated when the page is opened, when a tab is selected and every 5 seconds).
 Your CSV will then be recorded in the SD card under the `workspace` folder.
+On a Portiloop installed before, add the rule with `sudo cp ~/portiloop-software/portiloop/setup_files/sd_card.rules /etc/udev/rules.d/99-portiloop-sd-card.rules && sudo udevadm control --reload`.
+Remove the SD card only when no recording is running.
 Otherwise, your CSV will be recorded in internal memory under `/home/mendel/workspace`
 
 _:warning: Recording large CSV files in internal memory will quickly make your `Portiloop` unusable: the internal memory is quite small and recording CSVs in internal memory should never be done, except for quick testing.

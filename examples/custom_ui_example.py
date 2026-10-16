@@ -31,7 +31,7 @@ from nicegui import ui
 from portiloop import __version__
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.utils import DummyAlsaMixer
-from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED, STATE_PATH, NB_CHANNELS
+from portiloop.src.core.constants import SD_CARD, sd_card_detected, csv_path, STATE_PATH, NB_CHANNELS
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_processors import SpindleFilter
 from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector
@@ -176,7 +176,7 @@ class ExperimentState:
         else:
             self.run_dict['record'] = False
 
-        workspace_dir = CSV_PATH
+        workspace_dir = csv_path()  # the SD card may have been inserted since the start of the GUI
         self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name.split('.')[0], self.exp_name)
 
         self._t_capture = Process(target=start_capture,
@@ -218,9 +218,9 @@ class ExperimentState:
         self.stim_on = not self.stim_on
 
     def check_sd_card(self):
-        if SD_CARD_DETECTED:
+        if sd_card_detected():
             self.sd_card = True
-            self.disk_str = f"Disk Usage: {psutil.disk_usage(os.path.abspath('/media/sd_card/')).percent}%"
+            self.disk_str = f"Disk Usage: {psutil.disk_usage(str(SD_CARD)).percent}%"
         else:
             self.sd_card = False
             self.disk_str = f"Disk Usage: {psutil.disk_usage(os.getcwd()).percent}%"

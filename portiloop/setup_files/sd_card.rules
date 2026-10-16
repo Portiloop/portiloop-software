@@ -1,0 +1,3 @@
+# Mounts the SD card when it is inserted (the /etc/fstab entry alone only mounts it at boot).
+# systemd unmounts it when the card is removed (the mount unit is bound to the device).
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="mmcblk2p1", RUN+="/bin/systemctl --no-block start media-sd_card.mount"

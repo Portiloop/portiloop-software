@@ -22,7 +22,7 @@ from portiloop.src.core.hardware.backend import Backend
 from portiloop.src.core.hardware.config_hardware import to_ads_frequency
 from portiloop.src.core.hardware.impedance import ImpedanceMeter, results_to_metadata, NOT_CHECKED
 from portiloop.src.core.impedance_display import results_html
-from portiloop.src.core.constants import CSV_PATH, SD_CARD_DETECTED, STATE_PATH, NB_CHANNELS, DEFAULT_CONFIG_DICT
+from portiloop.src.core.constants import SD_CARD, sd_card_detected, csv_path, STATE_PATH, NB_CHANNELS, DEFAULT_CONFIG_DICT
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_pipelines import PIPELINES
 
@@ -330,7 +330,7 @@ class ExperimentState:
         self.set_volume(self.volume)
         self.run_dict['volume'] = int(self.volume)
 
-        workspace_dir = CSV_PATH
+        workspace_dir = csv_path()  # the SD card may have been inserted since the start of the GUI
         self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name.split('.')[0], self.exp_name)
 
         self._t_capture = Process(target=start_capture,
@@ -380,9 +380,9 @@ class ExperimentState:
         self.stim_on = not self.stim_on
 
     def check_sd_card(self):
-        if SD_CARD_DETECTED:
+        if sd_card_detected():
             self.sd_card = True
-            self.disk_str = f"Disk Usage: {psutil.disk_usage(os.path.abspath('/media/sd_card/')).percent}%"
+            self.disk_str = f"Disk Usage: {psutil.disk_usage(str(SD_CARD)).percent}%"
         else:
             self.sd_card = False
             self.disk_str = f"Disk Usage: {psutil.disk_usage(os.getcwd()).percent}%"
@@ -555,6 +555,7 @@ class SimpleUI:
                     ui.notify(f"Failed to sync clock: {err}", type='warning')
 
         app.on_connect(sync_clock)
+        app.on_connect(exp_state.check_sd_card)  # the SD card may have been inserted since the last visit
 
         async def manual_sync():
             await sync_clock(force=True)
@@ -596,7 +597,7 @@ class SimpleUI:
         ui.html(f"Connected to: <strong>{portiloop_ID}</strong> (v{RUN_SETTINGS['hardware_version']} - {RUN_SETTINGS['nb_channels']} channels)")
         ui.separator()
 
-        with ui.tabs().classes('w-full') as tabs:
+        with ui.tabs(on_change=lambda _: exp_state.check_sd_card()).classes('w-full') as tabs:
             control_tab = ui.tab('Control', icon='home')
             check_tab = ui.tab('Check', icon='Ω')  # not in Material Icons: rendered with a fallback font
             output_tab = ui.tab('Output', icon='timeline')

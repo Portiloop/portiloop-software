@@ -9,7 +9,7 @@ from portiloop.src.core.capture import start_capture
 from portiloop.src.core.hardware.config_hardware import to_ads_frequency
 from portiloop.src.core.hardware.impedance import ImpedanceMeter, SimulatedADS
 from portiloop.src.core.utils import get_hardware_version, DummyAlsaMixer
-from portiloop.src.core.constants import CSV_PATH, SIGNAL_SAMPLES_FOLDER
+from portiloop.src.core.constants import csv_path, SIGNAL_SAMPLES_FOLDER
 
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_pipelines import PIPELINES, DEFAULT_PIPELINE_KEY
@@ -34,7 +34,7 @@ class JupyterUI:
         self._pipelines = pipelines
         self._default_pipeline_key = default_pipeline_key
 
-        self.filename = CSV_PATH / 'recording' / 'recording.csv'
+        self.filename = Path('recording') / 'recording.csv'  # in csv_path(), checked at the start of the recording
         self.record_raw = True
         self.record_filtered = False
 
@@ -523,7 +523,7 @@ class JupyterUI:
             if isinstance(value, basic_types) or value is None:
                 output_dict[key] = value
 
-        output_dict['filename'] = str(self.filename)
+        output_dict['filename'] = str(csv_path() / self.filename)
 
         # Make sure we don't have the filter settings in duplicates
         for key, value in output_dict['filter_settings'].items():
@@ -841,7 +841,7 @@ class JupyterUI:
                 val += '.csv'
         else:
             val = 'recording.csv'
-        self.filename = CSV_PATH / val.split('.')[0] / val
+        self.filename = Path(val.split('.')[0]) / val
 
     def on_b_duration(self, value):
         val = value['new']
