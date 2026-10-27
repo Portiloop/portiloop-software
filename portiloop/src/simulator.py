@@ -154,12 +154,18 @@ PIPELINE_ALIASES = {
     "none": "Acquisition only",
     "acquisition only": "Acquisition only",
     "acquisition": "Acquisition only",
+    "tinysleepnet": "Sleep staging (TinySleepNet)",
+    "sleep staging (tinysleepnet)": "Sleep staging (TinySleepNet)",
+    "nanosleepnet": "Sleep staging (NanoSleepNet)",
+    "sleep staging (nanosleepnet)": "Sleep staging (NanoSleepNet)",
 }
 
 KNOWN_PIPELINES = [
     "Sleep spindles",
     "Sleep slow oscillations",
     "Sleep slow oscillations (upstate)",
+    "Sleep staging (TinySleepNet)",
+    "Sleep staging (NanoSleepNet)",
     "Acquisition only",
 ]
 
@@ -603,6 +609,8 @@ class PortiloopSimulator:
                             res_list = det_signal[0]
                             if any(res_list):
                                 total_detections += 1
+                    elif detector is not None and hasattr(detector, "skip"):
+                        detector.skip(len(filtered_list))
 
                     # 3. Stimulation (skipped during sleep timeout)
                     if stimulator is not None and not is_paused and det_signal is not None:
