@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 STAGES = ("W", "N1", "N2", "N3", "REM")  # detection signal 1 to 5
 NO_STAGE = 0  # detection signal before the first stage
-DEFAULT_FPZ_CHANNEL = 1  # an assumption: set the Fpz channel of the actual montage in the GUI
+DEFAULT_FPZ_CHANNEL = 8  # CLAS protocol montage (Cz on channel 6, the default detection channel); set it in the GUI for other montages
 MODELS_FOLDER = DEFAULT_MODEL_PATH.parent
 
 # The models were trained on Sleep-EDF Fpz-Cz: 100 Hz, 30 s epochs, +-192 uV
