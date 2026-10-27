@@ -174,7 +174,7 @@ You can select the relevant pipeline and parameters for your experiments in the 
 
 #### Sleep staging (TinySleepNet) and Sleep staging (NanoSleepNet)
 These pipelines stage the sleep every 30 s (W, N1, N2, N3, REM) from the Fpz - Cz derivation, without stimulation. They differ only in the model: TinySleepNet (1.5 M parameters, TensorFlow Lite) or NanoSleepNet-TCN (17 k parameters, NumPy; each epoch is staged from it and the 9 epochs before it).
-- Set the `Detection channel` to the Cz electrode and the `Fpz channel` to the Fpz electrode (both referenced to the same electrode).
+- Set the `Detection channel` to the Cz electrode and the `Fpz channel` to the Fpz electrode (both referenced to the same electrode). The defaults, 6 and 8, match the CLAS protocol montage.
 - The sampling frequency must be 250 Hz; otherwise, or if the Fpz or Cz channel is disabled, or if the model cannot be used, the recording goes on without staging: the GUI shows a warning at the start and `<recording>_staging.json` gives the reason.
 - The stage of the last completed 30 s epoch is written to the `detection` column of the recording (0: none yet, 1: W, 2: N1, 3: N2, 4: N3, 5: REM), and each epoch to `<recording>_stages.tsv` next to it (`first_row`: row of the recording where the epoch starts).
 - The staging starts at once: the `Stimulation starts after` setting does not apply (there is no stimulation). It restarts from scratch after the detection is paused; it stops for the rest of the recording if the Fpz or Cz electrode is off.
