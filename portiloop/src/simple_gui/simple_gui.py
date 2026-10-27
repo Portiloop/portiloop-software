@@ -25,6 +25,7 @@ from portiloop.src.core.impedance_display import results_html
 from portiloop.src.core.constants import SD_CARD, sd_card_detected, csv_path, STATE_PATH, NB_CHANNELS, DEFAULT_CONFIG_DICT
 from portiloop.src.custom.config import RUN_SETTINGS
 from portiloop.src.custom.custom_pipelines import PIPELINES
+from portiloop.src.custom.sleep_staging import DEFAULT_FPZ_CHANNEL, STAGING_DETECTORS
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ PERSISTED_FIELDS = (
     "select_freq",
     "power_line",
     "channel_detection",
+    "staging_fpz_channel",
     "pipeline_key",
     "custom_exp_name",
     "stim_on",
@@ -110,6 +112,7 @@ class ExperimentState:
         self.select_freq = 250
         self.power_line = 60
         self.channel_detection = DEFAULT_CONFIG_DICT.get('channel_detection', 6)
+        self.staging_fpz_channel = RUN_SETTINGS.get('staging_fpz_channel', DEFAULT_FPZ_CHANNEL)
         self.python_clock = RUN_SETTINGS['python_clock']
         self.persistent_file_name = STATE_PATH / "Previous run.json"
 
@@ -178,6 +181,7 @@ class ExperimentState:
         run_dict['frequency'] = self.select_freq
         run_dict["filter_settings"]["power_line"] = self.power_line
         run_dict['channel_detection'] = int(self.channel_detection)
+        run_dict['staging_fpz_channel'] = int(self.staging_fpz_channel)
         run_dict['pipeline_name'] = self.pipeline_key
         run_dict['pipeline'] = self.pipeline_key
         run_dict['sleep_timeout'] = self.sleep_timeout
@@ -320,7 +324,8 @@ class ExperimentState:
         self.len_plot = int(self.run_dict['frequency'] * LINE_PLOT_WINDOW / LINE_PLOT_STRIDE)
 
         # Calculating how much time to pause in seconds
-        if self.sleep_timeout > 0:
+        # The sleep timeout delays the stimulation: pipelines without a stimulator (sleep staging) are not paused.
+        if self.sleep_timeout > 0 and self._pipelines[self.pipeline_key]["stimulator"] is not None:
             self.time_unpause = self.time_started.timestamp() + self.sleep_timeout * 60
             self.pause_value.value = True
             logger.info("Currently: %s, Pausing until: %s", self.time_started.timestamp(), self.time_unpause)
@@ -415,6 +420,12 @@ class SimpleUI:
         def start():
             exp_state.start()
             start_button.enabled = False
+            detector = self._pipelines[exp_state.pipeline_key]["detector"]
+            if detector in STAGING_DETECTORS:
+                error = detector.configuration_error(exp_state.run_dict)
+                if error:  # the recording goes on: the raw signal is worth keeping
+                    ui.notify(f"Sleep staging will not run: {error}. Recording without it.",
+                              type='warning', closeBtn='OK', timeout=0)
 
         def stop():
             exp_state.stop()
@@ -706,6 +717,12 @@ class SimpleUI:
                         possible_channels,
                         value=exp_state.channel_detection,
                         label="Detection channel").bind_value(exp_state, 'channel_detection').classes('w-3/4')
+                    # Sleep staging uses Fpz - Cz; Cz is the detection channel
+                    select_channel_fpz = ui.select(
+                        possible_channels,
+                        value=exp_state.staging_fpz_channel,
+                        label="Fpz channel (sleep staging; Cz = detection channel)").bind_value(exp_state, 'staging_fpz_channel').classes('w-3/4')
+                    select_channel_fpz.bind_visibility_from(exp_state, 'pipeline_key', backward=lambda key: self._pipelines[key]["detector"] in STAGING_DETECTORS)
                     ui.separator().classes('w-2/3')
                     ui.label('Clock:')
                     clock_toggle = ui.toggle(['ADS', 'Coral'], value='Coral' if exp_state.python_clock else 'ADS').bind_value(
@@ -745,6 +762,7 @@ class SimpleUI:
                     start_button.bind_enabled_to(select_freq)
                     start_button.bind_enabled_to(select_notch)
                     start_button.bind_enabled_to(select_channel_detect)
+                    start_button.bind_enabled_to(select_channel_fpz)
                     start_button.bind_enabled_to(clock_toggle)
                     start_button.bind_enabled_to(sync_clock_btn)
                     start_button.bind_enabled_to(sleep_timeout)

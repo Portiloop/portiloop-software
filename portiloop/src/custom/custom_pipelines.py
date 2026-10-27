@@ -5,6 +5,7 @@ Custom pipelines available in the GUI.
 from portiloop.src.custom.custom_processors import SpindleFilter, SlowOscillationFilter
 from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector, SlowOscillationDetector, SOUpstateDetector
 from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator, SlowOscillationStimulator
+from portiloop.src.custom.sleep_staging import SleepStagingDetector, NanoSleepNetStagingDetector
 
 PIPELINES = {
     "Acquisition only": {
@@ -29,6 +30,18 @@ PIPELINES = {
         "processor": SlowOscillationFilter,
         "detector": SOUpstateDetector,
         "stimulator": SlowOscillationStimulator,
+        "config_modifiers": {}
+    },
+    "Sleep staging (TinySleepNet)": {
+        "processor": None,
+        "detector": SleepStagingDetector,
+        "stimulator": None,
+        "config_modifiers": {}
+    },
+    "Sleep staging (NanoSleepNet)": {
+        "processor": None,
+        "detector": NanoSleepNetStagingDetector,
+        "stimulator": None,
         "config_modifiers": {}
     }
 }

@@ -172,6 +172,14 @@ You can select the relevant pipeline and parameters for your experiments in the 
 
 :information_source: The `Acquisition only` pipeline does not perform any detection or stimulation.
 
+#### Sleep staging (TinySleepNet) and Sleep staging (NanoSleepNet)
+These pipelines stage the sleep every 30 s (W, N1, N2, N3, REM) from the Fpz - Cz derivation, without stimulation. They differ only in the model: TinySleepNet (1.5 M parameters, TensorFlow Lite) or NanoSleepNet-TCN (17 k parameters, NumPy; each epoch is staged from it and the 9 epochs before it).
+- Set the `Detection channel` to the Cz electrode and the `Fpz channel` to the Fpz electrode (both referenced to the same electrode).
+- The sampling frequency must be 250 Hz; otherwise, or if the Fpz or Cz channel is disabled, or if the model cannot be used, the recording goes on without staging: the GUI shows a warning at the start and `<recording>_staging.json` gives the reason.
+- The stage of the last completed 30 s epoch is written to the `detection` column of the recording (0: none yet, 1: W, 2: N1, 3: N2, 4: N3, 5: REM), and each epoch to `<recording>_stages.tsv` next to it (`first_row`: row of the recording where the epoch starts).
+- The staging starts at once: the `Stimulation starts after` setting does not apply (there is no stimulation). It restarts from scratch after the detection is paused; it stops for the rest of the recording if the Fpz or Cz electrode is off.
+- The models (`portiloop/models/tinysleepnet`, `portiloop/models/nanosleepnet`) were trained and evaluated on the Sleep-EDF dataset; they have not been validated on Portiloop recordings.
+
 ### Jupyter UI
 
 The `Portiloop` advanced UI is a web-based interface running as a `jupyter` server.
@@ -228,6 +236,8 @@ The core Portiloop software architecture is defined in `portiloop.src.core`.
 It defines the three interfaces that developers of custom pipelines must implement:
 - `processing.py` defines the `Processor` interface, in charge of all signal processing.
 - `detection.py` defines the `Detector` interface, in charge of all detection algorithms/models.
+  A `Detector` may also define `skip(n_points)`: the capture loop then calls it for the points it does not pass to `detect` (detection paused, electrode off);
+  and `channels`, the list of channels it uses (default: the detection channel): the detection is paused when one of their electrodes is off.
 - `stimulation.py` defines the `Stimulator` interface, in charge of all response to the detector output.
 
 The Portiloop software is a Python library.

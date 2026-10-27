@@ -294,6 +294,8 @@ def start_capture(
 
         # Lead-off detection: detection and stimulation are paused while the detection electrode is off (for the
         # rest of the recording), or while the reference or bias electrode seems off
+        # A detector that uses several channels lists them in its `channels` attribute.
+        detection_channels = getattr(detector, "channels", [config_dict['channel_detection']])
         leadoff_events = []
         detection_electrode_off = False
         reference_or_bias_off = False
@@ -352,9 +354,10 @@ def start_capture(
             elif msg[0] == 'LOFF':
                 event = dict(msg[1], time=datetime.fromtimestamp(msg[1]['time']).isoformat(timespec='milliseconds'))
                 logger.warning("Lead-off event: %s, channels %s (sample %s).", event['event'], event['channels'], event['sample'])
-                if event['event'] in (NOT_CONNECTED_AT_START, DISABLED) and config_dict['channel_detection'] in event['channels']:
+                if (event['event'] in (NOT_CONNECTED_AT_START, DISABLED)
+                        and any(ch in event['channels'] for ch in detection_channels)):
                     detection_electrode_off = True
-                    logger.warning("The detection electrode is off: detection and stimulation are paused.")
+                    logger.warning("A detection electrode is off: detection and stimulation are paused.")
                 elif event['event'] == REFERENCE_OR_BIAS_OFF:
                     reference_or_bias_off = True
                 elif event['event'] == REFERENCE_OR_BIAS_RECOVERED:
@@ -455,6 +458,9 @@ def start_capture(
                         t6 = time.perf_counter()
                         perf["stimulate"][0] += t6 - t5
                         perf["stimulate"][1] += 1
+            elif detector is not None and hasattr(detector, "skip"):
+                # Detectors that follow the signal over time (e.g. sleep staging) need to know about missed points
+                detector.skip(len(raw_points))
 
             if PROFILE:
                 t7 = time.perf_counter()
