@@ -28,8 +28,7 @@ from portiloop.src.core.utils import Dummy, get_hardware_version
 from portiloop.src.core.output import CSVRecorder, LiveDisplay, LSLStreamer
 from portiloop.src.core.capture_backend import ADSBackend, FileBackend
 from portiloop.src.core.constants import SIGNAL_SAMPLES_FOLDER
-from portiloop.src.core.leadoff import (LeadoffMonitor, NOT_CONNECTED_AT_START, DISABLED, REFERENCE_OR_BIAS_OFF,
-                                        REFERENCE_OR_BIAS_RECOVERED)
+from portiloop.src.core.leadoff import LeadoffMonitor, NOT_CONNECTED_AT_START, DISABLED, REFERENCE_OR_BIAS_OFF, REFERENCE_OR_BIAS_RECOVERED
 
 from portiloop.src import ADS
 if ADS:
@@ -124,7 +123,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
 
         t_next = t + sample_time
         t_chk_msg = t + time_msg_in
-        
+
         # sampling loop:
         while c and t < t_max:
             t = time.perf_counter()
@@ -136,8 +135,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
                 reading = backend.read()
                 # the same conversion read twice (the ADS runs at twice the frequency, but the timer can be late),
                 # only detectable when a channel is neither powered down nor saturated:
-                if (reading.channels() == previous.channels()
-                        and any(code not in UNINFORMATIVE_CODES for code in reading.channels())):
+                if reading.channels() == previous.channels() and any(code not in UNINFORMATIVE_CODES for code in reading.channels()):
                     lost.append(nb_samples)
             else:
                 reading, missed = backend.wait_new_data()
