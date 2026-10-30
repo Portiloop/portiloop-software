@@ -167,6 +167,7 @@ class Backend:
         self.dev.xfer([STOP])
 
     def close(self):
+        self.drdy.close()
         if self.start_gpio is not None:
             self.start_gpio.close()
         self.dev.close()
