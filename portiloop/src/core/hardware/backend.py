@@ -1,8 +1,15 @@
 import logging
+import os
+import struct
 from periphery import GPIO
 from spidev import SpiDev
 
 logger = logging.getLogger(__name__)
+
+# struct gpioevent_data of the GPIO character device (v1 API, used by python-periphery on Mendel):
+# __u64 timestamp, __u32 id, padded to 16 bytes
+_DRDY_EVENT = struct.Struct("=QI4x")
+_DRDY_QUEUE = 16  # events kept by the kernel for a line, older ones are dropped (drivers/gpio/gpiolib.c)
 
 
 WAKEUP = 0x02
@@ -139,12 +146,9 @@ class Backend:
             (Reading, int): the latest conversion, and the number of conversions missed since the previous call
                 (DRDY events still pending when the caller is late: RDATA only returns the latest conversion)
         """
-        self.drdy.poll(timeout=None)  # poll the falling edge event
-        self.drdy.read_event()  # consume the event
-        missed = 0
-        while self.drdy.poll(0):
-            self.drdy.read_event()
-            missed += 1
+        # blocks until a DRDY falling edge is queued, then returns all the queued events at once
+        events = os.read(self.drdy._line_fd, _DRDY_EVENT.size * _DRDY_QUEUE)
+        missed = len(events) // _DRDY_EVENT.size - 1
         return self.read(), missed  # read SPI with RDATA
 
     def start_conversion(self):
