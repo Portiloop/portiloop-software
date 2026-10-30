@@ -16,9 +16,19 @@ import psutil
 from nicegui import app, ui
 
 from portiloop import __version__
-from portiloop.src.core.capture import start_capture
 from portiloop.src.core.utils import DummyAlsaMixer, get_hardware_version
 from portiloop.src.core.hardware.backend import Backend
+
+# The ADS1299 must be reset after power-up, and the Simple GUI starts at boot, before any recording.
+# Reset it before importing constants, which reads the number of channels from the ADS.
+_backend = Backend(get_hardware_version())
+try:
+    _backend.reset()
+finally:
+    _backend.close()
+del _backend
+
+from portiloop.src.core.capture import start_capture
 from portiloop.src.core.hardware.config_hardware import to_ads_frequency
 from portiloop.src.core.hardware.impedance import ImpedanceMeter, results_to_metadata, NOT_CHECKED
 from portiloop.src.core.impedance_display import results_html
