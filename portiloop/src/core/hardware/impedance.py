@@ -199,6 +199,7 @@ class ImpedanceMeter:
         as they are not excited anymore.
         """
         self.channels = sorted(channels)
+        self.backend.reset()
         self.backend.stop_conversion()
         self.backend.write_regs(0x00, impedance_config(self.channels, self.nb_channels, self.current))
         self._statp = self._leads_off(sum(1 << ch for ch in self.channels), LEADOFF_PRECHARGE_SAMPLES)
@@ -446,6 +447,10 @@ class SimulatedADS:
 
     def get_nb_channels(self):
         return self.nb_channels
+
+    def reset(self):
+        self.regs = [0x00] * 0x18
+        self.running = False
 
     def write_regs(self, start, values):
         self.regs[start:start + len(values)] = values

@@ -85,6 +85,7 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
 
         hardware_version = get_hardware_version()
         backend = Backend(hardware_version)
+        backend.reset()
 
         config = BACKEND_CONFIG
         if python_clock:  # set ADS to 2 * frequency

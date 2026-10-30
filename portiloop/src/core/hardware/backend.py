@@ -1,6 +1,7 @@
 import logging
 import os
 import struct
+from time import sleep
 from periphery import GPIO
 from spidev import SpiDev
 
@@ -106,11 +107,17 @@ class Backend:
     # def powerdown(self):
     #     self.pwdn.write(False)
 
-    # def reset(self):
-    #     self.nrst.write(False)
-    #     sleep(0.01)
-    #     self.nrst.write(True)
-    #     sleep(0.1)
+    def reset(self):
+        """
+        Resets the ADS1299 with the RESET command: all the registers return to their default values.
+
+        The datasheet requires a reset after power-up (SBAS499C, 11.1 Power-Up Sequencing), and the RESET pin
+        is not driven by the Coral on v2 (pulled up on the PCB). Only call it before configuring the ADS: it
+        would break the recording of another process using it.
+        """
+        self.dev.xfer([RESET])
+        sleep(0.001)  # 18 tCLK (9 us) to execute the command, without sending any other command
+        self.stop_continuous()  # the device wakes up in RDATAC mode
 
     def read_regs(self, start, len):
         values = self.dev.xfer([RREG | (start & 0x1F), (len - 1) & 0x1F] + [0x00] * len)
