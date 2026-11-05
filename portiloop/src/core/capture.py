@@ -28,8 +28,8 @@ from portiloop.src.core.utils import Dummy, get_hardware_version
 from portiloop.src.core.output import CSVRecorder, LiveDisplay, LSLStreamer
 from portiloop.src.core.capture_backend import ADSBackend, FileBackend
 from portiloop.src.core.constants import SIGNAL_SAMPLES_FOLDER
-from portiloop.src.core.leadoff import (LeadoffMonitor, NOT_CONNECTED_AT_START, DISABLED, REFERENCE_OR_BIAS_OFF,
-                                        REFERENCE_OR_BIAS_RECOVERED)
+from portiloop.src.core.leadoff import (LeadoffCheck, LeadoffMonitor, NOT_CONNECTED_AT_START, DISABLED,
+                                        REFERENCE_OR_BIAS_OFF, REFERENCE_OR_BIAS_RECOVERED)
 
 from portiloop.src import ADS
 if ADS:
@@ -69,8 +69,10 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
         time_msg_in: float: min time between attempts to recv incomming messages
         channel_states: list: list of strings representing channel states ('disabled', 'simple', etc.)
         vref: float: ADS reference voltage
-        leadoff_detection: bool: if True, fallen electrodes are removed from the bias loop (see core/leadoff.py),
-            and the lead-off events are sent to the parent process as ("LOFF", event)
+        leadoff_detection: bool: if True, fallen electrodes are removed from the bias loop (see core/leadoff.py): the
+            capture process runs the initial check and sends ("LOFF", event) and ("LOFF_IN_USE", mask), then runs the
+            checks requested by the parent process, ("LOFF_CHECK", mask) and ("LOFF_IN_USE", mask), and sends their
+            results as ("LOFF_RESULT", result)
 
     Lost samples (conversions missed because the process was late, or read twice with the Python clock) repeat the
     previous sample, their indices are sent to the parent process with the statistics.
@@ -100,17 +102,19 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
 
         leadoff = None
         if leadoff_detection:
-            leadoff = LeadoffMonitor(backend, frequency, in_use=config[13], nb_channels=len(channel_states), vref=vref)
+            leadoff = LeadoffCheck(backend, frequency, in_use=config[13], nb_channels=len(channel_states))
             for event in leadoff.initial_check():
                 p_msg_io.send(("LOFF", event))
+            p_msg_io.send(("LOFF_IN_USE", leadoff.in_use))
 
         c = True
         
         def send_sample(reading):
             p_data_o.send(reading.channels())
             if leadoff is not None:
-                for event in leadoff.update(reading):
-                    p_msg_io.send(("LOFF", event))
+                result = leadoff.update(reading)
+                if result is not None:
+                    p_msg_io.send(("LOFF_RESULT", result))
 
         # first sample:
         reading = backend.read()
@@ -152,11 +156,15 @@ def capture_process(p_data_o, p_msg_io, duration, frequency, python_clock, time_
             # Check for messages
             if t >= t_chk_msg:
                 t_chk_msg = t + time_msg_in
-                if p_msg_io.poll():
+                while p_msg_io.poll():
                     message = p_msg_io.recv()
                     if message == 'STOP':
                         # p_msg_io.send(("PRT", f"msg from parent process: {message}"))
                         c = False
+                    elif leadoff is not None and message[0] == 'LOFF_CHECK':
+                        leadoff.start_check(message[1])
+                    elif leadoff is not None and message[0] == 'LOFF_IN_USE':
+                        leadoff.set_in_use(message[1])
         t = time.perf_counter()
         total_time = t - t_start
         nb_steps = nb_samples - 1  # sample periods since the first sample
@@ -298,7 +306,31 @@ def start_capture(
         leadoff_events = []
         detection_electrode_off = False
         reference_or_bias_off = False
+        leadoff = None  # screening of the recorded signal, the checks run in the capture process
+
+        def send_to_capture(msg):
+            try:
+                capture_backend.send_msg(msg)
+            except (BrokenPipeError, OSError):  # the capture process has stopped
+                pass
+
         if config_dict['signal_input'] == "ADS" and config_dict.get('leadoff_detection', True):
+            leadoff = LeadoffMonitor(config_dict['frequency'], len(config_dict['channel_states']), send_to_capture,
+                                     vref=config_dict['vref'])
+            dump_metadata(config_dict, {"events": leadoff_events}, "leadoff")
+
+        def leadoff_event(event):
+            nonlocal detection_electrode_off, reference_or_bias_off
+            event = dict(event, time=datetime.fromtimestamp(event['time']).isoformat(timespec='milliseconds'))
+            logger.warning("Lead-off event: %s, channels %s (sample %s).", event['event'], event['channels'], event['sample'])
+            if event['event'] in (NOT_CONNECTED_AT_START, DISABLED) and config_dict['channel_detection'] in event['channels']:
+                detection_electrode_off = True
+                logger.warning("The detection electrode is off: detection and stimulation are paused.")
+            elif event['event'] == REFERENCE_OR_BIAS_OFF:
+                reference_or_bias_off = True
+            elif event['event'] == REFERENCE_OR_BIAS_RECOVERED:
+                reference_or_bias_off = False
+            leadoff_events.append(event)
             dump_metadata(config_dict, {"events": leadoff_events}, "leadoff")
     
         # Initialize the variable to keep track of whether we are in a detection state or not for the markers
@@ -351,17 +383,12 @@ def start_capture(
             elif msg[0] == 'PRT':
                 logger.info(msg[1])
             elif msg[0] == 'LOFF':
-                event = dict(msg[1], time=datetime.fromtimestamp(msg[1]['time']).isoformat(timespec='milliseconds'))
-                logger.warning("Lead-off event: %s, channels %s (sample %s).", event['event'], event['channels'], event['sample'])
-                if event['event'] in (NOT_CONNECTED_AT_START, DISABLED) and config_dict['channel_detection'] in event['channels']:
-                    detection_electrode_off = True
-                    logger.warning("The detection electrode is off: detection and stimulation are paused.")
-                elif event['event'] == REFERENCE_OR_BIAS_OFF:
-                    reference_or_bias_off = True
-                elif event['event'] == REFERENCE_OR_BIAS_RECOVERED:
-                    reference_or_bias_off = False
-                leadoff_events.append(event)
-                dump_metadata(config_dict, {"events": leadoff_events}, "leadoff")
+                leadoff_event(msg[1])
+            elif msg[0] == 'LOFF_IN_USE':
+                leadoff.set_in_use(msg[1])
+            elif msg[0] == 'LOFF_RESULT':
+                for event in leadoff.check_done(msg[1]):
+                    leadoff_event(event)
             elif msg[0] == 'STT':
                 total_time, nb_steps, lost = msg[1]
                 step_duration = total_time / nb_steps
@@ -471,6 +498,11 @@ def start_capture(
             timestamp = time.time() - start_time
             if q_display is not None:
                 q_display.put([timestamp, raw_points, filtered_points])
+
+            # Lead-off screening, after the stimulation so as not to delay it
+            if leadoff is not None:
+                for event in leadoff.update(raw_points):
+                    leadoff_event(event)
 
             if PROFILE:
                 t8 = time.perf_counter()
