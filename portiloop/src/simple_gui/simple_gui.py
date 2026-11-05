@@ -29,6 +29,7 @@ finally:
 del _backend
 
 from portiloop.src.core.capture import start_capture
+from portiloop.src.core.fast_capture import start_fast_capture, FAST_RATES
 from portiloop.src.core.hardware.config_hardware import to_ads_frequency
 from portiloop.src.core.hardware.impedance import ImpedanceMeter, results_to_metadata, NOT_CHECKED
 from portiloop.src.core.impedance_display import results_html
@@ -47,6 +48,10 @@ LINE_PLOT_UPDATE_EVERY = 2  # plot every N x TIMER_READ_DISPLAY_QUEUE s
 LINE_PLOT_FIGSIZE = (3, 2)
 LINE_PLOT_STRIDE = 4  # plot only 1 in N datapoints
 TIMER_READ_DISPLAY_QUEUE = 1.0
+
+SAMPLE_FREQUENCIES = [50, 100, 250, 500, 1000]
+DEFAULT_FREQUENCY = 250
+DEFAULT_FAST_FREQUENCY = 8000  # "Acquisition only (fast)" pipeline, FAST_RATES
 
 TIMER_SD_CARD = 5.0
 TIMER_CHECK_CAPTURE = 2.0
@@ -168,6 +173,19 @@ class ExperimentState:
         self.refresh_presets()
         self.preset_key = preset_name
 
+    def is_fast(self):
+        """Whether the pipeline is the fast acquisition (2 to 16 kSPS, core/fast_capture.py)."""
+        return self._pipelines.get(self.pipeline_key, {}).get("fast_capture", False)
+
+    def frequencies(self):
+        """The sample frequencies of the pipeline."""
+        return list(FAST_RATES) if self.is_fast() else list(SAMPLE_FREQUENCIES)
+
+    def fix_frequency(self):
+        """Sets the default sample frequency of the pipeline if the current one is not one of its frequencies."""
+        if self.select_freq not in self.frequencies():
+            self.select_freq = DEFAULT_FAST_FREQUENCY if self.is_fast() else DEFAULT_FREQUENCY
+
     def _channel_states(self):
         """
         Enables all the channels, except the electrodes that were OFF at the last impedance check (powered down, they
@@ -243,6 +261,7 @@ class ExperimentState:
                 # Check that pipeline_key is valid:
                 if self.pipeline_key not in self.pipeline_keys:
                     self.pipeline_key = self.pipeline_keys[0]
+                self.fix_frequency()
 
                 if hasattr(self, 'volume'):
                     self.set_volume(self.volume)
@@ -311,10 +330,14 @@ class ExperimentState:
         while not self.q_msg.empty():
             self.q_msg.get()
 
-        if not self.python_clock:  # ADS clock: force the frequency to an ADS-compatible frequency
+        fast = self.is_fast()
+        self.fix_frequency()
+        if not self.python_clock and not fast:  # ADS clock: force the frequency to an ADS-compatible frequency
             self.select_freq = to_ads_frequency(self.select_freq)
 
         self.run_dict = self._build_run_dict_from_ui_state()
+        if fast:
+            self.run_dict['python_clock'] = False  # the capture program uses the ADS's DRDY
         self.save()
 
         # Set the variables for the experiment
@@ -343,14 +366,17 @@ class ExperimentState:
         workspace_dir = csv_path()  # the SD card may have been inserted since the start of the GUI
         self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name.split('.')[0], self.exp_name)
 
-        self._t_capture = Process(target=start_capture,
-                                  args=(self._pipelines[self.pipeline_key]["processor"],
-                                        self._pipelines[self.pipeline_key]["detector"],
-                                        self._pipelines[self.pipeline_key]["stimulator"],
-                                        self.run_dict,
-                                        self.q_msg,
-                                        self.display_q,
-                                        self.pause_value,))
+        if fast:
+            target, args = start_fast_capture, (self.run_dict, self.q_msg, self.display_q, self.pause_value)
+        else:
+            target, args = start_capture, (self._pipelines[self.pipeline_key]["processor"],
+                                           self._pipelines[self.pipeline_key]["detector"],
+                                           self._pipelines[self.pipeline_key]["stimulator"],
+                                           self.run_dict,
+                                           self.q_msg,
+                                           self.display_q,
+                                           self.pause_value)
+        self._t_capture = Process(target=target, args=args)
         self._t_capture.start()
         logger.info("PID start process: %s. Kill this process if program crashes before end of execution.", self._t_capture.pid)
 
@@ -489,14 +515,24 @@ class SimpleUI:
             except Exception as e:
                 logger.warning("Caught exception while saving preset: %s", e)
 
-        def disable_stim_toggle_callback(caller):
+        def refresh_frequencies():
+            # the fast acquisition has its own sample frequencies
+            select_freq.options = exp_state.frequencies()
+            select_freq.update()  # before setting the value: it is shown from the options of the last update
+            exp_state.fix_frequency()
+            select_freq.value = exp_state.select_freq
+
+        def pipeline_changed(e):
             stim_toggle.enable()
+            exp_state.pipeline_key = e.value  # before the binding, for the frequencies of the new pipeline
+            refresh_frequencies()
 
         def preset_callback(caller):
             if exp_state.preset_key is not None:
                 try:
                     filepath = STATE_PATH / f"{exp_state.preset_key}.json"
                     exp_state.load(filepath=filepath)  # load persistent state
+                    refresh_frequencies()
                     logger.info("Loaded preset %s", filepath)
                 except Exception as e:
                     logger.warning("Caught exception while loading preset: %s", e)
@@ -696,12 +732,11 @@ class SimpleUI:
                     select_preset = ui.select(exp_state.preset_keys, value=exp_state.preset_key, on_change=preset_callback, label="Preset").bind_value(exp_state, 'preset_key')
                     select_preset.classes('w-3/4')
 
-                    select_pipeline = ui.select(exp_state.pipeline_keys, value=exp_state.pipeline_key, on_change=disable_stim_toggle_callback, label="Pipeline").bind_value(exp_state, 'pipeline_key')
+                    select_pipeline = ui.select(exp_state.pipeline_keys, value=exp_state.pipeline_key, on_change=pipeline_changed, label="Pipeline").bind_value(exp_state, 'pipeline_key')
                     select_pipeline.classes('w-3/4')
 
-                    possible_freqs = [50, 100, 250, 500, 1000]
                     select_freq = ui.select(
-                        possible_freqs,
+                        exp_state.frequencies(),
                         value=exp_state.select_freq,
                         label="Sample frequency (Hz)").bind_value(exp_state, 'select_freq').classes('w-3/4')
                     ui.separator().classes('w-2/3')

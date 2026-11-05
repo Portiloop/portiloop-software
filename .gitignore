@@ -131,3 +131,6 @@ venv.bak/
 dmypy.json
 
 config_files.txt
+
+# Fast acquisition: built on the Portiloop by portiloop/fast_capture/install.sh
+portiloop/fast_capture/adscapture

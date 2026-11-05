@@ -1,0 +1,5 @@
+# Fast acquisition (portiloop/fast_capture): /dev/spimap for the users of /dev/spidev0.0 (group input). The
+# assignments are final (:=), as 99-pvr.rules (Mendel) gives all the misc devices to the group video.
+KERNEL=="spimap", SUBSYSTEM=="misc", GROUP:="input", MODE:="0660"
+# The SPI controller is driven directly during the fast acquisition: it must not be suspended (runtime PM)
+SUBSYSTEM=="platform", KERNEL=="1100c000.spi", ATTR{power/control}="on"
