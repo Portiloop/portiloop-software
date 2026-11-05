@@ -251,7 +251,7 @@ class SlowOscillationDetector(Detector):
             so_detected
             and self.est_t_upstate is not None
             and self.counter_upstate is not None
-            and self.counter_upstate == self.est_t_upstate
+            and self.counter_upstate == round(self.est_t_upstate)  # the estimate is a float
         )
 
         self.prev_signal = self.prev_signal if self.prev_signal is not None else tsignal  # previous filtered data point
@@ -264,7 +264,8 @@ class SlowOscillationDetector(Detector):
                         self.est_t_upstate = self.t_upstate
                     else:
                         # compute a running average
-                        self.est_t_upstate = int(self.alpha * self.t_upstate + (1 - self.alpha) * self.est_t_upstate)
+                        # kept as a float: truncating it at each update biased it below the average (early stimulations)
+                        self.est_t_upstate = self.alpha * self.t_upstate + (1 - self.alpha) * self.est_t_upstate
 
                 # reinitialize the SO detection parameters
                 self.max_peak = -1000
