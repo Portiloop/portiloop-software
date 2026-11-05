@@ -1,0 +1,11 @@
+   0 first attempts timed out, 0 recovered by the retry; 0 had a valid frame in the RX FIFO anyway
+   register 0x20 over 0 transfers: went to 0 in 0, back to 1 in 0 (after 0.0 us on average); STATUS0 seen done in 0 (after 0.0 us), before 0x20 returned to 1 in 0
+   register 0x20: 00000001 when idle; at the first timeouts:
+ 8000 SPS direct: 1200.0 s, 9576676 frames, gaps > 1.5 periods 13, longest gap 235 us, longest read 130 us, read timeouts 0, bad status 0
+   from the data: 9576676 samples, lost 2, duplicated 0, 2335/2337 half-periods complete; run lengths {4095: 2, 4096: 2335}
+   0 first attempts timed out, 0 recovered by the retry; 0 had a valid frame in the RX FIFO anyway
+   register 0x20 over 0 transfers: went to 0 in 0, back to 1 in 0 (after 0.0 us on average); STATUS0 seen done in 0 (after 0.0 us), before 0x20 returned to 1 in 0
+   register 0x20: 00000001 when idle; at the first timeouts:
+16000 SPS direct: 675.7 s, 10784968 frames, gaps > 1.5 periods 48, longest gap 114 us, longest read 56 us, read timeouts 0, bad status 0
+   from the data: 10784968 samples, lost 2, duplicated 0, 1313/1315 half-periods complete; run lengths {8191: 2, 8192: 1313}
+restored: SPI PM auto
