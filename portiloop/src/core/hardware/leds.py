@@ -1,6 +1,6 @@
 from periphery import GPIO
 from enum import Enum
-from portiloop.src import IS_CORAL
+from portiloop.src import IS_RDKX5
 
 
 class Color(Enum):
@@ -16,15 +16,17 @@ class Color(Enum):
 
 class LEDs:
     def __init__(self):
-        self._enabled = IS_CORAL
-        if not self._enabled:
-            return
-
-        self.led1_R = GPIO("/dev/gpiochip0", 22, "out")
-        self.led1_B = GPIO("/dev/gpiochip0", 10, "out")
-        self.led1_G = GPIO("/dev/gpiochip0", 9, "out")
-
-        self.leds_ctl = GPIO("/dev/gpiochip0", 39, "out")
+        if IS_RDKX5:
+            # 40-pin header pins: 7 (R), 13 (B), 11 (G), 40 (leds_ctl)
+            self.led1_R = GPIO("/dev/gpiochip3", 9, "out")
+            self.led1_B = GPIO("/dev/gpiochip4", 0, "out")
+            self.led1_G = GPIO("/dev/gpiochip4", 1, "out")
+            self.leds_ctl = GPIO("/dev/gpiochip3", 13, "out")
+        else:
+            self.led1_R = GPIO("/dev/gpiochip0", 22, "out")
+            self.led1_B = GPIO("/dev/gpiochip0", 10, "out")
+            self.led1_G = GPIO("/dev/gpiochip0", 9, "out")
+            self.leds_ctl = GPIO("/dev/gpiochip0", 39, "out")
 
         # LED1
         self.led1_R.write(False)
@@ -34,13 +36,9 @@ class LEDs:
         self.leds_ctl.write(False)
     
     def activate(self, active=True):
-        if not self._enabled:
-            return
         self.leds_ctl.write(active)
 
     def led1(self, value: Color):
-        if not self._enabled:
-            return
         if value == Color.RED:
             self.led1_R.write(True)
             self.led1_G.write(False)
@@ -77,9 +75,6 @@ class LEDs:
             assert False, "Unknown color"
 
     def close(self):
-        if not self._enabled:
-            return
-
         # LED1
         self.led1_R.write(False)
         self.led1_B.write(False)

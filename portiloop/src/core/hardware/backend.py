@@ -82,8 +82,11 @@ class Backend:
             self.start_gpio.write(False)
 
         elif portiloop_version == 3:
-            # D-Robotics RDK X5 exposes SPI1 on the 40-pin header (/dev/spidev1.0)
+            # D-Robotics RDK X5: SPI1 on 40-pin header (/dev/spidev1.0), DRDY on pin 37, START on pin 35
             spi_bus = 1
+            self.drdy = GPIO("/dev/gpiochip4", 22, "in")
+            self.start_gpio = GPIO("/dev/gpiochip3", 11, "out")
+            self.start_gpio.write(False)
 
         if self.drdy is not None:
             self.drdy.edge = "falling"
