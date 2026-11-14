@@ -13,6 +13,18 @@ def is_coral():
     except Exception: pass
     return False
 
+
+def is_rdkx5():
+    try:
+        with io.open('/sys/firmware/devicetree/base/model', 'r') as m:
+            line = m.read().lower()
+            if 'rdk x5' in line or 'd-robotics' in line:
+                return True
+    except Exception:
+        pass
+    return False
+
+
 requirements_list = ['wheel',
                      'numpy',
                      'portilooplot',
@@ -27,6 +39,13 @@ if is_coral():
                           'pyalsaaudio==0.9.2',
                           'python-socketio==5.9',
                           'nicegui']
+elif is_rdkx5():
+    requirements_list += ['spidev',
+                          'pyalsaaudio',
+                          'python-socketio',
+                          'psutil',
+                          'nicegui',
+                          'tflite-runtime']
 else:
     requirements_list += ['gradio',
                           'tensorflow',

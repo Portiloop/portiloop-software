@@ -5,7 +5,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_hardware_version():
-    # Check if we are on a Portiloop V1 or V2.
+    # Check if we are on a Portiloop V1 (phanbell), V2 (coral), or V3 (RDK X5).
     try:
         with io.open('/sys/firmware/devicetree/base/model', 'r') as m:
             string = m.read().lower()
@@ -13,6 +13,8 @@ def get_hardware_version():
                 hardware_version = 1
             elif "coral" in string:
                 hardware_version = 2
+            elif "rdk x5" in string or "d-robotics" in string:
+                hardware_version = 3
             else:
                 hardware_version = -1
     except Exception:

@@ -1,5 +1,6 @@
 from periphery import GPIO
 from enum import Enum
+from portiloop.src import IS_CORAL
 
 
 class Color(Enum):
@@ -15,6 +16,9 @@ class Color(Enum):
 
 class LEDs:
     def __init__(self):
+        self._enabled = IS_CORAL
+        if not self._enabled:
+            return
 
         self.led1_R = GPIO("/dev/gpiochip0", 22, "out")
         self.led1_B = GPIO("/dev/gpiochip0", 10, "out")
@@ -30,9 +34,13 @@ class LEDs:
         self.leds_ctl.write(False)
     
     def activate(self, active=True):
+        if not self._enabled:
+            return
         self.leds_ctl.write(active)
 
     def led1(self, value: Color):
+        if not self._enabled:
+            return
         if value == Color.RED:
             self.led1_R.write(True)
             self.led1_G.write(False)
@@ -69,6 +77,8 @@ class LEDs:
             assert False, "Unknown color"
 
     def close(self):
+        if not self._enabled:
+            return
 
         # LED1
         self.led1_R.write(False)

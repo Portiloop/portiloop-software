@@ -1,8 +1,69 @@
+REPO_DIR := $(CURDIR)
+SETUP_DIR := $(REPO_DIR)/portiloop/setup_files
+VENV_DIR := $(HOME)/portiloop-venv
+USER_NAME := $(shell id -un)
+USER_UID := $(shell id -u)
+IS_RDKX5 := $(shell grep -qiE "rdk x5|d-robotics" /sys/firmware/devicetree/base/model 2>/dev/null && echo 1 || echo 0)
+
+ifeq ($(IS_RDKX5),1)
+all: rdkx5
+else
 all: miniforge
+endif
 
-# all can be either "vanilla" or "miniforge"
+# all can be either "rdkx5" or "miniforge"
 
-# === Apt setup and AP creation ===
+# === RDK X5 installation pipeline ===
+
+rdkx5_deps.temp:
+	@echo "--- RDK X5 SYSTEM DEPENDENCIES ---"
+	sudo apt-get update
+	sudo apt-get install -y python3-venv python3-dev python3-matplotlib python3-scipy libasound2-dev git-lfs exfatprogs iw
+	touch rdkx5_deps.temp
+
+rdkx5_ap.temp: rdkx5_deps.temp
+	@echo "--- RDK X5 ACCESS POINT SETUP ---"
+	cd $(REPO_DIR) && bash create_ap.sh
+	touch rdkx5_ap.temp
+
+rdkx5_venv.temp: rdkx5_ap.temp
+	@echo "--- RDK X5 PYTHON VENV & PORTILOOP INSTALL ---"
+	python3 -m venv $(VENV_DIR)
+	$(VENV_DIR)/bin/pip install --upgrade pip wheel
+	$(VENV_DIR)/bin/pip install notebook ipywidgets
+	cd $(REPO_DIR) && (git lfs pull || true) && $(VENV_DIR)/bin/pip install -e .
+	mkdir -p $(HOME)/workspace/recordings
+	touch rdkx5_venv.temp
+
+rdkx5_services.temp: rdkx5_venv.temp
+	@echo "--- RDK X5 SERVICES & ALSA SETUP ---"
+	sudo cp $(SETUP_DIR)/asound.conf /etc/asound.conf
+	sed "s/^mendel /$(USER_NAME) /" $(SETUP_DIR)/limits.conf | sudo tee /etc/security/limits.d/portiloop.conf > /dev/null
+	sed -e "s/mendel/$(USER_NAME)/g" -e "s/1000/$(USER_UID)/g" $(SETUP_DIR)/create_login_folder.service | sudo tee /etc/systemd/system/create_login_folder.service > /dev/null
+	sed -e "s|/home/mendel/miniforge3/bin/conda run -n portiloop jupyter|$(VENV_DIR)/bin/jupyter|g" \
+	    -e "s|/home/mendel|$(HOME)|g" \
+	    -e "s/=mendel/=$(USER_NAME)/g" \
+	    $(SETUP_DIR)/miniforge_jupyter.service | sudo tee /etc/systemd/system/jupyter.service > /dev/null
+	sed -e "s|~/miniforge3/envs/portiloop/bin/python|$(VENV_DIR)/bin/python|g" \
+	    -e "s|/home/mendel/portiloop-software|$(REPO_DIR)|g" \
+	    -e "s|/home/mendel|$(HOME)|g" \
+	    -e "s/=mendel/=$(USER_NAME)/g" \
+	    $(SETUP_DIR)/simplegui.service | sudo tee /etc/systemd/system/simplegui.service > /dev/null
+	sudo systemctl daemon-reload
+	sudo systemctl enable create_login_folder.service jupyter.service simplegui.service
+	touch rdkx5_services.temp
+
+rdkx5: rdkx5_services.temp
+	@echo "Playing test sound to update ALSA..."
+	aplay -Dplug:softvol $(REPO_DIR)/portiloop/sounds/stimulus.wav || true
+	@if [ "$(SKIP_JUPYTER_PW)" != "1" ]; then \
+		echo "Launching jupyter notebook password manager..."; \
+		$(VENV_DIR)/bin/jupyter notebook password; \
+	fi
+	rm -f *.temp
+	@echo "All done! Please reboot the device."
+
+# === Coral / Miniforge pipeline ===
 
 step_pre0.temp:
 	echo "--- APT UPGRADING STEP ---"

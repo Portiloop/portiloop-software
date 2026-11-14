@@ -66,6 +66,8 @@ class Backend:
         max_speed = 1000000
 
         self.start_gpio = None
+        self.drdy = None
+        spi_bus = 0
         if portiloop_version == 1:
             # self.nrst = GPIO("/dev/gpiochip2", 9, "out")
             # self.pwdn = GPIO("/dev/gpiochip2", 12, "out")
@@ -79,9 +81,14 @@ class Backend:
             self.start_gpio = GPIO("/dev/gpiochip0", 37, "out")
             self.start_gpio.write(False)
 
-        self.drdy.edge = "falling"
+        elif portiloop_version == 3:
+            # D-Robotics RDK X5 exposes SPI1 on the 40-pin header (/dev/spidev1.0)
+            spi_bus = 1
+
+        if self.drdy is not None:
+            self.drdy.edge = "falling"
         self.dev = SpiDev()
-        self.dev.open(0, 0)
+        self.dev.open(spi_bus, 0)
         self.dev.max_speed_hz = max_speed
         self.dev.mode = 0b01
         self._nb_channels = None  # read once, at the first reading
@@ -143,6 +150,8 @@ class Backend:
         return Reading(values, self.get_nb_channels())
 
     def is_ready(self):
+        if self.drdy is None:
+            return True
         return not self.drdy.read()
 
     def wait_new_data(self):
@@ -153,6 +162,8 @@ class Backend:
             (Reading, int): the latest conversion, and the number of conversions missed since the previous call
                 (DRDY events still pending when the caller is late: RDATA only returns the latest conversion)
         """
+        if self.drdy is None:
+            raise RuntimeError("DRDY GPIO is not configured on this hardware version; use python_clock=True")
         # blocks until a DRDY falling edge is queued, then returns all the queued events at once
         events = os.read(self.drdy._line_fd, _DRDY_EVENT.size * _DRDY_QUEUE)
         missed = len(events) // _DRDY_EVENT.size - 1
@@ -167,7 +178,8 @@ class Backend:
         self.dev.xfer([STOP])
 
     def close(self):
-        self.drdy.close()
+        if self.drdy is not None:
+            self.drdy.close()
         if self.start_gpio is not None:
             self.start_gpio.close()
         self.dev.close()

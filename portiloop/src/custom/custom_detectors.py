@@ -10,11 +10,16 @@ from portiloop.src.core.constants import DEFAULT_MODEL_PATH
 from portiloop.src.core.utils import Dummy
 # from portiloop.src.custom.custom_processors import FIR
 
-from portiloop.src import ADS
-if ADS:
+from portiloop.src import IS_CORAL
+if IS_CORAL:
     from pycoral.utils import edgetpu
 else:
-    import tensorflow as tf
+    try:
+        import tflite_runtime.interpreter as tflite
+        _TFLiteInterpreter = tflite.Interpreter
+    except ImportError:
+        import tensorflow as tf
+        _TFLiteInterpreter = tf.lite.Interpreter
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +46,10 @@ class SleepSpindleRealTimeDetector(Detector):
 
         self.interpreters = []
         for i in range(self.num_models_parallel):
-            if ADS:
+            if IS_CORAL:
                 self.interpreters.append(edgetpu.make_interpreter(model_path))
             else:
-                self.interpreters.append(tf.lite.Interpreter(model_path=model_path))
+                self.interpreters.append(_TFLiteInterpreter(model_path=model_path))
             self.interpreters[i].allocate_tensors()
         self.interpreter_counter = 0
 

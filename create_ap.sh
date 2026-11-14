@@ -2,27 +2,46 @@
 
 set -e
 
-echo "--- PORTILOOP V2 ACCESS POINT SETUP ---"
+echo "--- PORTILOOP ACCESS POINT SETUP ---"
 
-echo "ACTION REQUIRED: Enter the desired access point wifi SSID (example: portiloop-wifi):"
-read portiloop_SSID
-echo "ACTION REQUIRED: Enter the desired access point wifi password (example: portiloop):"
-read portiloop_password
-echo "ACTION REQUIRED: Enter the desired access point wifi channel (example: 6):"
-read portiloop_channel
+if [[ -z "${PORTILOOP_SSID}" ]]; then
+    echo "ACTION REQUIRED: Enter the desired access point wifi SSID (example: portiloop-wifi):"
+    read portiloop_SSID
+else
+    portiloop_SSID="${PORTILOOP_SSID}"
+fi
 
-cd ~
+if [[ -z "${PORTILOOP_PASSWORD}" ]]; then
+    echo "ACTION REQUIRED: Enter the desired access point wifi password (example: portiloop):"
+    read portiloop_password
+else
+    portiloop_password="${PORTILOOP_PASSWORD}"
+fi
+
+if [[ -z "${PORTILOOP_CHANNEL}" ]]; then
+    echo "ACTION REQUIRED: Enter the desired access point wifi channel (example: 6):"
+    read portiloop_channel
+else
+    portiloop_channel="${PORTILOOP_CHANNEL}"
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echo "Preparing apt..."
-export LC_ALL="en_US.UTF-8"
-sudo apt remove -y reportbug python3-reportbug
-gpg --keyserver keyserver.ubuntu.com --recv-keys B53DC80D13EDEF05
-gpg --export --armor B53DC80D13EDEF05 | sudo apt-key add -
-sudo apt-get --allow-releaseinfo-change-suite update
+if grep -qi "mendel" /etc/os-release 2>/dev/null; then
+    export LC_ALL="en_US.UTF-8"
+    sudo apt remove -y reportbug python3-reportbug || true
+    gpg --keyserver keyserver.ubuntu.com --recv-keys B53DC80D13EDEF05
+    gpg --export --armor B53DC80D13EDEF05 | sudo apt-key add -
+    sudo apt-get --allow-releaseinfo-change-suite update
+else
+    sudo apt-get update
+fi
 
-echo "Creating access point interface..."
-sudo apt-get install hostapd dnsmasq -y
+echo "Installing hostapd and dnsmasq..."
+sudo apt-get install -y hostapd dnsmasq iw
 
-cd ~/portiloop-software/portiloop/setup_files
+cd "${SCRIPT_DIR}/portiloop/setup_files"
 sudo cp create_ap0.sh /usr/local/bin/create_ap0.sh
 sudo chmod +x /usr/local/bin/create_ap0.sh
 sudo cp unmanaged.conf /etc/NetworkManager/conf.d/unmanaged.conf
@@ -57,10 +76,9 @@ echo "Enabling AP service..."
 sudo systemctl enable create_ap.service
 echo "Enabling hostapd service..."
 sudo systemctl enable hostapd.service
-echo "Enabling dnsmask service..."
+echo "Enabling dnsmasq service..."
 sudo systemctl enable dnsmasq.service
 echo "Enabling setup_tables service..."
 sudo systemctl enable setup_tables.service
 
-cd ~/portiloop-software
-echo "Interface created, please reboot the device and move on to the installation script."
+echo "AP configuration installed."
