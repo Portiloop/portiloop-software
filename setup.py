@@ -39,5 +39,6 @@ setup(
     version=VERSION,
     packages=[package for package in find_packages()],
     description='Portiloop software library',
+    license='MIT',
     install_requires=requirements_list,
 )

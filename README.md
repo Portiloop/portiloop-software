@@ -253,3 +253,6 @@ Abide only to these interfaces and do not make additional assumptions, otherwise
 
 :warning: Non-core internal developers should not modify the `portiloop.core` package, nor the `jupyter_gui` and `simple_gui` packages.
 If you feel you need to do any of these things, please ask for assistance, as you are probably doing something wrong.
+## License
+
+This project is released under the [MIT License](LICENSE).
