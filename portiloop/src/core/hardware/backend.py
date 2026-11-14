@@ -67,7 +67,7 @@ class Backend:
 
         self.start_gpio = None
         self.drdy = None
-        spi_bus = 0
+        spi_bus, spi_cs = 0, 0
         if portiloop_version == 1:
             # self.nrst = GPIO("/dev/gpiochip2", 9, "out")
             # self.pwdn = GPIO("/dev/gpiochip2", 12, "out")
@@ -82,8 +82,9 @@ class Backend:
             self.start_gpio.write(False)
 
         elif portiloop_version == 3:
-            # D-Robotics RDK X5: SPI1 on 40-pin header (/dev/spidev1.0), DRDY on pin 37, START on pin 35
-            spi_bus = 1
+            # D-Robotics RDK X5: header pin 24 (CE0) is wired to SoC SPI1_CSN1 (/dev/spidev1.1),
+            # DRDY on pin 37, START on pin 35
+            spi_bus, spi_cs = 1, 1
             self.drdy = GPIO("/dev/gpiochip4", 22, "in")
             self.start_gpio = GPIO("/dev/gpiochip3", 11, "out")
             self.start_gpio.write(False)
@@ -91,7 +92,7 @@ class Backend:
         if self.drdy is not None:
             self.drdy.edge = "falling"
         self.dev = SpiDev()
-        self.dev.open(spi_bus, 0)
+        self.dev.open(spi_bus, spi_cs)
         self.dev.max_speed_hz = max_speed
         self.dev.mode = 0b01
         self._nb_channels = None  # read once, at the first reading
