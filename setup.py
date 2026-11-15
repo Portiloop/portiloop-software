@@ -26,7 +26,7 @@ def is_rdkx5():
 
 
 requirements_list = ['wheel',
-                     'numpy',
+                     'numpy<2' if is_rdkx5() else 'numpy',
                      'portilooplot',
                      'ipywidgets',
                      'python-periphery',
