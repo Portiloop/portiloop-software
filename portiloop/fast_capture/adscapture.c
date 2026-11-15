@@ -58,8 +58,22 @@
 #define R(off) regs[(off) / 4]
 
 #define SPI_POWER_CONTROL "/sys/devices/platform/soc/1100c000.spi/power/control"
-#define DRDY_LINE 45
-#define START_LINE 37
+#define CORAL_DRDY_LINE 45
+#define CORAL_START_LINE 37
+#define RDKX5_DRDY_CHIP "/dev/gpiochip4"
+#define RDKX5_DRDY_LINE 22
+#define RDKX5_START_CHIP "/dev/gpiochip3"
+#define RDKX5_START_LINE 11
+
+static int is_rdkx5(void) {
+    char buf[128] = {0};
+    FILE *f = fopen("/sys/firmware/devicetree/base/model", "r");
+    if (!f) return 0;
+    size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    buf[n] = '\0';
+    return strcasestr(buf, "rdk x5") != NULL || strcasestr(buf, "d-robotics") != NULL;
+}
 
 #define RING_BITS 19  /* 524288 frames: 32 s at 16 kSPS */
 #define RING_SIZE (1u << RING_BITS)
@@ -412,21 +426,30 @@ int main(int argc, char **argv) {
     sa.sa_handler = on_stop;  /* no SA_RESTART */
     sigaction(SIGINT, &sa, NULL); sigaction(SIGTERM, &sa, NULL);
     signal(SIGPIPE, SIG_IGN);
-    if (check_power_control()) return 1;
+    int rdkx5 = is_rdkx5();
+    if (!rdkx5 && check_power_control()) return 1;
 
     /* ---- configuration through the kernel ---- */
-    spi = open("/dev/spidev0.0", O_RDWR); if (spi < 0) { logmsg("/dev/spidev0.0: %s", strerror(errno)); return 1; }
+    const char *spi_dev = rdkx5 ? "/dev/spidev1.1" : "/dev/spidev0.0";
+    spi = open(spi_dev, O_RDWR); if (spi < 0) { logmsg("%s: %s", spi_dev, strerror(errno)); return 1; }
     uint8_t mode = SPI_MODE_1; ioctl(spi, SPI_IOC_WR_MODE, &mode);
     uint32_t base = 1000000; ioctl(spi, SPI_IOC_WR_MAX_SPEED_HZ, &base);
-    int chip = open("/dev/gpiochip0", O_RDWR); if (chip < 0) { logmsg("/dev/gpiochip0: %s", strerror(errno)); return 1; }
+    const char *start_chip_path = rdkx5 ? RDKX5_START_CHIP : "/dev/gpiochip0";
+    const char *drdy_chip_path = rdkx5 ? RDKX5_DRDY_CHIP : "/dev/gpiochip0";
+    int start_chip = open(start_chip_path, O_RDWR);
+    if (start_chip < 0) { logmsg("%s: %s", start_chip_path, strerror(errno)); return 1; }
+    int drdy_chip = rdkx5 ? open(drdy_chip_path, O_RDWR) : start_chip;
+    if (drdy_chip < 0) { logmsg("%s: %s", drdy_chip_path, strerror(errno)); return 1; }
     struct gpiohandle_request start_line, drdy;
     memset(&start_line, 0, sizeof start_line); memset(&drdy, 0, sizeof drdy);
-    start_line.lineoffsets[0] = START_LINE; start_line.lines = 1; start_line.flags = GPIOHANDLE_REQUEST_OUTPUT;
+    start_line.lineoffsets[0] = rdkx5 ? RDKX5_START_LINE : CORAL_START_LINE;
+    start_line.lines = 1; start_line.flags = GPIOHANDLE_REQUEST_OUTPUT;
     strcpy(start_line.consumer_label, "adscapture");  /* held low, as Backend does */
-    if (ioctl(chip, GPIO_GET_LINEHANDLE_IOCTL, &start_line) < 0) { logmsg("START line: %s", strerror(errno)); return 1; }
-    drdy.lineoffsets[0] = DRDY_LINE; drdy.lines = 1; drdy.flags = GPIOHANDLE_REQUEST_INPUT;
+    if (ioctl(start_chip, GPIO_GET_LINEHANDLE_IOCTL, &start_line) < 0) { logmsg("START line: %s", strerror(errno)); return 1; }
+    drdy.lineoffsets[0] = rdkx5 ? RDKX5_DRDY_LINE : CORAL_DRDY_LINE;
+    drdy.lines = 1; drdy.flags = GPIOHANDLE_REQUEST_INPUT;
     strcpy(drdy.consumer_label, "adscapture-drdy");
-    if (ioctl(chip, GPIO_GET_LINEHANDLE_IOCTL, &drdy) < 0) { logmsg("DRDY line: %s", strerror(errno)); return 1; }
+    if (ioctl(drdy_chip, GPIO_GET_LINEHANDLE_IOCTL, &drdy) < 0) { logmsg("DRDY line: %s", strerror(errno)); return 1; }
     struct gpiohandle_data v;
 
     /* as capture_process(): reset, configure, start */
@@ -453,11 +476,13 @@ int main(int argc, char **argv) {
         }
     }
     if (command1(0x08)) { logmsg("SPI command: %s", strerror(errno)); return 1; }  /* START */
-    /* last kernel transfer: sets the controller's 16 MHz dividers, mode and CS timing for the direct reads */
+    /* first fast transfer: sets the controller's fast clock dividers, mode and CS timing */
+    uint32_t fast_hz = rdkx5 ? 20000000 : 16000000;
+    ioctl(spi, SPI_IOC_WR_MAX_SPEED_HZ, &fast_hz);
     uint8_t tx[28] = {0x12}, rx[28];
     struct spi_ioc_transfer k;
     memset(&k, 0, sizeof k);
-    k.tx_buf = (uintptr_t)tx; k.rx_buf = (uintptr_t)rx; k.len = 28; k.speed_hz = 16000000; k.bits_per_word = 8;
+    k.tx_buf = (uintptr_t)tx; k.rx_buf = (uintptr_t)rx; k.len = 28; k.speed_hz = fast_hz; k.bits_per_word = 8;
     if (ioctl(spi, SPI_IOC_MESSAGE(1), &k) < 0) { logmsg("SPI read: %s", strerror(errno)); return 1; }
 
     /* ---- buffers and writer ---- */
@@ -487,25 +512,28 @@ int main(int argc, char **argv) {
     int e = pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
     if (e) logmsg("SCHED_FIFO %d: %s (continuing at normal priority)", prio, strerror(e));
 
-    int fd = open("/dev/spimap", O_RDWR | O_SYNC);
-    if (fd < 0) { logmsg("/dev/spimap: %s", strerror(errno)); stop = 1; }
-    else {
-        void *m = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        if (m == MAP_FAILED) { logmsg("mmap: %s", strerror(errno)); stop = 1; }
-        else regs = m;
-    }
-    if (regs) {
-        signal(SIGSEGV, on_fatal); signal(SIGBUS, on_fatal); signal(SIGILL, on_fatal);
-        signal(SIGFPE, on_fatal); signal(SIGABRT, on_fatal);
-        cmd0 = R(CMD);
-        cmd = cmd0 & ~(CMD_FINISH_IE | CMD_PAUSE_IE | CMD_PAUSE_EN | CMD_ACT | CMD_RESUME);
-        R(CMD) = cmd;
-        if (R(CMD) & (CMD_FINISH_IE | CMD_PAUSE_IE)) { logmsg("interrupt enables still set: aborting"); R(CMD) = cmd0; stop = 1; }
-        (void)R(STATUS0);
-        R(CFG1) = (R(CFG1) & ~(CFG1_LEN_MASK | CFG1_LOOP_MASK)) | (27u << 16);
+    int fd = -1;
+    if (!rdkx5) {
+        fd = open("/dev/spimap", O_RDWR | O_SYNC);
+        if (fd < 0) { logmsg("/dev/spimap: %s", strerror(errno)); stop = 1; }
+        else {
+            void *m = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+            if (m == MAP_FAILED) { logmsg("mmap: %s", strerror(errno)); stop = 1; }
+            else regs = m;
+        }
+        if (regs) {
+            signal(SIGSEGV, on_fatal); signal(SIGBUS, on_fatal); signal(SIGILL, on_fatal);
+            signal(SIGFPE, on_fatal); signal(SIGABRT, on_fatal);
+            cmd0 = R(CMD);
+            cmd = cmd0 & ~(CMD_FINISH_IE | CMD_PAUSE_IE | CMD_PAUSE_EN | CMD_ACT | CMD_RESUME);
+            R(CMD) = cmd;
+            if (R(CMD) & (CMD_FINISH_IE | CMD_PAUSE_IE)) { logmsg("interrupt enables still set: aborting"); R(CMD) = cmd0; stop = 1; }
+            (void)R(STATUS0);
+            R(CFG1) = (R(CFG1) & ~(CFG1_LEN_MASK | CFG1_LOOP_MASK)) | (27u << 16);
+        }
     }
     if (stop) { snprintf(stop_reason, sizeof stop_reason, "setup failed"); failed = 1; }
-    else logmsg("capturing at %.0f SPS", rate);
+    else logmsg("capturing at %.0f SPS (%s)", rate, rdkx5 ? "spidev" : "spimap");
 
     /* Index of each conversion: conversion k is expected at a + k * p. A read later than LATE_FRACTION of a
      * period after the expected time of the next conversion means that conversions were missed. The reference a
@@ -532,7 +560,8 @@ int main(int argc, char **argv) {
         if (stop) break;
         double t = now();
         if (t_end && t >= t_end) { snprintf(stop_reason, sizeof stop_reason, "duration reached"); break; }
-        if (!direct_read(rx)) { timeouts++; continue; }
+        int read_ok = rdkx5 ? (ioctl(spi, SPI_IOC_MESSAGE(1), &k) >= 0) : direct_read(rx);
+        if (!read_ok) { timeouts++; continue; }
         double dr = now() - t;
         if (dr > max_read) max_read = dr;
         if (first) {
@@ -584,6 +613,8 @@ int main(int argc, char **argv) {
            "%llu read timeouts, longest gap %.0f us",
            stop_reason, (unsigned long long)rows, nb_parts, (unsigned long long)nb_lost, (unsigned long long)missed,
            (unsigned long long)bad_frames, (unsigned long long)overflows, (unsigned long long)timeouts, max_gap * 1e6);
-    close(drdy.fd); close(start_line.fd); close(chip); close(spi);
+    close(drdy.fd); close(start_line.fd);
+    if (drdy_chip != start_chip) close(drdy_chip);
+    close(start_chip); close(spi);
     return write_failed || failed ? 3 : 0;
 }

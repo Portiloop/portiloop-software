@@ -32,6 +32,7 @@ rdkx5_venv.temp: rdkx5_ap.temp
 	$(VENV_DIR)/bin/pip install --upgrade pip wheel
 	$(VENV_DIR)/bin/pip install notebook ipywidgets
 	cd $(REPO_DIR) && (git lfs pull || true) && $(VENV_DIR)/bin/pip install -e .
+	cd $(REPO_DIR)/portiloop/fast_capture && bash install.sh
 	mkdir -p $(HOME)/workspace/recordings
 	touch rdkx5_venv.temp
 

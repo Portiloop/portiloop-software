@@ -27,6 +27,7 @@ from pathlib import Path
 
 import numpy as np
 
+from portiloop.src import IS_RDKX5
 from portiloop.src.core.hardware.config_hardware import ADS_LSB, BACKEND_CONFIG, mod_config
 
 logger = logging.getLogger(__name__)
@@ -35,13 +36,14 @@ FAST_RATES = (2000, 4000, 8000, 16000)
 DISPLAY_RATE = 250  # Hz, decimated signal for the display and LSL
 PART_ROWS = 28_800_000  # rows per CSV file, at most about 2.8 GB (FAT32 files are limited to 4 GB): 1 h at 8 kSPS
 MIN_FREE_MB = 200  # the recording stops when the free space falls below this
-CAPTURE_CPU = 3  # the reader polls DRDY on this CPU
+CAPTURE_CPU = 7 if IS_RDKX5 else 3  # the reader polls DRDY on this CPU
 CAPTURE_RT_PRIORITY = 10  # allowed by LimitRTPRIO in simplegui.service
 STOP_TIMEOUT = 30  # s, for the capture program to write its last rows and exit
 
 FAST_CAPTURE_DIR = Path(__file__).resolve().parents[2] / "fast_capture"
 ADSCAPTURE = FAST_CAPTURE_DIR / "adscapture"
 SPIMAP = Path("/dev/spimap")
+RDKX5_SPIDEV = Path("/dev/spidev1.1")
 SPI_POWER_CONTROL = Path("/sys/devices/platform/soc/1100c000.spi/power/control")
 PORTILOOP_ID = f"{socket.gethostname()}-portiloop"
 
@@ -54,6 +56,12 @@ def fast_capture_status():
     install = "run portiloop/fast_capture/install.sh"
     if not ADSCAPTURE.is_file():
         return f"{ADSCAPTURE} is not built ({install})"
+    if IS_RDKX5:
+        if not RDKX5_SPIDEV.exists():
+            return f"{RDKX5_SPIDEV} is missing"
+        if not os.access(str(RDKX5_SPIDEV), os.R_OK | os.W_OK):
+            return f"{RDKX5_SPIDEV} is not accessible"
+        return None
     if not SPIMAP.exists():
         return f"{SPIMAP} is missing: the spimap module is not loaded ({install})"
     if not os.access(str(SPIMAP), os.R_OK | os.W_OK):

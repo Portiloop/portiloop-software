@@ -1,17 +1,29 @@
 #!/bin/bash
 
 # Installs the fast acquisition (2 to 16 kSPS, see README.md) on this Portiloop: builds the capture program, and
-# installs the spimap kernel module (loaded at boot) and its udev rules. Run it on the Portiloop, as mendel:
-#   bash ~/portiloop-software/portiloop/fast_capture/install.sh
-# Then restart the Simple GUI (sudo systemctl restart simplegui) to get the "Acquisition only (fast)" pipeline.
+# on Coral installs the spimap kernel module; on RDK X5 uses /dev/spidev1.1 and disables spidev dynamic_debug.
 
 KERNEL=4.19.125-mtk  # spimap.ko was built for this kernel
 
 info() { echo -e "\033[1;34m==>\033[0m $*"; }
 fail() { echo -e "\033[1;31mERROR:\033[0m $*"; exit 1; }
 
-[[ $EUID -eq 0 ]] && fail "Run this script as mendel, without sudo."
+[[ $EUID -eq 0 ]] && fail "Run this script as a regular user, without sudo."
 cd "$(dirname "$(readlink -f "$0")")" || fail "Could not open the fast_capture folder."
+
+if grep -qiE "rdk x5|d-robotics" /sys/firmware/devicetree/base/model 2>/dev/null; then
+    info "Building the capture program for RDK X5 (spidev)..."
+    gcc -O2 -Wall -pthread -o adscapture adscapture.c -lm || fail "Could not build adscapture."
+    info "Disabling spidev dynamic_debug logging (and persisting via udev rule)..."
+    if [[ -e /sys/kernel/debug/dynamic_debug/control ]]; then
+        echo "module spidev -p" | sudo tee /sys/kernel/debug/dynamic_debug/control > /dev/null || true
+    fi
+    echo 'SUBSYSTEM=="spidev", ACTION=="add", RUN+="/bin/sh -c '\''echo module spidev -p > /sys/kernel/debug/dynamic_debug/control'\''"' \
+        | sudo tee /etc/udev/rules.d/99-portiloop-spidev.rules > /dev/null
+    sudo udevadm control --reload
+    info "Done. Restart the Simple GUI to use the \"Acquisition only (fast)\" pipeline: sudo systemctl restart simplegui"
+    exit 0
+fi
 
 [[ $(uname -r) == "$KERNEL" ]] || fail "spimap.ko was built for $KERNEL, this Portiloop runs $(uname -r): rebuild it (README.md)."
 # same vermagic as the kernel's own modules (CONFIG_MODVERSIONS is off and modules are not signed)
