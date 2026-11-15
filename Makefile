@@ -28,7 +28,7 @@ rdkx5_ap.temp: rdkx5_deps.temp
 
 rdkx5_venv.temp: rdkx5_ap.temp
 	@echo "--- RDK X5 PYTHON VENV & PORTILOOP INSTALL ---"
-	python3 -m venv $(VENV_DIR)
+	python3 -m venv --system-site-packages $(VENV_DIR)
 	$(VENV_DIR)/bin/pip install --upgrade pip wheel
 	$(VENV_DIR)/bin/pip install notebook ipywidgets
 	cd $(REPO_DIR) && (git lfs pull || true) && $(VENV_DIR)/bin/pip install -e .

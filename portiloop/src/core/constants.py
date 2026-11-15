@@ -8,8 +8,11 @@ from portiloop.src.core.utils import get_hardware_version
 backend = None
 try:
     HARDWARE_VERSION = get_hardware_version()
-    backend = Backend(HARDWARE_VERSION)
-    NB_CHANNELS = backend.get_nb_channels()
+    if HARDWARE_VERSION > 0:
+        backend = Backend(HARDWARE_VERSION)
+        NB_CHANNELS = backend.get_nb_channels()
+    else:
+        NB_CHANNELS = 8
 finally:
     if backend is not None:
         backend.close()
@@ -18,11 +21,15 @@ finally:
 
 # Home:
 HOME_FOLDER = Path.home()
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_INSTALL_ROOT = HOME_FOLDER / 'portiloop-software'
+if not (_INSTALL_ROOT / 'portiloop' / 'models').exists() and (_REPO_ROOT / 'portiloop' / 'models').exists():
+    _INSTALL_ROOT = _REPO_ROOT
 
 # Portiloop repository:
-SIGNAL_SAMPLES_FOLDER = HOME_FOLDER / 'portiloop-software' / 'portiloop' / 'signal_samples'
-SOUNDS_FOLDER = HOME_FOLDER / 'portiloop-software' / 'portiloop' / 'sounds'
-DEFAULT_MODEL_PATH = HOME_FOLDER / 'portiloop-software' / 'portiloop' / 'models' / 'portiloop_model_quant.tflite'
+SIGNAL_SAMPLES_FOLDER = _INSTALL_ROOT / 'portiloop' / 'signal_samples'
+SOUNDS_FOLDER = _INSTALL_ROOT / 'portiloop' / 'sounds'
+DEFAULT_MODEL_PATH = _INSTALL_ROOT / 'portiloop' / 'models' / 'portiloop_model_quant.tflite'
 
 if not (SIGNAL_SAMPLES_FOLDER.exists() and SOUNDS_FOLDER.exists() and DEFAULT_MODEL_PATH.exists()):
     raise RuntimeError("The current version of the library must be installed locally in the home folder.")

@@ -1,6 +1,7 @@
-from periphery import GPIO
 from enum import Enum
-from portiloop.src import IS_RDKX5
+from portiloop.src import ADS, IS_RDKX5
+if ADS:
+    from periphery import GPIO
 
 
 class Color(Enum):

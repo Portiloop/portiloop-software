@@ -5,12 +5,15 @@ from enum import Enum, auto
 import numpy as np
 # from scipy import signal
 
+from pathlib import Path
 from portiloop.src.core.detection import Detector
 from portiloop.src.core.constants import DEFAULT_MODEL_PATH
 from portiloop.src.core.utils import Dummy
+from portiloop.src.core.bpu import BPUSession, ONNXSession, bpu_available, onnx_available
 # from portiloop.src.custom.custom_processors import FIR
 
 from portiloop.src import IS_CORAL
+_TFLiteInterpreter = None
 if IS_CORAL:
     from pycoral.utils import edgetpu
 else:
@@ -18,8 +21,11 @@ else:
         import tflite_runtime.interpreter as tflite
         _TFLiteInterpreter = tflite.Interpreter
     except ImportError:
-        import tensorflow as tf
-        _TFLiteInterpreter = tf.lite.Interpreter
+        try:
+            import tensorflow as tf
+            _TFLiteInterpreter = tf.lite.Interpreter
+        except ImportError:
+            _TFLiteInterpreter = None
 
 logger = logging.getLogger(__name__)
 
@@ -36,36 +42,54 @@ class SleepSpindleRealTimeDetector(Detector):
         num_models_parallel = 8
         window_size = 54
         seq_stride = 42
-        model_path = None
+        model_path = config_dict.get('spindle_model_path')
         verbose = False
         # channel = 2
 
-        model_path = str(DEFAULT_MODEL_PATH if model_path is None else model_path)
+        model_path = Path(DEFAULT_MODEL_PATH if model_path is None else model_path)
         self.verbose = verbose
         self.num_models_parallel = num_models_parallel
-
-        self.interpreters = []
-        for i in range(self.num_models_parallel):
-            if IS_CORAL:
-                self.interpreters.append(edgetpu.make_interpreter(model_path))
-            else:
-                self.interpreters.append(_TFLiteInterpreter(model_path=model_path))
-            self.interpreters[i].allocate_tensors()
-        self.interpreter_counter = 0
-
-        self.input_details = self.interpreters[0].get_input_details()
-        self.output_details = self.interpreters[0].get_output_details()
-
-        self.buffer = []
-        self.seq_stride = seq_stride
         self.window_size = window_size
+        self.seq_stride = seq_stride
+
+        bpu_path = model_path.with_name("portiloop_model_bpu.bin")
+        onnx_path = model_path.with_name("portiloop_spindle.onnx")
+        self.session = None
+        self.interpreters = []
+
+        if model_path.suffix == ".bin" or (bpu_available() and bpu_path.is_file()):
+            target = model_path if model_path.suffix == ".bin" else bpu_path
+            self.session = BPUSession(target)
+            self.backend = "bpu"
+            h_dtype = np.float32
+            logger.info("SleepSpindleRealTimeDetector using RDK X5 BPU model: %s", target)
+        elif model_path.suffix == ".onnx" or (_TFLiteInterpreter is None and not IS_CORAL and onnx_available() and onnx_path.is_file()):
+            target = model_path if model_path.suffix == ".onnx" else onnx_path
+            self.session = ONNXSession(target)
+            self.backend = "onnx"
+            h_dtype = np.float32
+            logger.info("SleepSpindleRealTimeDetector using ONNX model: %s", target)
+        else:
+            self.backend = "tflite"
+            h_dtype = np.int8
+            for i in range(self.num_models_parallel):
+                if IS_CORAL:
+                    self.interpreters.append(edgetpu.make_interpreter(str(model_path)))
+                else:
+                    self.interpreters.append(_TFLiteInterpreter(model_path=str(model_path)))
+                self.interpreters[i].allocate_tensors()
+            self.input_details = self.interpreters[0].get_input_details()
+            self.output_details = self.interpreters[0].get_output_details()
+
+        self.interpreter_counter = 0
+        self.buffer = []
 
         self.stride_counters = [np.floor((self.seq_stride / self.num_models_parallel) * (i + 1)) for i in range(self.num_models_parallel)]
         for idx in reversed(range(1, len(self.stride_counters))):
             self.stride_counters[idx] -= self.stride_counters[idx-1]
         assert sum(self.stride_counters) == self.seq_stride, f"{self.stride_counters} does not sum to {self.seq_stride}"
 
-        self.h = [np.zeros((1, 7), dtype=np.int8) for _ in range(self.num_models_parallel)]
+        self.h = [np.zeros((1, 7), dtype=h_dtype) for _ in range(self.num_models_parallel)]
 
         self.current_stride_counter = self.stride_counters[0] - 1
 
@@ -109,6 +133,16 @@ class SleepSpindleRealTimeDetector(Detector):
         return result
 
     def forward_tflite(self, idx, input_x, input_h):
+        if self.session is not None:
+            x_4d = np.asarray(input_x, dtype=np.float32).reshape((1, 1, 1, self.window_size))
+            if self.verbose:
+                start_time = time.time()
+            out = self.session.run({"x": x_4d, "h": input_h})
+            if self.verbose:
+                end_time = time.time()
+                logger.info("Computed output %s in %s seconds", out["y"], end_time - start_time)
+            return float(out["y"].reshape(-1)[0]), out["h_out"].reshape((1, 7))
+
         input_details = self.interpreters[idx].get_input_details()
         output_details = self.interpreters[idx].get_output_details()
 

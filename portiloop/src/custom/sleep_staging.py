@@ -15,12 +15,18 @@ from portiloop.src.core.capture import dump_metadata
 from portiloop.src.core.constants import DEFAULT_MODEL_PATH
 from portiloop.src.core.detection import Detector
 from portiloop.src.core.utils import Dummy
+from portiloop.src.core.bpu import BPUSession, ONNXSession, bpu_available, onnx_available
 
-from portiloop.src import ADS
-if ADS:
+_TFLiteInterpreter = None
+try:
     import tflite_runtime.interpreter as tflite
-else:
-    import tensorflow as tf
+    _TFLiteInterpreter = tflite.Interpreter
+except ImportError:
+    try:
+        import tensorflow as tf
+        _TFLiteInterpreter = tf.lite.Interpreter
+    except ImportError:
+        _TFLiteInterpreter = None
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +91,8 @@ class Preprocessor:
 
 class TinySleepNetStep:
     """
-    TinySleepNet as a TensorFlow Lite model; the LSTM state is carried from epoch to epoch.
+    TinySleepNet as a BPU (.bin), ONNX (.onnx), or TensorFlow Lite (.tflite) model;
+    the LSTM state is carried from epoch to epoch.
 
     probe.npz holds one epoch and the LSTM state the original model reaches on it from a zero state: it tells the
     two state outputs of the TFLite model (same shape) apart.
@@ -93,13 +100,32 @@ class TinySleepNetStep:
     NAME = "TinySleepNet"
     FOLDER = MODELS_FOLDER / 'tinysleepnet'
     FILES = ("tinysleepnet_float.tflite", "probe.npz")
+    BPU_FILE = "tinysleepnet_bpu.bin"
+    ONNX_FILE = "tinysleepnet.onnx"
 
     def __init__(self, model_folder):
-        model_path = str(Path(model_folder) / self.FILES[0])
-        if ADS:
-            self.interpreter = tflite.Interpreter(model_path=model_path)
-        else:
-            self.interpreter = tf.lite.Interpreter(model_path=model_path)
+        folder = Path(model_folder)
+        bpu_path = folder / self.BPU_FILE
+        onnx_path = folder / self.ONNX_FILE
+        tflite_path = folder / self.FILES[0]
+        self.session = None
+        self.interpreter = None
+
+        if bpu_available() and bpu_path.is_file():
+            self.session = BPUSession(bpu_path)
+            self.active_model_file = bpu_path
+            self.reset()
+            logger.info("TinySleepNet using RDK X5 BPU model: %s", bpu_path)
+            return
+        if _TFLiteInterpreter is None and onnx_available() and onnx_path.is_file():
+            self.session = ONNXSession(onnx_path)
+            self.active_model_file = onnx_path
+            self.reset()
+            logger.info("TinySleepNet using ONNX model: %s", onnx_path)
+            return
+
+        self.active_model_file = tflite_path
+        self.interpreter = _TFLiteInterpreter(model_path=str(tflite_path))
         self.interpreter.allocate_tensors()
 
         input_index = {d['name']: d['index'] for d in self.interpreter.get_input_details()}
@@ -113,7 +139,7 @@ class TinySleepNetStep:
             else:
                 state_outputs.append(output['index'])
 
-        with np.load(Path(model_folder) / self.FILES[1]) as probe:
+        with np.load(folder / self.FILES[1]) as probe:
             probe_x, probe_c = probe['x'], probe['c']
         self.reset()
         first, second = self.forward_tflite(probe_x, state_outputs)
@@ -139,6 +165,12 @@ class TinySleepNetStep:
         """
         Logits (W, N1, N2, N3, REM) of one epoch; the LSTM state carries over to the next call.
         """
+        if self.session is not None:
+            x_4d = np.asarray(epoch, dtype=np.float32).reshape(1, 1, 1, EPOCH_SAMPLES)
+            out = self.session.run({"x": x_4d, "c": self.c, "h": self.h})
+            self.c = out["c_out"].reshape(1, 128)
+            self.h = out["h_out"].reshape(1, 128)
+            return out["logits"].reshape(len(STAGES))
         logits, self.c, self.h = self.forward_tflite(epoch, (self.output_logits, self.output_c, self.output_h))
         return logits[0]
 
@@ -182,13 +214,23 @@ class NanoSleepNetStep:
     NAME = "NanoSleepNet"
     FOLDER = MODELS_FOLDER / 'nanosleepnet'
     FILES = ("nanosleepnet.npz",)
+    BPU_FILE = "nanosleepnet_bpu.bin"
     WINDOW = 10  # epochs seen by the temporal network: the length of the training sequences
 
     def __init__(self, model_folder):
-        with np.load(Path(model_folder) / self.FILES[0]) as weights:
+        folder = Path(model_folder)
+        npz_path = folder / self.FILES[0]
+        bpu_path = folder / self.BPU_FILE
+        with np.load(npz_path) as weights:
             self.w = {name: weights[name].astype(np.float64) for name in weights.files}
         nb_blocks = len([name for name in self.w if name.endswith(".dilation")])
         self.blocks = [(f"block{i}", int(self.w[f"block{i}.dilation"])) for i in range(nb_blocks)]
+        self.bpu_session = None
+        self.active_model_file = npz_path
+        if bpu_available() and bpu_path.is_file():
+            self.bpu_session = BPUSession(bpu_path)
+            self.active_model_file = bpu_path
+            logger.info("NanoSleepNet using RDK X5 BPU model: %s", bpu_path)
         self.reset()
 
     def reset(self):
@@ -234,6 +276,20 @@ class NanoSleepNetStep:
         """
         Logits (W, N1, N2, N3, REM) of one epoch, from it and the up to 9 epochs before it.
         """
+        if self.bpu_session is not None:
+            past = np.zeros((1, 64, 1, self.WINDOW - 1), dtype=np.float32)
+            if self.tokens:
+                tok_arr = np.stack(self.tokens, axis=1).astype(np.float32)
+                n_prev = min(tok_arr.shape[1], self.WINDOW - 1)
+                past[0, :, 0, -n_prev:] = tok_arr[:, -n_prev:]
+            x_4d = np.asarray(epoch, dtype=np.float32).reshape(1, 1, 1, EPOCH_SAMPLES)
+            out = self.bpu_session.run({"x": x_4d, "past_tokens": past})
+            self.tokens.append(out["token"].reshape(64).astype(np.float64))
+            if len(self.tokens) == self.WINDOW:
+                return out["logits"].reshape(len(STAGES)).astype(np.float32)
+            features = self.temporal(np.stack(self.tokens, axis=1))[:, -1]
+            return (self.w["classifier.w"] @ features + self.w["classifier.b"]).astype(np.float32)
+
         self.tokens.append(self.epoch_token(epoch))
         features = self.temporal(np.stack(self.tokens, axis=1))[:, -1]
         return (self.w["classifier.w"] @ features + self.w["classifier.b"]).astype(np.float32)
@@ -361,7 +417,8 @@ class SleepStagingDetector(Detector):
             "cz_channel": self.cz,
         }
         if self.error is None:
-            with open(self.model_folder / self.model_class.FILES[0], 'rb') as f:
+            active_file = getattr(self.model, "active_model_file", self.model_folder / self.model_class.FILES[0])
+            with open(active_file, 'rb') as f:
                 status["model_sha256"] = hashlib.sha256(f.read()).hexdigest()
         dump_metadata(self.config_dict, status, "staging")
 

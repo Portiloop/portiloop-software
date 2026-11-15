@@ -2,8 +2,10 @@ import logging
 import os
 import struct
 from time import sleep
-from periphery import GPIO
-from spidev import SpiDev
+from portiloop.src import ADS
+if ADS:
+    from periphery import GPIO
+    from spidev import SpiDev
 
 logger = logging.getLogger(__name__)
 
