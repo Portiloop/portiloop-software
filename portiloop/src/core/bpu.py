@@ -1,6 +1,6 @@
 """
-D-Robotics RDK X5 BPU (`hobot_dnn.pyeasy_dnn`) and ONNX Runtime (`onnxruntime`) inference wrappers
-for Portiloop models.
+D-Robotics RDK X5 BPU (`hbm_runtime.HB_HBMRuntime`, with `hobot_dnn.pyeasy_dnn` fallback)
+and ONNX Runtime (`onnxruntime`) inference wrappers for Portiloop models.
 """
 import logging
 from pathlib import Path
@@ -10,15 +10,21 @@ from portiloop.src import IS_RDKX5
 
 logger = logging.getLogger(__name__)
 
+_hbm_runtime = None
 _dnn = None
 if IS_RDKX5:
     try:
-        from hobot_dnn import pyeasy_dnn as _dnn
+        import hbm_runtime as _hbm_runtime
     except ImportError:
+        _hbm_runtime = None
+    if _hbm_runtime is None:
         try:
-            import hobot_dnn as _dnn
+            from hobot_dnn import pyeasy_dnn as _dnn
         except ImportError:
-            _dnn = None
+            try:
+                import hobot_dnn as _dnn
+            except ImportError:
+                _dnn = None
 
 try:
     import onnxruntime as _ort
@@ -27,8 +33,8 @@ except ImportError:
 
 
 def bpu_available() -> bool:
-    """True when running on an RDK X5 with `hobot_dnn` installed."""
-    return _dnn is not None
+    """True when running on an RDK X5 with `hbm_runtime` or `hobot_dnn` installed."""
+    return _hbm_runtime is not None or _dnn is not None
 
 
 def onnx_available() -> bool:
@@ -38,20 +44,45 @@ def onnx_available() -> bool:
 
 class BPUSession:
     """
-    Thin wrapper around `hobot_dnn.pyeasy_dnn.load(bin_path)[0]` with named input/output lookup.
+    Thin wrapper around D-Robotics `hbm_runtime.HB_HBMRuntime` (or legacy `pyeasy_dnn`)
+    with named input/output lookup.
     """
     def __init__(self, bin_path):
-        if _dnn is None:
-            raise RuntimeError("hobot_dnn is not available on this system")
         self.bin_path = Path(bin_path)
-        models = _dnn.load(str(self.bin_path))
-        self.model = models[0]
-        self.input_names = [inp.name for inp in self.model.inputs]
-        self.input_shapes = [tuple(inp.properties.shape) for inp in self.model.inputs]
-        self.output_names = [out.name for out in self.model.outputs]
-        self.output_shapes = [tuple(out.properties.shape) for out in self.model.outputs]
+        if _hbm_runtime is not None:
+            self._use_hbm = True
+            self.model = _hbm_runtime.HB_HBMRuntime(str(self.bin_path))
+            self.model_name = self.model.model_names[0]
+            self.input_names = list(self.model.input_names[self.model_name])
+            self.input_shapes = [tuple(self.model.input_shapes[self.model_name][n]) for n in self.input_names]
+            self.output_names = list(self.model.output_names[self.model_name])
+            self.output_shapes = [tuple(self.model.output_shapes[self.model_name][n]) for n in self.output_names]
+        elif _dnn is not None:
+            self._use_hbm = False
+            models = _dnn.load(str(self.bin_path))
+            self.model = models[0]
+            self.model_name = getattr(self.model, "name", self.bin_path.stem)
+            self.input_names = [inp.name for inp in self.model.inputs]
+            self.input_shapes = [tuple(inp.properties.shape) for inp in self.model.inputs]
+            self.output_names = [out.name for out in self.model.outputs]
+            self.output_shapes = [tuple(out.properties.shape) for out in self.model.outputs]
+        else:
+            raise RuntimeError("Neither hbm_runtime nor hobot_dnn is available on this system")
 
     def run(self, feed_dict: dict) -> dict:
+        if self._use_hbm:
+            model_inputs = {}
+            for name, shape in zip(self.input_names, self.input_shapes):
+                arr = np.asarray(feed_dict[name], dtype=np.float32)
+                if arr.shape != shape and arr.size == int(np.prod(shape)):
+                    arr = arr.reshape(shape)
+                model_inputs[name] = np.ascontiguousarray(arr)
+            raw_outs = self.model.run({self.model_name: model_inputs})[self.model_name]
+            return {
+                name: np.asarray(raw_outs[name], dtype=np.float32)
+                for name in self.output_names
+            }
+
         ordered_inputs = []
         for name, shape in zip(self.input_names, self.input_shapes):
             arr = np.asarray(feed_dict[name], dtype=np.float32)

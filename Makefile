@@ -22,8 +22,10 @@ rdkx5_deps.temp:
 	touch rdkx5_deps.temp
 
 rdkx5_ap.temp: rdkx5_deps.temp
-	@echo "--- RDK X5 ACCESS POINT SETUP ---"
-	cd $(REPO_DIR) && bash create_ap.sh
+	@echo "--- RDK X5 DEVICE NAME & ACCESS POINT SETUP ---"
+	@DEVICE_NAME="$$(bash $(SETUP_DIR)/setup_device_name.sh)"; \
+	echo "Device hostname: $$DEVICE_NAME (Wi-Fi SSID: $${PORTILOOP_SSID:-$${DEVICE_NAME}-wifi})"; \
+	cd $(REPO_DIR) && PORTILOOP_SSID="$${PORTILOOP_SSID:-$${DEVICE_NAME}-wifi}" bash create_ap.sh
 	touch rdkx5_ap.temp
 
 rdkx5_venv.temp: rdkx5_ap.temp

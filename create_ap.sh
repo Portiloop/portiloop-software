@@ -4,9 +4,11 @@ set -e
 
 echo "--- PORTILOOP ACCESS POINT SETUP ---"
 
-if [[ -z "${PORTILOOP_SSID}" ]]; then
-    echo "ACTION REQUIRED: Enter the desired access point wifi SSID (example: portiloop-wifi):"
+if [[ -z "${PORTILOOP_SSID:-}" ]]; then
+    DEFAULT_SSID="$(hostname 2>/dev/null || echo portiloop)-wifi"
+    echo "ACTION REQUIRED: Enter the desired access point wifi SSID [${DEFAULT_SSID}]:"
     read portiloop_SSID
+    portiloop_SSID="${portiloop_SSID:-${DEFAULT_SSID}}"
 else
     portiloop_SSID="${PORTILOOP_SSID}"
 fi

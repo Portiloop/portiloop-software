@@ -13,17 +13,26 @@ OPENEXPLORER_IMAGE="${OPENEXPLORER_IMAGE:-openexplorer/ai_toolchain_ubuntu_20_x5
 cd "${BPU_DIR}"
 
 echo "[1/3] Preparing PTQ calibration data..."
-python3 "${BPU_DIR}/prepare_calibration_data.py" --models-dir "${MODELS_DIR}" --cal-dir "${BPU_DIR}/cal_data"
+if python3 -c "import onnxruntime" >/dev/null 2>&1; then
+    python3 "${BPU_DIR}/prepare_calibration_data.py" --models-dir "${MODELS_DIR}" --cal-dir "${BPU_DIR}/cal_data"
+elif command -v uv >/dev/null 2>&1; then
+    uv run --with onnxruntime --with numpy python3 "${BPU_DIR}/prepare_calibration_data.py" --models-dir "${MODELS_DIR}" --cal-dir "${BPU_DIR}/cal_data"
+else
+    echo "ERROR: 'onnxruntime' is not installed for python3 and 'uv' was not found." >&2
+    exit 1
+fi
 
 run_hb_mapper() {
     if command -v hb_mapper >/dev/null 2>&1; then
         hb_mapper "$@"
     elif command -v docker >/dev/null 2>&1; then
-        docker run --rm -u "$(id -u):$(id -g)" \
+        local uid_gid
+        uid_gid="$(id -u):$(id -g)"
+        docker run --rm \
             -v "${REPO_ROOT}:${REPO_ROOT}" \
             -w "${BPU_DIR}" \
             "${OPENEXPLORER_IMAGE}" \
-            hb_mapper "$@"
+            bash -c "hb_mapper \"\$@\"; ret=\$?; chown -R ${uid_gid} \"${BPU_DIR}\"; exit \$ret" -- "$@"
     else
         echo "ERROR: Neither 'hb_mapper' nor 'docker' (for ${OPENEXPLORER_IMAGE}) was found." >&2
         exit 1
