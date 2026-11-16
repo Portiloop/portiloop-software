@@ -63,7 +63,9 @@ class SleepSpindleRealTimeDetector(Detector):
             self.backend = "bpu"
             h_dtype = np.float32
             logger.info("SleepSpindleRealTimeDetector using RDK X5 BPU model: %s", target)
-        elif model_path.suffix == ".onnx" or (_TFLiteInterpreter is None and not IS_CORAL and onnx_available() and onnx_path.is_file()):
+        elif model_path.suffix == ".onnx" or (not IS_CORAL and onnx_available() and onnx_path.is_file()):
+            # Off the Coral, prefer the floating-point ONNX model to the INT8 TFLite one: it is unquantized and at
+            # least as fast on the RDK X5 CPU (the BPU brings no gain for a network this small).
             target = model_path if model_path.suffix == ".onnx" else onnx_path
             self.session = ONNXSession(target)
             self.backend = "onnx"
