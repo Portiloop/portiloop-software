@@ -9,9 +9,12 @@ if ADS:
 
 logger = logging.getLogger(__name__)
 
-# struct gpioevent_data of the GPIO character device (v1 API, used by python-periphery on Mendel):
-# __u64 timestamp, __u32 id, padded to 16 bytes
-_DRDY_EVENT = struct.Struct("=QI4x")
+# DRDY edge events of the GPIO character device. python-periphery uses the v2 API when the kernel supports it
+# (python-periphery >= 2.5, e.g. on the RDK X5), otherwise the v1 API (python-periphery 2.4 on Mendel):
+# struct gpioevent_data (v1): __u64 timestamp, __u32 id, padded to 16 bytes
+_DRDY_EVENT_V1 = struct.Struct("=QI4x")
+# struct gpio_v2_line_event (v2): __u64 timestamp_ns, __u32 id, offset, seqno, line_seqno, __u32 padding[6]
+_DRDY_EVENT_V2 = struct.Struct("=QIIII24x")
 _DRDY_QUEUE = 16  # events kept by the kernel for a line, older ones are dropped (drivers/gpio/gpiolib.c)
 
 
@@ -65,7 +68,10 @@ class Backend:
         if portiloop_version < 2:
             logger.warning(f"Your version ({portiloop_version}) of the Portiloop PCB has known issues and is not supported. Upgrade to Version >= 2.3.")
 
+        # Register commands need 4 tCLK (about 2 us) between bytes to be decoded: they stay at 1 MHz (they fail at
+        # 10 MHz). The data reads (RDATA + 27 bytes) have no such constraint and can run faster where tested.
         max_speed = 1000000
+        self.data_speed = max_speed
 
         self.start_gpio = None
         self.drdy = None
@@ -87,12 +93,19 @@ class Backend:
             # D-Robotics RDK X5: header pin 24 (CE0) is wired to SoC SPI1_CSN1 (/dev/spidev1.1),
             # DRDY on pin 37, START on pin 35
             spi_bus, spi_cs = 1, 1
+            # 10 MHz data reads: about 0.1 ms per sample (Backend.read()) instead of about 0.33 ms at 1 MHz
+            self.data_speed = 10000000
             self.drdy = GPIO("/dev/gpiochip4", 22, "in")
             self.start_gpio = GPIO("/dev/gpiochip3", 11, "out")
             self.start_gpio.write(False)
 
+        # size of the DRDY events read in wait_new_data(): the v2 events are 48 bytes, and counting them as 16-byte v1
+        # events would report 2 missed conversions for each one (each sample recorded 3 times)
+        self._drdy_event = _DRDY_EVENT_V1
         if self.drdy is not None:
             self.drdy.edge = "falling"
+            if type(self.drdy).__name__ == "Cdev2GPIO":
+                self._drdy_event = _DRDY_EVENT_V2
         self.dev = SpiDev()
         self.dev.open(spi_bus, spi_cs)
         self.dev.max_speed_hz = max_speed
@@ -142,7 +155,7 @@ class Backend:
     def read(self):
         if self._nb_channels is None:
             self._nb_channels = self.get_nb_channels()
-        values = self.dev.xfer([RDATA] + [0x00] * 27)
+        values = self.dev.xfer([RDATA] + [0x00] * 27, self.data_speed)
         return Reading(values[1:], self._nb_channels)
 
     def start_continuous(self):
@@ -152,7 +165,7 @@ class Backend:
         self.dev.xfer([SDATAC])
 
     def read_continuous(self):
-        values = self.dev.xfer([0x00] * 27)
+        values = self.dev.xfer([0x00] * 27, self.data_speed)
         return Reading(values, self.get_nb_channels())
 
     def is_ready(self):
@@ -171,8 +184,9 @@ class Backend:
         if self.drdy is None:
             raise RuntimeError("DRDY GPIO is not configured on this hardware version; use python_clock=True")
         # blocks until a DRDY falling edge is queued, then returns all the queued events at once
-        events = os.read(self.drdy._line_fd, _DRDY_EVENT.size * _DRDY_QUEUE)
-        missed = len(events) // _DRDY_EVENT.size - 1
+        size = self._drdy_event.size
+        events = os.read(self.drdy._line_fd, size * _DRDY_QUEUE)
+        missed = len(events) // size - 1
         return self.read(), missed  # read SPI with RDATA
 
     def start_conversion(self):
