@@ -1,0 +1,97 @@
+{
+  "samples": 5292,
+  "duration_sec": 0.12,
+  "sample_rate": 44100,
+  "peak": 0.3340202569961548,
+  "rms": 0.1000000001278743,
+  "rms_dbfs": -19.99999998889298,
+  "clipping": false,
+  "recipe": {
+    "schema_version": 1,
+    "sample_rate": 44100,
+    "master_gain_db": 0.0,
+    "layers": [
+      {
+        "enabled": true,
+        "offset_sec": 0.0,
+        "gain_db": 0.0,
+        "sound": {
+          "kind": "speech",
+          "duration_sec": 0.12,
+          "frequency_hz": 98.0,
+          "pitch_semitones": 0.0,
+          "target_rms": 0.1,
+          "onset_ramp_ms": 2.0,
+          "offset_ramp_ms": 2.0,
+          "gap_onset_sec": null,
+          "gap_duration_sec": 0.0,
+          "gap_ramp_ms": 1.0,
+          "polarity": 1,
+          "noise_color": "pink",
+          "bandwidth_hz": 0.0,
+          "timbre": "sine",
+          "harmonics_db": null,
+          "consonant": "d",
+          "vowel": "a",
+          "token_path": "",
+          "random_seed": 51,
+          "mbrola_executable": "",
+          "mbrola_voice_path": "",
+          "consonant_duration_ms": 20.0
+        }
+      },
+      {
+        "enabled": false,
+        "offset_sec": 0.0,
+        "gain_db": -6.0,
+        "sound": {
+          "kind": "noise",
+          "duration_sec": 0.2,
+          "frequency_hz": 1000.0,
+          "pitch_semitones": 0.0,
+          "target_rms": 0.1,
+          "onset_ramp_ms": 2.0,
+          "offset_ramp_ms": 2.0,
+          "gap_onset_sec": null,
+          "gap_duration_sec": 0.0,
+          "gap_ramp_ms": 1.0,
+          "polarity": 1,
+          "noise_color": "pink",
+          "bandwidth_hz": 0.0,
+          "timbre": "sine",
+          "harmonics_db": null,
+          "consonant": "d",
+          "vowel": "a",
+          "token_path": "",
+          "random_seed": 42,
+          "mbrola_executable": "",
+          "mbrola_voice_path": "",
+          "consonant_duration_ms": 20.0
+        }
+      }
+    ]
+  },
+  "versions": {
+    "numpy": "2.3.5",
+    "scipy": "1.17.1",
+    "parselmouth": "0.4.7",
+    "praat": "6.1.38"
+  },
+  "speech_method": "Praat KlattGrid; tmda-pav CV presets v3 (filtered stop release)",
+  "references": [
+    "Klatt & Klatt (1990), JASA 87, 820-857. doi:10.1121/1.398894",
+    "Jadoul, Thompson & de Boer (2018), Journal of Phonetics 71, 1-15. doi:10.1016/j.wocn.2018.07.001",
+    "https://www.fon.hum.uva.nl/praat/manual/KlattGrid.html"
+  ],
+  "speech_reproducibility": "Praat frication is stochastic; reuse the exported WAV for identical trials/polarities.",
+  "speech_sources": [
+    {
+      "layer": 1,
+      "kind": "speech",
+      "method": "Praat KlattGrid; tmda-pav CV presets v3 (filtered stop release)"
+    }
+  ],
+  "exported_at_utc": "2026-11-16T22:54:30.435675+00:00",
+  "wav_format": "IEEE float32 mono",
+  "wav_sha256": "d806b4bbd6b5323f30e535d2eb333c92a8aafb46d1f74307ee42f875da2fc292"
+}

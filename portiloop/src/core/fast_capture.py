@@ -9,6 +9,9 @@ blocks of samples, DISPLAY_RATE Hz) to this process, for the GUI display and LSL
 
 There is no lead-off detection during these recordings (its checks need register commands, which would interrupt the
 reads); the electrodes OFF at the last impedance check are disabled as in the other pipelines.
+
+A paradigm (core/ffr.py) can play sounds during the capture: it sends the time of each onset to the capture program
+(adscapture -e), which writes its trigger code in the last column of the CSV, and the recording stops at its end.
 """
 
 import json
@@ -38,6 +41,8 @@ MIN_FREE_MB = 200  # the recording stops when the free space falls below this
 CAPTURE_CPU = 3  # the reader polls DRDY on this CPU
 CAPTURE_RT_PRIORITY = 10  # allowed by LimitRTPRIO in simplegui.service
 STOP_TIMEOUT = 30  # s, for the capture program to write its last rows and exit
+START_TIMEOUT = 10  # s, for the capture program to start capturing (before a paradigm starts)
+DURATION_MARGIN = 10  # s, with a paradigm: the capture program stops by itself this long after its expected end
 
 FAST_CAPTURE_DIR = Path(__file__).resolve().parents[2] / "fast_capture"
 ADSCAPTURE = FAST_CAPTURE_DIR / "adscapture"
@@ -67,9 +72,12 @@ def fast_capture_status():
     return None
 
 
-def _log_stderr(stream):
+def _log_stderr(stream, capturing=None):
     for line in iter(stream.readline, b''):
-        logger.info(line.decode(errors='replace').rstrip())
+        line = line.decode(errors='replace').rstrip()
+        logger.info(line)
+        if capturing is not None and "capturing at" in line:
+            capturing.set()
 
 
 def _stop_ads():
@@ -86,16 +94,20 @@ def _stop_ads():
         backend.close()
 
 
-def start_fast_capture(config_dict, q_msg, q_display, pause_value=None):
+def start_fast_capture(config_dict, q_msg, q_display, pause_value=None, paradigm=None):
     """
-    Runs a fast acquisition until 'STOP' is received on q_msg (or the duration is reached).
+    Runs a fast acquisition until 'STOP' is received on q_msg (or the duration is reached, or the paradigm ends).
     Same arguments as start_capture() (without the pipeline classes): config_dict['frequency'] must be in FAST_RATES.
+
+    paradigm: None, or a class as core/ffr.py's FFRRun, made with config_dict: sounds played during the capture,
+        with triggers. Its duration replaces config_dict['duration'].
     """
     from portiloop.src.core.hardware.leds import Color, LEDs
 
     leds = None
     proc = None
     stats_tmp = None
+    run = None
     try:
         leds = LEDs()
         leds.led1(Color.CYAN if config_dict['stimulate'] else Color.PURPLE)
@@ -113,6 +125,9 @@ def start_fast_capture(config_dict, q_msg, q_display, pause_value=None):
         decimation = rate // DISPLAY_RATE
         duration = config_dict['duration'] if config_dict['duration'] > 0 else 0
         record = config_dict['record']
+        if paradigm is not None:
+            run = paradigm(config_dict)
+            duration = run.duration_s + DURATION_MARGIN  # in case the player hangs: stopped at its end otherwise
 
         config_dict = dict(config_dict,
                            python_clock=False,
@@ -123,6 +138,8 @@ def start_fast_capture(config_dict, q_msg, q_display, pause_value=None):
                                "decimated_rate": rate / decimation,
                                "decimated_signal": f"means of {decimation} samples (GUI display and LSL only)",
                            })
+        if run is not None:
+            config_dict['ffr'] = run.metadata()
 
         if record:
             prefix = os.path.splitext(config_dict['filename'])[0]
@@ -130,6 +147,8 @@ def start_fast_capture(config_dict, q_msg, q_display, pause_value=None):
             stats_path = f"{prefix}_stats.json"
             with open(f"{prefix}_metadata.json", "w") as f:
                 json.dump(config_dict, f, indent=4)
+            if run is not None:
+                run.write_trials(f"{prefix}_trials.csv")
         else:
             prefix = None
             fd, stats_tmp = tempfile.mkstemp(suffix="_stats.json")
@@ -148,10 +167,22 @@ def start_fast_capture(config_dict, q_msg, q_display, pause_value=None):
                 "-u", str(CAPTURE_CPU), "-p", str(CAPTURE_RT_PRIORITY)]
         if prefix is not None:
             args += ["-o", prefix]
+        if run is not None:
+            args += ["-e"]  # the triggers, from the player through stdin
         args += [f"{b:02x}" for b in ads_config[1:]]
         logger.info("Starting the fast acquisition at %s Hz: %s", rate, " ".join(args))
-        proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        threading.Thread(target=_log_stderr, args=(proc.stderr,), daemon=True).start()
+        proc = subprocess.Popen(args, stdin=subprocess.PIPE if run is not None else subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        capturing = threading.Event()
+        threading.Thread(target=_log_stderr, args=(proc.stderr, capturing), daemon=True).start()
+        if run is not None:
+            # the sound starts once the ADS is read (its first onset is LEAD_IN_S later)
+            t0 = time.monotonic()
+            while not capturing.wait(0.1):
+                if proc.poll() is not None or time.monotonic() - t0 > START_TIMEOUT:
+                    raise RuntimeError("The capture program did not start (see its messages above).")
+            run.start(proc.stdin)  # the player writes the onsets to adscapture's stdin
+            proc.stdin.close()  # the player has its own copy: adscapture sees the end of the input when it exits
 
         record_size = 4 * nb_channels
         out_fd = proc.stdout.fileno()
@@ -162,10 +193,16 @@ def start_fast_capture(config_dict, q_msg, q_display, pause_value=None):
             try:
                 while True:
                     if q_msg.get_nowait() == 'STOP' and not stop_sent:
+                        if run is not None:
+                            run.stop()
                         proc.send_signal(signal.SIGTERM)
                         stop_sent = time.monotonic()
             except queue.Empty:
                 pass
+            if run is not None and not stop_sent and run.ended():
+                logger.info("End of the FFR run: stopping the capture.")
+                proc.send_signal(signal.SIGTERM)  # the player exits once its last frame (silence) is played
+                stop_sent = time.monotonic()
             if stop_sent and time.monotonic() - stop_sent > STOP_TIMEOUT:
                 break  # killed below
 
@@ -206,6 +243,8 @@ def start_fast_capture(config_dict, q_msg, q_display, pause_value=None):
         except (OSError, ValueError) as e:
             logger.error("No statistics from the capture program (%s).", e)
 
+        if run is not None:
+            run.finish(prefix, stats_path)
         if exitcode != 0:
             raise RuntimeError(f"The capture program failed (exit code {exitcode}).")
 
@@ -214,6 +253,8 @@ def start_fast_capture(config_dict, q_msg, q_display, pause_value=None):
         raise
 
     finally:
+        if run is not None:
+            run.close()  # stops the sound if it still plays
         if proc is not None:
             if proc.poll() is None:
                 proc.kill()

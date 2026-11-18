@@ -68,6 +68,63 @@ are disabled, as in the other pipelines.
   a buffer of 524 288 conversions (32 s at 16 kSPS), so that storage stalls do not delay the reads.
 - The program stops on SIGTERM (the GUI's Stop), at the end of the duration, when the disk is nearly full, or if the
   ADS stops converting (no DRDY for 1 s), and if its parent process dies.
+- With `-e` (the FFR pipeline), the writer thread also reads the triggers on stdin and writes them in the rows (see
+  "FFR paradigm").
+
+## FFR paradigm
+
+The "FFR (fast)" pipeline is a fast acquisition during which the Portiloop plays the stimuli of the FFR protocol
+(`FFR_Timeline_and_parameters.pdf`), with a trigger code in the recording at the onset of each one. The paradigm and
+its parameters are in `portiloop/src/core/ffr.py`, the stimuli in `portiloop/sounds/ffr`. In short:
+
+- 4 conditions, 120 ms each, with their trigger codes: `+` /da/ (1), `-` /da/ x -1 (2), `+N` /da/ + noise (3),
+  `-N` -/da/ + noise (4). The noise is one of 4 tokens (drawn at random), at +10 dB SNR (RMS over the 120 ms).
+- One Start is one run: 250 blocks of the 4 conditions shuffled within each block (1000 trials), SOA uniformly random
+  between 195 and 205 ms, 1 s of silence before the first trial and 0.5 s after the last one (about 3.4 min). A
+  session is 4 runs, so 4 recordings. The recording stops at the end of the run.
+- The random parameters come from a seed drawn for each run (`ffr.seed` in the metadata).
+- The volume of the GUI applies (calibrate it for 80 dB SPL with "Test Sound", which plays a positive /da/ every
+  200 ms for 5 s). With "Cond A", the run is the same, with its triggers, in silence.
+
+Its recordings have, besides the usual files:
+- the CSV's last column, `trigger` (instead of `stimulation_on`): the trigger code in the row of each onset, 0
+  elsewhere;
+- `_trials.csv`: one line per trial (block, condition, code, noise token, onset frame in the sound, SOA to the next
+  trial), with the row of its trigger, `offset_us` (onset - time of that row) and `in_csv`;
+- `_triggers.csv`: the triggers as written by `adscapture` (trial, code, row, onset time, `offset_us`, `in_csv`);
+- the `ffr` section of `_metadata.json` (the parameters, the seed, the SHA-256 of the stimulus files) and the
+  `ffr_playback` and `fast_capture.triggers` sections of `_stats.json` (underruns, late triggers).
+
+### Timing
+
+The whole run is rendered as one sound at 48 kHz (the stimuli are resampled once, with `resample_poly`, so that ALSA
+does not resample them), so the SOAs are exact to the frame (1/48 ms). `ffrplay.c` plays it through `softvol` and,
+after each write of 5 ms, reads the frame being played (`snd_pcm_delay()`) with the time (CLOCK_MONOTONIC). It fits a
+line to the last 2 s of these (the clock of the sound output), and sends the time of each onset to `adscapture -e`,
+on its stdin, when it writes it (about 100 ms before it is played). `adscapture` writes the code in the row of the
+conversion nearest to it, as per the time of each row (the expected time of its DRDY, which the reader already
+follows). Through the time, and not a number of samples, the triggers stay right although the ADS's clock is not the
+Coral's.
+
+On bored-yarn (18 Nov 2026):
+- The playback position moves by 4 frames (83 us) and lies within about 1 frame (24 us RMS) of the fitted line; the
+  onset times of a run lie on a straight line in the onset frames to within 2 to 3 us RMS (14 us at most).
+- The time of the rows follows the DRDYs read to within 1 to 7 us (checked against all the read times of a run). Over a
+  run, the ADS's clock moves by up to 2.6 ms against the Coral's (0.25 % slower than nominal, varying by a few ppm):
+  counting samples from the first trigger would put the last ones up to 40 rows off at 16 kSPS.
+- Every trigger is in the row nearest to its onset, to within the 2 % by which the reader's reference can move per
+  conversion (`offset_us` gives the rest). Runs of 1000 trials at 8 and 16 kSPS and of 100 trials at 16 kSPS: no
+  underrun, all the triggers in the CSV, 9 missed conversions (filled) in the run of 1000 trials at 16 kSPS, none at
+  8 kSPS; with the test signal, every half-period had its rows (4096 at 8 kSPS, 8192 at 16 kSPS) while the sound
+  played.
+
+Not included in the onset time: the latency of the codec, amplifier and earphones after the audio DMA, and the delay of
+the ADS1299's filter. Both are constant; measure them once (for example, the sound output through a divider into a
+channel) to place the onsets in absolute time.
+
+The PulseAudio daemon keeps the sound card for about 5 s after a sound played through it (ALSA's `default`, as the
+`aplay` run when `portiloop.src` is imported); `ffrplay` waits for it (the silence before the first trial is then
+longer).
 
 ## Tests (red-ibis, 5 Nov 2026)
 

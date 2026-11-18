@@ -1,0 +1,81 @@
+{
+  "samples": 5292,
+  "duration_sec": 0.12,
+  "sample_rate": 44100,
+  "peak": 0.4296796917915344,
+  "rms": 0.09999999999283259,
+  "rms_dbfs": -20.000000000622556,
+  "clipping": false,
+  "recipe": {
+    "schema_version": 1,
+    "sample_rate": 44100,
+    "master_gain_db": 0.0,
+    "layers": [
+      {
+        "enabled": true,
+        "offset_sec": 0.0,
+        "gain_db": 0.0,
+        "sound": {
+          "kind": "noise",
+          "duration_sec": 0.12,
+          "frequency_hz": 98.0,
+          "pitch_semitones": 0.0,
+          "target_rms": 0.1,
+          "onset_ramp_ms": 2.0,
+          "offset_ramp_ms": 2.0,
+          "gap_onset_sec": null,
+          "gap_duration_sec": 0.0,
+          "gap_ramp_ms": 1.0,
+          "polarity": 1,
+          "noise_color": "pink",
+          "bandwidth_hz": 0.0,
+          "timbre": "sine",
+          "harmonics_db": null,
+          "consonant": "d",
+          "vowel": "a",
+          "token_path": "",
+          "random_seed": 51,
+          "mbrola_executable": "",
+          "mbrola_voice_path": "",
+          "consonant_duration_ms": 20.0
+        }
+      },
+      {
+        "enabled": false,
+        "offset_sec": 0.0,
+        "gain_db": -6.0,
+        "sound": {
+          "kind": "noise",
+          "duration_sec": 0.2,
+          "frequency_hz": 1000.0,
+          "pitch_semitones": 0.0,
+          "target_rms": 0.1,
+          "onset_ramp_ms": 2.0,
+          "offset_ramp_ms": 2.0,
+          "gap_onset_sec": null,
+          "gap_duration_sec": 0.0,
+          "gap_ramp_ms": 1.0,
+          "polarity": 1,
+          "noise_color": "pink",
+          "bandwidth_hz": 0.0,
+          "timbre": "sine",
+          "harmonics_db": null,
+          "consonant": "d",
+          "vowel": "a",
+          "token_path": "",
+          "random_seed": 42,
+          "mbrola_executable": "",
+          "mbrola_voice_path": "",
+          "consonant_duration_ms": 20.0
+        }
+      }
+    ]
+  },
+  "versions": {
+    "numpy": "2.3.5",
+    "scipy": "1.17.1"
+  },
+  "exported_at_utc": "2026-11-16T22:54:19.567536+00:00",
+  "wav_format": "IEEE float32 mono",
+  "wav_sha256": "6c07372a932121329e664513a7808511579c4ea6d3bfbc5a9dfb34646b2c7eb0"
+}

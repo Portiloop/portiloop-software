@@ -6,6 +6,7 @@ from portiloop.src.custom.custom_processors import SpindleFilter, SlowOscillatio
 from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector, SlowOscillationDetector, SOUpstateDetector
 from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator, SlowOscillationStimulator
 from portiloop.src.core.fast_capture import fast_capture_status
+from portiloop.src.core.ffr import ffr_status
 
 PIPELINES = {
     "Acquisition only": {
@@ -45,6 +46,20 @@ if _fast_status is None:
         "stimulator": None,
         "config_modifiers": {},
         "fast_capture": True,
+    }
+
+FFR_PIPELINE_KEY = "FFR (fast)"
+
+# Fast acquisition with the sounds of the FFR protocol and their triggers (core/ffr.py)
+_ffr_status = ffr_status()
+if _fast_status is None and _ffr_status is None:
+    PIPELINES[FFR_PIPELINE_KEY] = {
+        "processor": None,
+        "detector": None,
+        "stimulator": None,
+        "config_modifiers": {},
+        "fast_capture": True,
+        "ffr": True,
     }
 
 DEFAULT_PIPELINE_KEY = "Acquisition only"

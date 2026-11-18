@@ -1,9 +1,11 @@
 #!/bin/bash
 
-# Installs the fast acquisition (2 to 16 kSPS, see README.md) on this Portiloop: builds the capture program, and
-# installs the spimap kernel module (loaded at boot) and its udev rules. Run it on the Portiloop, as mendel:
+# Installs the fast acquisition (2 to 16 kSPS, see README.md) on this Portiloop: builds the capture program and the
+# FFR player, and installs the spimap kernel module (loaded at boot) and its udev rules. Run it on the Portiloop, as
+# mendel:
 #   bash ~/portiloop-software/portiloop/fast_capture/install.sh
-# Then restart the Simple GUI (sudo systemctl restart simplegui) to get the "Acquisition only (fast)" pipeline.
+# Then restart the Simple GUI (sudo systemctl restart simplegui) to get the "Acquisition only (fast)" and "FFR (fast)"
+# pipelines.
 
 KERNEL=4.19.125-mtk  # spimap.ko was built for this kernel
 
@@ -21,6 +23,8 @@ actual=$(/sbin/modinfo -F vermagic spimap/spimap.ko)
 
 info "Building the capture program..."
 gcc -O2 -Wall -pthread -o adscapture adscapture.c -lm || fail "Could not build adscapture."
+info "Building the FFR player..."
+gcc -O2 -Wall -o ffrplay ffrplay.c -lasound -lm || fail "Could not build ffrplay (libasound2-dev is needed)."
 
 info "Installing the spimap module and its udev rules (your password may be asked)..."
 sudo install -D -m 644 spimap/spimap.ko "/lib/modules/$KERNEL/extra/spimap.ko" || fail "Could not install spimap.ko."
@@ -37,4 +41,4 @@ ls -l /dev/spimap
 echo "SPI controller power/control: $(cat /sys/devices/platform/soc/1100c000.spi/power/control)"
 [[ -r /dev/spimap && -w /dev/spimap ]] || fail "/dev/spimap is not accessible to $(whoami)."
 [[ $(cat /sys/devices/platform/soc/1100c000.spi/power/control) == on ]] || fail "power/control is not 'on'."
-info "Done. Restart the Simple GUI to use the \"Acquisition only (fast)\" pipeline: sudo systemctl restart simplegui"
+info "Done. Restart the Simple GUI to use the \"Acquisition only (fast)\" and \"FFR (fast)\" pipelines: sudo systemctl restart simplegui"

@@ -12,12 +12,19 @@
  *   -t seconds  duration (0: until SIGTERM or SIGINT, the default)
  *   -m MB       stop when the free space of the CSV folder falls below this (default 200)
  *   -p prio     SCHED_FIFO priority of the reader (default 10), -u cpu: its CPU (default 3)
+ *   -e          triggers on stdin (lines "<trial> <code> <CLOCK_MONOTONIC time in s>", in increasing time, received
+ *               before the conversion at that time is read, as ffrplay sends them): each code is written in the
+ *               row of the conversion nearest to its time, in the last column (then named "trigger" instead of
+ *               "stimulation_on"), and listed in <prefix>_triggers.csv
  *
  * The ADS is configured through spidev, then each conversion is read by driving the SPI controller's registers
  * directly (/dev/spimap, about 18 us per read, DRDY polled on its own CPU). A writer thread on the other CPUs writes
  * the CSV, so that SD card stalls do not delay the reads. Each conversion gets its index from the time it was read,
  * so the rows of the CSV stay one per conversion: a missed conversion (or a frame with a bad status byte, or one
- * lost because the buffer was full) repeats the previous row, and its index is listed in the statistics. */
+ * lost because the buffer was full) repeats the previous row, and its index is listed in the statistics.
+ *
+ * The time of each row (for the triggers) is the expected time of its DRDY as per the reference of the reader
+ * (a + index * p below), in CLOCK_MONOTONIC, the clock of ffrplay's onset times. */
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
@@ -69,6 +76,7 @@
 #define SLEW_FRACTION 0.02  /* the time reference follows late reads by at most 2 % of a period per conversion */
 
 struct frame {
+    double t;        /* expected time of its DRDY (CLOCK_MONOTONIC) */
     uint32_t index;  /* conversion index (CSV row) */
     uint8_t bad;     /* bad status byte */
     uint8_t data[24];
@@ -89,6 +97,7 @@ static int nch = 8, decimation, cpu = 3, prio = 10;
 static uint64_t part_rows = 28800000;
 static const char *prefix, *stats_path;
 static double duration, min_free_mb = 200;
+static int events_on;  /* -e */
 
 /* reader statistics */
 static uint64_t missed, overflows, timeouts, retried_ok, gaps;
@@ -230,7 +239,7 @@ static void open_part(void) {
     csv_fd = open(part_name, O_WRONLY | O_CREAT | O_EXCL, 0644);
     if (csv_fd < 0) { fail_write(part_name); return; }
     for (int c = 0; c < nch; c++) wlen += sprintf(wbuf + wlen, "raw_ch%d,", c + 1);
-    wlen += sprintf(wbuf + wlen, "stimulation_on\n");
+    wlen += sprintf(wbuf + wlen, events_on ? "trigger\n" : "stimulation_on\n");
     logmsg("writing %s", part_name);
 }
 
@@ -251,10 +260,84 @@ static int32_t code_of(const uint8_t *d) {
     return v & 0x800000 ? v - 0x1000000 : v;
 }
 
+/* ---------- triggers (-e) ---------- */
+
+struct event { double t; uint32_t trial; int code; };
+#define EV_CAP 4096  /* pending triggers: ffrplay sends them about 0.1 s ahead, 5 per second */
+static struct event evq[EV_CAP];
+static uint64_t ev_head, ev_tail;
+static char evbuf[4096];
+static size_t evlen;
+static int ev_eof;
+static uint64_t ev_received, ev_in_csv, ev_late, ev_same_row, ev_malformed, ev_overflow;
+static FILE *trig_f;
+
+/* reads the triggers that arrived on stdin (non-blocking) */
+static void read_events(void) {
+    if (!events_on || ev_eof) return;
+    for (;;) {
+        ssize_t n = read(STDIN_FILENO, evbuf + evlen, sizeof evbuf - 1 - evlen);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            if (errno != EAGAIN) { logmsg("triggers input: %s", strerror(errno)); ev_eof = 1; }
+            return;
+        }
+        if (n == 0) { ev_eof = 1; return; }  /* the player has exited */
+        evlen += n;
+        char *s = evbuf, *nl;
+        while ((nl = memchr(s, '\n', evbuf + evlen - s))) {
+            *nl = 0;
+            unsigned trial; int code; double t;
+            if (sscanf(s, "%u %d %lf", &trial, &code, &t) != 3 || code <= 0) ev_malformed++;
+            else if (ev_head - ev_tail >= EV_CAP) ev_overflow++;
+            else { evq[ev_head++ % EV_CAP] = (struct event){ t, trial, code }; ev_received++; }
+            s = nl + 1;
+        }
+        evlen -= s - evbuf;
+        memmove(evbuf, s, evlen);
+        if (evlen == sizeof evbuf - 1) { ev_malformed++; evlen = 0; }  /* a line too long */
+    }
+}
+
+/* The code of the triggers of the row 'row' expected at t_row: those from the end of the previous row (half a period
+ * after its time) to half a period after t_row (the rows follow one another without gaps, even when the reference
+ * of the reader moves), and the late ones (received after their row was written: listed with their row, but not in
+ * the CSV). */
+static double row_end = -INFINITY;  /* of the previous row */
+
+static int take_triggers(uint64_t row, double t_row) {
+    int code = 0;
+    double half = 0.5 / rate;
+    while (ev_tail != ev_head && evq[ev_tail % EV_CAP].t < t_row + half) {
+        struct event *e = &evq[ev_tail++ % EV_CAP];
+        double off = e->t - t_row;
+        uint64_t r = row;
+        int in_csv = 1;
+        if (e->t < row_end) {  /* its row was already written */
+            ev_late++;
+            in_csv = 0;
+            double back = floor(-off * rate + 0.5);
+            r = back <= (double)row ? row - (uint64_t)back : 0;
+            off += back / rate;
+        } else if (code) {
+            ev_same_row++;  /* two triggers in one row: the first code is kept in the CSV */
+            in_csv = 0;
+        } else {
+            code = e->code;
+            ev_in_csv++;
+        }
+        if (trig_f) fprintf(trig_f, "%u,%d,%llu,%.7f,%.1f,%d\n", e->trial, e->code, (unsigned long long)r, e->t,
+                            off * 1e6, in_csv);
+    }
+    row_end = t_row + half;
+    return code;
+}
+
 static double dec_sum[8];
 static int dec_n;
 
-static void emit(const uint8_t *data) {
+static void emit(const uint8_t *data, double t_row) {
+    int code = events_on ? take_triggers(rows, t_row) : 0;
     if (prefix && !write_failed) {
         if (csv_fd < 0 || (rows > 0 && rows % part_rows == 0)) {
             close_part();
@@ -263,7 +346,7 @@ static void emit(const uint8_t *data) {
         if (wlen > WBUF_SIZE - 512) flush_csv();
         char *p = wbuf + wlen;
         for (int c = 0; c < nch; c++) { p = put_uv(p, code_of(data + 3 * c)); *p++ = ','; }
-        *p++ = '0'; *p++ = '\n';
+        p += sprintf(p, "%d\n", code);
         wlen = p - wbuf;
     }
     rows++;
@@ -299,22 +382,32 @@ static void *writer(void *arg) {
     double t_flush = now();
     for (;;) {
         uint64_t h = atomic_load_explicit(&head, memory_order_acquire);
+        read_events();  /* after head: the triggers of all these rows were sent before they were read */
         if (t == h) {
             if (atomic_load(&reader_done)) break;
-            if (prefix && wlen && now() - t_flush > 1.0) { flush_csv(); t_flush = now(); }  /* at least once a second */
+            if (prefix && wlen && now() - t_flush > 1.0) {  /* at least once a second */
+                flush_csv();
+                if (trig_f) fflush(trig_f);
+                t_flush = now();
+            }
             usleep(2000);
             continue;
         }
         while (t != h) {
             struct frame *f = &ring[t & RING_MASK];
-            while (rows < f->index) { emit(prev); note_lost(rows - 1); }  /* missed conversions */
-            if (f->bad) { bad_frames++; emit(prev); note_lost(rows - 1); }
-            else { emit(f->data); memcpy(prev, f->data, 24); }
+            while (rows < f->index) {  /* missed conversions */
+                emit(prev, f->t - (f->index - rows) / rate);
+                note_lost(rows - 1);
+            }
+            if (f->bad) { bad_frames++; emit(prev, f->t); note_lost(rows - 1); }
+            else { emit(f->data, f->t); memcpy(prev, f->data, 24); }
             t++;
             atomic_store_explicit(&tail, t, memory_order_release);
         }
     }
     close_part();
+    if (trig_f && fclose(trig_f) && !write_failed) fail_write("triggers file");
+    trig_f = NULL;
     return NULL;
 }
 
@@ -352,7 +445,14 @@ static void write_stats(void) {
     fprintf(f, "        \"gaps_over_1.5_periods\": %llu,\n        \"longest_gap_us\": %.1f,\n",
             (unsigned long long)gaps, max_gap * 1e6);
     fprintf(f, "        \"longest_read_us\": %.1f,\n        \"ads_period_us\": %.6f,\n", max_read * 1e6, period_est * 1e6);
-    fprintf(f, "        \"decimated_samples_dropped\": %llu\n    }\n}\n", (unsigned long long)decim_dropped);
+    fprintf(f, "        \"decimated_samples_dropped\": %llu", (unsigned long long)decim_dropped);
+    if (events_on)
+        fprintf(f, ",\n        \"triggers\": {\"received\": %llu, \"in_csv\": %llu, \"late\": %llu, \"same_row\": %llu, "
+                   "\"after_the_end\": %llu, \"malformed\": %llu, \"overflows\": %llu}",
+                (unsigned long long)ev_received, (unsigned long long)ev_in_csv, (unsigned long long)ev_late,
+                (unsigned long long)ev_same_row, (unsigned long long)(ev_head - ev_tail),
+                (unsigned long long)ev_malformed, (unsigned long long)ev_overflow);
+    fprintf(f, "\n    }\n}\n");
     fclose(f);
 }
 
@@ -360,7 +460,7 @@ static void write_stats(void) {
 
 static void usage(void) {
     fprintf(stderr, "usage: adscapture -r rate -k scale -s stats [-c n] [-o prefix] [-n rows] [-d n] [-t s] [-m MB] "
-                    "[-p prio] [-u cpu] config bytes (hex, from register 0x01)\n");
+                    "[-p prio] [-u cpu] [-e] config bytes (hex, from register 0x01)\n");
     exit(2);
 }
 
@@ -379,7 +479,7 @@ static int check_power_control(void) {
 
 int main(int argc, char **argv) {
     int opt;
-    while ((opt = getopt(argc, argv, "r:c:k:o:n:s:d:t:m:p:u:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:c:k:o:n:s:d:t:m:p:u:e")) != -1) {
         switch (opt) {
         case 'r': rate = atof(optarg); break;
         case 'c': nch = atoi(optarg); break;
@@ -392,6 +492,7 @@ int main(int argc, char **argv) {
         case 'm': min_free_mb = atof(optarg); break;
         case 'p': prio = atoi(optarg); break;
         case 'u': cpu = atoi(optarg); break;
+        case 'e': events_on = 1; break;
         default: usage();
         }
     }
@@ -465,6 +566,16 @@ int main(int argc, char **argv) {
     wbuf = malloc(WBUF_SIZE);
     if (!ring || !wbuf) { logmsg("out of memory"); return 1; }
     memset(ring, 0, RING_SIZE * sizeof *ring);  /* no page faults in the reader */
+    if (events_on) {
+        fcntl(STDIN_FILENO, F_SETFL, fcntl(STDIN_FILENO, F_GETFL) | O_NONBLOCK);
+        if (prefix) {
+            char name[4096];
+            snprintf(name, sizeof name, "%s_triggers.csv", prefix);
+            trig_f = fopen(name, "wx");
+            if (!trig_f) { logmsg("%s: %s", name, strerror(errno)); return 1; }
+            fputs("trial,code,row,onset_time,offset_us,in_csv\n", trig_f);
+        }
+    }
     if (decimation > 0) {
         out_dec = STDOUT_FILENO;
         fcntl(out_dec, F_SETFL, fcntl(out_dec, F_GETFL) | O_NONBLOCK);
@@ -560,6 +671,7 @@ int main(int argc, char **argv) {
         uint64_t h = atomic_load_explicit(&head, memory_order_relaxed);
         if (h - atomic_load_explicit(&tail, memory_order_acquire) >= RING_SIZE) { overflows++; continue; }
         struct frame *f = &ring[h & RING_MASK];
+        f->t = a + idx * p;
         f->index = (uint32_t)idx;
         f->bad = (rx[1] & 0xF0) != 0xC0;
         memcpy(f->data, rx + 4, 24);
