@@ -1,0 +1,4 @@
+#!/bin/sh
+# stand-in for bc: the output of kernel/time/timeconst.bc for CONFIG_HZ=250, computed elsewhere
+cat > /dev/null
+cat "$(dirname "$0")/timeconst.h"

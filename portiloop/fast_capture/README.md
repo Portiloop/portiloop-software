@@ -146,15 +146,68 @@ the display queue and on LSL.
 
 ## Rebuilding the module
 
-For another kernel, build `spimap/` against that kernel's source, on the Portiloop (there is no aarch64 cross
-compiler in the usual setups). The steps used for 4.19.125-mtk (the Mendel kernel source, prepared with the running
-kernel's `.config`, with the parsers generated elsewhere since Mendel has no bison or flex, and a stand-in for `bc`)
-are in `experiments/high_rate_capture/README.md` on the `high-rate-capture` branch. Then:
+The module must be built against the exact running kernel, on the Portiloop itself (there is no aarch64 cross
+compiler in the usual setups). For 4.19.125-mtk (package `linux-mtk (4-2)`), the source is the Mendel kernel
+checkout (`mendel-linux/linux`, commit `d51d089ea374`, not part of this repository). The steps used on red-ibis:
 
-```
-make -C <prepared kernel tree> M=$PWD/spimap LOCALVERSION=-mtk YACC=: LEX=: modules
-strip --strip-debug spimap/spimap.ko
-```
+1. **Copy the kernel source to the Portiloop** (about 300 MB), without `.git`, `Documentation`, `tools`, `samples`
+   and the other architectures. Then add back every `Kconfig*` file and `tools/include`, which `olddefconfig` and
+   `prepare` need:
+   ```
+   cd mendel-linux/linux
+   tar czf - --exclude=.git --exclude=Documentation --exclude='./arch/[!a]*' --exclude='./arch/a[!r]*' \
+       --exclude='./arch/arc' --exclude='./arch/arm' --exclude='./drivers/*.c' --exclude='./fs/*.c' \
+       --exclude='./net/*.c' --exclude='./sound/*.c' --exclude='./tools' --exclude='./samples' --exclude='*.o' . \
+     | ssh mendel@<portiloop> 'mkdir -p ~/kmod/linux && tar xzf - -C ~/kmod/linux'
+   find . -name 'Kconfig*' -not -path './.git/*' | tar czf - -T - | ssh mendel@<portiloop> 'tar xzf - -C ~/kmod/linux'
+   tar czf - tools/include | ssh mendel@<portiloop> 'tar xzf - -C ~/kmod/linux'
+   ```
+2. **Generate the parsers on another machine**, since Mendel has no bison or flex (for example with
+   `pixi exec --spec bison --spec flex`): `scripts/kconfig/zconf.tab.c` (`bison -t -l scripts/kconfig/zconf.y`),
+   `scripts/kconfig/zconf.lex.c` (`flex -L scripts/kconfig/zconf.l`), `scripts/dtc/dtc-parser.tab.c` and `.tab.h`
+   (`bison -t -l scripts/dtc/dtc-parser.y`, with `--defines` for the header) and `scripts/dtc/dtc-lexer.lex.c`
+   (`flex -L scripts/dtc/dtc-lexer.l`). Copy them to the same paths on the Portiloop.
+3. **Install the `bc` stand-in**, since Mendel has no `bc` either. `kernel_build/timeconst.h` is the output of
+   `echo 250 | bc -q kernel/time/timeconst.bc` (CONFIG_HZ is 250), and `kernel_build/bc` prints it. Copy
+   `kernel_build/` to `~/kmod/bin` on the Portiloop. For a kernel with another CONFIG_HZ, regenerate `timeconst.h`.
+4. **Prepare the tree** with the running kernel's configuration, on the Portiloop:
+   ```
+   cd ~/kmod/linux
+   cp /boot/config-4.19.125-mtk .config
+   make LOCALVERSION=-mtk YACC=: LEX=: olddefconfig
+   PATH=$HOME/kmod/bin:$PATH make LOCALVERSION=-mtk YACC=: LEX=: -j4 prepare
+   ```
+   On red-ibis the resulting `.config` was identical to `/boot/config-4.19.125-mtk`.
+5. **Build the module**, on the Portiloop, in this folder:
+   ```
+   make -C ~/kmod/linux M=$PWD/spimap LOCALVERSION=-mtk YACC=: LEX=: modules
+   strip --strip-debug spimap/spimap.ko
+   /sbin/modinfo -F vermagic spimap/spimap.ko   # must be the kernel's own ("4.19.125-mtk SMP preempt aarch64"
+                                                # for 4.19.125-mtk, as for spidev.ko)
+   ```
+   `install.sh` checks the kernel version and the vermagic before installing it.
+
+## Why direct register access
+
+Measured on red-ibis on 23 Oct 2026, before this pipeline existed, with no electrodes and the internal test signal
+on all channels ("lost" counted from the data):
+
+| Capture | 8 kSPS | 16 kSPS |
+|---|---|---|
+| Python, best version tested (lead-off on) | 90 % or more lost (tops out at about 1650 reads/s) | did not finish |
+| C, kernel spidev, DRDY interrupt | about 0.5 % lost | about 50 % lost |
+| C, kernel spidev, DRDY polled on CPU 3 | 7 to 13 per million (20 min runs) | about 21 % lost (SPI too slow) |
+| **C, direct register access (`spimap`), DRDY polled on CPU 3** | **2 in 9 576 676 (20 min)** | **2 in 10 784 968 (11 min)** |
+
+- **SPI reads without the kernel.** A 28-byte read (RDATA and 27 bytes) through spidev takes 65 to 130 us, almost all
+  of it kernel overhead. Driving the controller's registers directly takes about 18 us.
+- **DRDY polled.** The kernel's GPIO event path drops about 1 DRDY edge in 180 at 8 kSPS, without a trace. The
+  reader spins on the pin's level instead, on a CPU of its own.
+- **Completion read from register 0x20** (bit 0: 1 when idle, 0 during a transfer). Polling the read-to-clear
+  `STATUS0` flag instead missed the end of a transfer about 1 time in 500.
+
+The prototype (its capture loop, `spiprobe.c`, the first cautious test of the direct reads, the test scripts and the
+log of the long runs) is kept under the tag `high-rate-capture-prototype`, in `experiments/high_rate_capture/`.
 
 ## Security
 
