@@ -126,6 +126,20 @@ The PulseAudio daemon keeps the sound card for about 5 s after a sound played th
 `aplay` run when `portiloop.src` is imported); `ffrplay` waits for it (the silence before the first trial is then
 longer).
 
+## Click ABR paradigm
+
+The "Click ABR (fast)" pipeline works as the FFR one (same player, triggers and files), with a train of clicks
+(`portiloop/src/core/click_abr.py`, no stimulus file):
+
+- Click: a square of 5 frames at 48 kHz (104.2 us, the nearest to 100 us at the rate of the sound output, so that it
+  is not resampled), at 0.1 of the full scale, in positive (trigger code 5) or negative (code 6) polarity.
+- One Start is one run of 2000 clicks in strictly alternating polarity (+ - + - ..., 1000 of each), with a fixed SOA
+  of 32 ms (1536 frames, 31.25 Hz), 1 s of silence before the first click and 0.5 s after the last one (about 66 s).
+  Every run is the same.
+- "Test Sound" plays the clicks of a run for 5 s. With "Cond A", the run is the same, with its triggers, in silence.
+- `_trials.csv` lists the clicks (polarity, code, onset frame, SOA) with the row of their trigger; the parameters are
+  in the `click_abr` section of `_metadata.json`, the player's statistics in `click_abr_playback` of `_stats.json`.
+
 ## Tests (red-ibis, 5 Nov 2026)
 
 Internal test signal on all channels (a square wave at 0.977 Hz: each half-period must have exactly 0.512 x rate

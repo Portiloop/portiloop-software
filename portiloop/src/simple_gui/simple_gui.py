@@ -30,7 +30,7 @@ del _backend
 
 from portiloop.src.core.capture import start_capture
 from portiloop.src.core.fast_capture import start_fast_capture, FAST_RATES
-from portiloop.src.core import ffr
+from portiloop.src.core import ffr, click_abr
 from portiloop.src.core.hardware.config_hardware import to_ads_frequency
 from portiloop.src.core.hardware.impedance import ImpedanceMeter, results_to_metadata, NOT_CHECKED
 from portiloop.src.core.impedance_display import results_html
@@ -181,6 +181,10 @@ class ExperimentState:
     def is_ffr(self):
         """Whether the pipeline is the FFR paradigm (fast acquisition with sounds, core/ffr.py)."""
         return self._pipelines.get(self.pipeline_key, {}).get("ffr", False)
+
+    def is_click_abr(self):
+        """Whether the pipeline is the click ABR paradigm (fast acquisition with clicks, core/click_abr.py)."""
+        return self._pipelines.get(self.pipeline_key, {}).get("click_abr", False)
 
     def frequencies(self):
         """The sample frequencies of the pipeline."""
@@ -373,6 +377,9 @@ class ExperimentState:
 
         if self.is_ffr():
             target, args = ffr.start_ffr_capture, (self.run_dict, self.q_msg, self.display_q, self.pause_value)
+        elif self.is_click_abr():
+            target, args = (click_abr.start_click_abr_capture,
+                            (self.run_dict, self.q_msg, self.display_q, self.pause_value))
         elif fast:
             target, args = start_fast_capture, (self.run_dict, self.q_msg, self.display_q, self.pause_value)
         else:
@@ -476,14 +483,17 @@ class SimpleUI:
 
         def test_sound():
             exp_state.set_volume(exp_state.volume)
-            if exp_state.is_ffr():
+            if exp_state.is_ffr() or exp_state.is_click_abr():
                 if exp_state._t_capture is not None:  # dmix would mix it into the stimuli of the run
-                    ui.notify("No test sound during an FFR run.")
+                    ui.notify("No test sound during a run.")
                     return
                 try:
-                    ffr.test_sound()  # positive /da/ every 200 ms, for a few seconds
+                    if exp_state.is_ffr():
+                        ffr.test_sound()  # positive /da/ every 200 ms, for a few seconds
+                    else:
+                        click_abr.test_sound()  # the clicks of a run, for a few seconds
                 except Exception as e:
-                    logger.warning("Could not play the FFR test sound: %s", e)
+                    logger.warning("Could not play the test sound: %s", e)
                 return
             stimulator_cls = self._pipelines[exp_state.pipeline_key]["stimulator"]
             if stimulator_cls is not None:

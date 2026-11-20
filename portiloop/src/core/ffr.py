@@ -225,6 +225,9 @@ class FFRRun:
     plays them during the capture.
     """
     trigger_column = "trigger"
+    label = "FFR"  # in the messages
+    metadata_key = "ffr"  # its section in _metadata.json; "<metadata_key>_playback" in _stats.json
+    trial_fields = ["trial", "block", "condition", "code", "noise", "onset_frame", "soa_ms"]
 
     def __init__(self, config_dict, n_blocks=N_BLOCKS, seed=None):
         self.sound = bool(config_dict.get('stimulate', True))
@@ -291,7 +294,7 @@ class FFRRun:
         Writes the trials (CSV). With the triggers of the capture program ({trial: dict}), adds their row, offset and
         whether they are in the CSV.
         """
-        fields = ["trial", "block", "condition", "code", "noise", "onset_frame", "soa_ms"]
+        fields = list(self.trial_fields)
         if triggers is not None:
             fields += ["row", "offset_us", "in_csv"]
         with open(path, "w", newline="") as f:
@@ -308,7 +311,7 @@ class FFRRun:
     def start(self, events_out):
         """Starts playing the run; the onsets are written to events_out (adscapture's stdin)."""
         args = _player_args(self.audio_path, self.schedule_path, self.player_stats_path)
-        logger.info("Starting the FFR player: %s", " ".join(args))
+        logger.info("Starting the %s player: %s", self.label, " ".join(args))
         self.player = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=events_out, stderr=subprocess.PIPE)
         threading.Thread(target=_log_stream, args=(self.player.stderr,), daemon=True).start()
 
@@ -343,14 +346,14 @@ class FFRRun:
         try:
             with open(stats_path) as f:
                 stats = json.load(f)
-            stats["ffr_playback"] = player_stats
+            stats[f"{self.metadata_key}_playback"] = player_stats
             with open(stats_path, "w") as f:
                 json.dump(stats, f, indent=4)
             triggers = stats.get("fast_capture", {}).get("triggers", {})
-            logger.info("FFR: %s onsets played (%s underruns); triggers: %s.", player_stats.get("onsets_sent"),
-                        player_stats.get("underruns"), triggers)
+            logger.info("%s: %s onsets played (%s underruns); triggers: %s.", self.label,
+                        player_stats.get("onsets_sent"), player_stats.get("underruns"), triggers)
             if player_stats.get("underruns") or triggers.get("late") or triggers.get("same_row"):
-                logger.warning("FFR: some triggers may be wrong (see %s).", stats_path)
+                logger.warning("%s: some triggers may be wrong (see %s).", self.label, stats_path)
         except (OSError, ValueError) as e:
             logger.error("Could not add the player's statistics to %s (%s).", stats_path, e)
 
@@ -363,7 +366,7 @@ class FFRRun:
                 logger.error("Could not add the rows of the triggers to the trials (%s).", e)
 
         if exitcode not in (0, None) and not self._stopped:
-            raise RuntimeError(f"The FFR player failed (exit code {exitcode}).")
+            raise RuntimeError(f"The {self.label} player failed (exit code {exitcode}).")
 
     def close(self):
         if self.player is not None and self.player.poll() is None:

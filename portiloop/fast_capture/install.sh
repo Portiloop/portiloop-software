@@ -4,8 +4,8 @@
 # FFR player, and installs the spimap kernel module (loaded at boot) and its udev rules. Run it on the Portiloop, as
 # mendel:
 #   bash ~/portiloop-software/portiloop/fast_capture/install.sh
-# Then restart the Simple GUI (sudo systemctl restart simplegui) to get the "Acquisition only (fast)" and "FFR (fast)"
-# pipelines.
+# Then restart the Simple GUI (sudo systemctl restart simplegui) to get the "Acquisition only (fast)", "FFR (fast)" and
+# "Click ABR (fast)" pipelines.
 
 KERNEL=4.19.125-mtk  # spimap.ko was built for this kernel
 
@@ -41,4 +41,4 @@ ls -l /dev/spimap
 echo "SPI controller power/control: $(cat /sys/devices/platform/soc/1100c000.spi/power/control)"
 [[ -r /dev/spimap && -w /dev/spimap ]] || fail "/dev/spimap is not accessible to $(whoami)."
 [[ $(cat /sys/devices/platform/soc/1100c000.spi/power/control) == on ]] || fail "power/control is not 'on'."
-info "Done. Restart the Simple GUI to use the \"Acquisition only (fast)\" and \"FFR (fast)\" pipelines: sudo systemctl restart simplegui"
+info "Done. Restart the Simple GUI to use the \"Acquisition only (fast)\", \"FFR (fast)\" and \"Click ABR (fast)\" pipelines: sudo systemctl restart simplegui"

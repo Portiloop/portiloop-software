@@ -7,6 +7,7 @@ from portiloop.src.custom.custom_detectors import SleepSpindleRealTimeDetector, 
 from portiloop.src.custom.custom_stimulators import SleepSpindleRealTimeStimulator, SlowOscillationStimulator
 from portiloop.src.core.fast_capture import fast_capture_status
 from portiloop.src.core.ffr import ffr_status
+from portiloop.src.core.click_abr import click_abr_status
 
 PIPELINES = {
     "Acquisition only": {
@@ -60,6 +61,20 @@ if _fast_status is None and _ffr_status is None:
         "config_modifiers": {},
         "fast_capture": True,
         "ffr": True,
+    }
+
+CLICK_ABR_PIPELINE_KEY = "Click ABR (fast)"
+
+# Fast acquisition with clicks in alternating polarity and their triggers (core/click_abr.py)
+_click_abr_status = click_abr_status()
+if _fast_status is None and _click_abr_status is None:
+    PIPELINES[CLICK_ABR_PIPELINE_KEY] = {
+        "processor": None,
+        "detector": None,
+        "stimulator": None,
+        "config_modifiers": {},
+        "fast_capture": True,
+        "click_abr": True,
     }
 
 DEFAULT_PIPELINE_KEY = "Acquisition only"
