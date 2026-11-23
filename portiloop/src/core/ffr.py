@@ -5,18 +5,20 @@ code in the recording at the onset of each one. There is no detection or stimula
 
 Stimuli (portiloop/sounds/ffr, prepared at the start of each run):
     - /da/: da_positive.wav (120 ms at 44.1 kHz); -da = -1 x da.
-    - Noise tokens N1 to N4: noise1.wav to noise4.wav (120 ms), each scaled to +10 dB SNR against /da/ (RMS over the
-      120 ms).
+    - Noise: a new pink noise token for each noise trial, generated at 48 kHz (make_noise(): 1/f power from
+      NOISE_BAND_HZ, 120 ms, 2-ms raised-cosine ramps, as noise1.wav to noise4.wav, which are no longer used), scaled
+      to +10 dB SNR against /da/ (RMS over the 120 ms). No token is ever repeated, so the noise does not average into
+      the FFR; each one comes from its own seed (noise_seed in <name>_trials.csv), so it can be regenerated.
     - The 4 conditions and their trigger codes: + (/da/, 1), - (-da, 2), +N (/da/ + noise, 3), -N (-da + noise, 4).
       /da/ has the same level in all of them (the noise is added to it), the level calibrated at 80 dB SPL.
-    - Resampled to 48 kHz (scipy.signal.resample_poly, 160/147), the rate of the Portiloop's sound output (dmix), so
-      that ALSA does not resample them; the same sound in both ears.
+    - /da/ is resampled to 48 kHz (scipy.signal.resample_poly, 160/147), the rate of the Portiloop's sound output
+      (dmix), so that ALSA does not resample it; the same sound in both ears.
 
 Run (one recording, about 3.3 min; a session is 4 runs, so 4 recordings):
     - 1000 trials: 250 blocks of the 4 conditions, shuffled within each block (a condition can repeat back to back
       across blocks).
     - SOA (onset to onset) uniformly random between 195 and 205 ms, rounded to the frame (1/48 ms); for the noise
-      conditions, a noise token drawn at random among N1 to N4.
+      conditions, the seed of a new noise token.
     - The random parameters come from a seed drawn for each run, saved in the metadata. The trials are also listed in
       <name>_trials.csv.
     - LEAD_IN_S of silence before the first trial, TAIL_S after the last one.
@@ -50,13 +52,14 @@ logger = logging.getLogger(__name__)
 STIMULI_DIR = Path(__file__).resolve().parents[2] / "sounds" / "ffr"
 FFRPLAY = Path(__file__).resolve().parents[2] / "fast_capture" / "ffrplay"
 SPEECH_FILE = "da_positive.wav"
-NOISE_FILES = ("noise1.wav", "noise2.wav", "noise3.wav", "noise4.wav")
 
 STIMULUS_RATE = 44100  # Hz, rate of the stimulus files
 TOKEN_SAMPLES = 5292  # 120 ms at 44.1 kHz
 AUDIO_RATE = 48000  # Hz, rate of the sound output (dmix in /etc/asound.conf): no resampling by ALSA
 RESAMPLE_UP, RESAMPLE_DOWN = 160, 147  # 44100 * 160 / 147 = 48000
 SNR_DB = 10.0  # /da/ against each noise token, RMS over the 120 ms
+NOISE_BAND_HZ = (20.0, 22050.0)  # pink noise (1/f power) in this band, as the old tokens (44.1 kHz, no DC)
+NOISE_RAMP_MS = 2.0  # raised-cosine onset and offset ramps of each noise token
 
 CONDITIONS = (("+", 1), ("-", 2), ("+N", 3), ("-N", 4))  # (condition, trigger code)
 CONDITION_NAMES = {
@@ -87,9 +90,8 @@ def ffr_status():
     """
     if not FFRPLAY.is_file():
         return f"{FFRPLAY} is not built (run portiloop/fast_capture/install.sh)"
-    for name in (SPEECH_FILE,) + NOISE_FILES:
-        if not (STIMULI_DIR / name).is_file():
-            return f"{STIMULI_DIR / name} is missing"
+    if not (STIMULI_DIR / SPEECH_FILE).is_file():
+        return f"{STIMULI_DIR / SPEECH_FILE} is missing"
     return None
 
 
@@ -113,68 +115,77 @@ def _rms(x):
     return float(np.sqrt(np.mean(np.square(x))))
 
 
-def make_conditions():
+def make_noise(noise_seed, frames, rms):
     """
-    Prepares the stimuli of the 4 conditions from the files of STIMULI_DIR.
+    One pink noise token at AUDIO_RATE, from its seed: rng = numpy.random.default_rng(noise_seed); white Gaussian
+    noise rng.standard_normal(frames), its spectrum (rfft) shaped to 1/f power in NOISE_BAND_HZ (zero outside), back
+    to the time domain, raised-cosine ramps of NOISE_RAMP_MS at both ends, then scaled to this RMS (over the whole
+    token, ramps included).
 
     Returns:
-        stimuli: {code: [int16 array at AUDIO_RATE]}, one array for codes 1 and 2, one per noise token for 3 and 4
+        float array of `frames` samples (1.0 = full scale)
+    """
+    rng = np.random.default_rng(noise_seed)
+    spectrum = np.fft.rfft(rng.standard_normal(frames))
+    f = np.fft.rfftfreq(frames, 1 / AUDIO_RATE)
+    band = (f >= NOISE_BAND_HZ[0]) & (f <= NOISE_BAND_HZ[1])
+    spectrum[~band] = 0
+    spectrum[band] /= np.sqrt(f[band])
+    x = np.fft.irfft(spectrum, frames)
+    ramp = int(round(NOISE_RAMP_MS * AUDIO_RATE / 1000))
+    window = 0.5 - 0.5 * np.cos(np.pi * np.arange(ramp) / ramp)
+    x[:ramp] *= window
+    x[-ramp:] *= window[::-1]
+    return x * (rms / _rms(x))
+
+
+def make_conditions():
+    """
+    Prepares /da/ from STIMULI_DIR (the noise is made for each trial, in render()).
+
+    Returns:
+        da: float array at AUDIO_RATE (1.0 = full scale), the positive /da/
         info: dict for the metadata
     """
     from scipy.signal import resample_poly
 
     da = _read_token(STIMULI_DIR / SPEECH_FILE)
-    noises = [_read_token(STIMULI_DIR / name) for name in NOISE_FILES]
-    gains = [_rms(da) / _rms(n) / 10 ** (SNR_DB / 20) for n in noises]
-
-    def to_output(x):
-        return resample_poly(x, RESAMPLE_UP, RESAMPLE_DOWN)
-
-    da_out = to_output(da)
-    noises_out = [to_output(g * n) for g, n in zip(gains, noises)]
-    float_stimuli = {
-        1: [da_out],
-        2: [-da_out],  # resampling is linear: exactly -1 x the positive /da/ (also once rounded)
-        3: [da_out + n for n in noises_out],
-        4: [-da_out + n for n in noises_out],
-    }
-    peak = max(float(np.max(np.abs(x))) for xs in float_stimuli.values() for x in xs)
-    if peak >= 1.0:
-        raise ValueError(f"The stimuli clip (peak {peak:.3f} of the full scale).")
-    stimuli = {code: [np.round(x * FULL_SCALE).astype(np.int16) for x in xs] for code, xs in float_stimuli.items()}
-
+    da_out = resample_poly(da, RESAMPLE_UP, RESAMPLE_DOWN)
     info = {
         "stimuli_folder": str(STIMULI_DIR),
-        "stimulus_files_sha256": {name: _sha256(STIMULI_DIR / name) for name in (SPEECH_FILE,) + NOISE_FILES},
+        "stimulus_files_sha256": {SPEECH_FILE: _sha256(STIMULI_DIR / SPEECH_FILE)},
         "stimulus_rate": STIMULUS_RATE,
         "token_ms": 1000 * TOKEN_SAMPLES / STIMULUS_RATE,
         "da_rms": _rms(da),
         "snr_db": SNR_DB,
-        "noise_gains": gains,
+        "noise": "a new pink noise token for each noise trial, from noise_seed in <name>_trials.csv: "
+                 "ffr.make_noise(noise_seed, token_frames, noise_rms)",
+        "noise_band_hz": list(NOISE_BAND_HZ),
+        "noise_ramp_ms": NOISE_RAMP_MS,
+        "noise_rms": _rms(da_out) / 10 ** (SNR_DB / 20),
         "audio_rate": AUDIO_RATE,
-        "resampling": f"scipy.signal.resample_poly(x, {RESAMPLE_UP}, {RESAMPLE_DOWN}) of each token",
+        "resampling": f"scipy.signal.resample_poly(x, {RESAMPLE_UP}, {RESAMPLE_DOWN}) of /da/",
         "token_frames": int(len(da_out)),
-        "peak_full_scale": peak,
         "sample_format": f"16-bit, 1.0 in the files = {FULL_SCALE}",
     }
-    return stimuli, info
+    return da_out, info
 
 
 def make_run(seed, n_blocks=N_BLOCKS):
     """
     The trials of a run, drawn from the seed: for each block, rng.permutation(4) of CONDITIONS; then the SOAs after
-    each trial, rng.uniform(195, 205, n) ms (the last one is not used); then the noise tokens, rng.integers(1, 5, n)
-    (used by the noise conditions only), with rng = numpy.random.default_rng(seed).
+    each trial, rng.uniform(195, 205, n) ms (the last one is not used); then the seeds of the noise tokens,
+    rng.integers(1, 2**32, n) (used by the noise conditions only), with rng = numpy.random.default_rng(seed).
 
     Returns:
-        list of dicts: trial (from 1), block (from 1), condition, code, noise (1 to 4, 0 without noise),
+        list of dicts: trial (from 1), block (from 1), condition, code, noise_seed (0 without noise),
         onset_frame (in the rendered run, at AUDIO_RATE), soa_ms (to the next onset, None for the last trial)
     """
     rng = np.random.default_rng(seed)
     order = np.concatenate([rng.permutation(len(CONDITIONS)) for _ in range(n_blocks)])
     n = len(order)
     soa_frames = np.round(rng.uniform(SOA_MS[0], SOA_MS[1], n) * AUDIO_RATE / 1000).astype(np.int64)
-    noise = rng.integers(1, len(NOISE_FILES) + 1, n)
+    noise_seeds = rng.integers(1, 2 ** 32, n)
     onsets = int(round(LEAD_IN_S * AUDIO_RATE)) + np.concatenate([[0], np.cumsum(soa_frames[:-1])])
     trials = []
     for i in range(n):
@@ -184,26 +195,37 @@ def make_run(seed, n_blocks=N_BLOCKS):
             "block": i // len(CONDITIONS) + 1,
             "condition": condition,
             "code": code,
-            "noise": int(noise[i]) if code in (3, 4) else 0,
+            "noise_seed": int(noise_seeds[i]) if code in (3, 4) else 0,
             "onset_frame": int(onsets[i]),
             "soa_ms": 1000 * int(soa_frames[i]) / AUDIO_RATE if i < n - 1 else None,
         })
     return trials
 
 
-def render(trials, stimuli, sound=True):
+def render(trials, da, sound=True):
     """
-    The sound of the run (int16 frames, CHANNELS channels): silence, with the stimulus of each trial at its onset.
-    Without sound, silence of the same length.
+    The sound of the run (int16 frames, CHANNELS channels): silence, with the stimulus of each trial at its onset:
+    +/da/ or -/da/ (codes 1 to 4), plus the trial's own noise token (codes 3 and 4). Without sound, silence of the
+    same length.
+
+    Returns:
+        audio, peak (the highest absolute sample of the stimuli, 1.0 = full scale)
     """
-    length = len(stimuli[1][0])
+    length = len(da)
     nframes = trials[-1]["onset_frame"] + length + int(round(TAIL_S * AUDIO_RATE))
     mono = np.zeros(nframes, dtype=np.int16)
-    if sound:
-        for t in trials:
-            x = stimuli[t["code"]][max(t["noise"], 1) - 1]
-            mono[t["onset_frame"]:t["onset_frame"] + length] = x
-    return np.repeat(mono[:, None], CHANNELS, axis=1)
+    noise_rms = _rms(da) / 10 ** (SNR_DB / 20)
+    peak = 0.0
+    for t in trials:
+        x = da if t["code"] in (1, 3) else -da  # resampling is linear: exactly -1 x the positive /da/
+        if t["code"] in (3, 4):
+            x = x + make_noise(t["noise_seed"], length, noise_rms)
+        peak = max(peak, float(np.max(np.abs(x))))
+        if peak >= 1.0:
+            raise ValueError(f"Trial {t.get('trial')} clips (peak {peak:.3f} of the full scale).")
+        if sound:
+            mono[t["onset_frame"]:t["onset_frame"] + length] = np.round(x * FULL_SCALE).astype(np.int16)
+    return np.repeat(mono[:, None], CHANNELS, axis=1), peak
 
 
 def _player_args(audio_path, schedule_path, stats_path=None):
@@ -227,15 +249,15 @@ class FFRRun:
     trigger_column = "trigger"
     label = "FFR"  # in the messages
     metadata_key = "ffr"  # its section in _metadata.json; "<metadata_key>_playback" in _stats.json
-    trial_fields = ["trial", "block", "condition", "code", "noise", "onset_frame", "soa_ms"]
+    trial_fields = ["trial", "block", "condition", "code", "noise_seed", "onset_frame", "soa_ms"]
 
     def __init__(self, config_dict, n_blocks=N_BLOCKS, seed=None):
         self.sound = bool(config_dict.get('stimulate', True))
         self.volume = config_dict.get('volume')
         self.seed = secrets.randbits(32) if seed is None else int(seed)
-        self.stimuli, self.stimuli_info = make_conditions()
+        self.da, self.stimuli_info = make_conditions()
         self.trials = make_run(self.seed, n_blocks)
-        audio = render(self.trials, self.stimuli, self.sound)
+        audio, self.peak = render(self.trials, self.da, self.sound)
         self.nframes = len(audio)
         self.duration_s = self.nframes / AUDIO_RATE
         self._tmp = []
@@ -262,11 +284,12 @@ class FFRRun:
         counts = {c: sum(t["condition"] == c for t in self.trials) for c, _ in CONDITIONS}
         return dict(
             self.stimuli_info,
+            peak_full_scale=self.peak,
             paradigm="FFR_Timeline_and_parameters.pdf",
             seed=self.seed,
             random_draws="rng = numpy.random.default_rng(seed); for each block rng.permutation(4) of the conditions; "
                          "then rng.uniform(195, 205, n) ms (SOA after each trial); "
-                         "then rng.integers(1, 5, n) (noise token, noise conditions only)",
+                         "then rng.integers(1, 2**32, n) (noise_seed of each trial, noise conditions only)",
             numpy_version=np.__version__,
             n_trials=len(self.trials),
             n_blocks=len(self.trials) // len(CONDITIONS),
@@ -390,10 +413,10 @@ def test_sound():
     """
     Plays TEST_SOUND_S of positive /da/ every 200 ms (to check the sound or its level), without waiting.
     """
-    stimuli, _ = make_conditions()
+    da, _ = make_conditions()
     n = int(TEST_SOUND_S * 1000 / 200)
-    trials = [{"code": 1, "noise": 0, "onset_frame": int(i * 0.2 * AUDIO_RATE)} for i in range(n)]
-    audio = render(trials, stimuli)
+    trials = [{"code": 1, "noise_seed": 0, "onset_frame": int(i * 0.2 * AUDIO_RATE)} for i in range(n)]
+    audio, _ = render(trials, da)
     paths = []
     for suffix in ("_ffr_test.raw", "_ffr_test.txt"):
         fd, path = tempfile.mkstemp(suffix=suffix, dir=TMP_DIR)

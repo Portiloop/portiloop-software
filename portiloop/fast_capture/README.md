@@ -78,7 +78,9 @@ The "FFR (fast)" pipeline is a fast acquisition during which the Portiloop plays
 its parameters are in `portiloop/src/core/ffr.py`, the stimuli in `portiloop/sounds/ffr`. In short:
 
 - 4 conditions, 120 ms each, with their trigger codes: `+` /da/ (1), `-` /da/ x -1 (2), `+N` /da/ + noise (3),
-  `-N` -/da/ + noise (4). The noise is one of 4 tokens (drawn at random), at +10 dB SNR (RMS over the 120 ms).
+  `-N` -/da/ + noise (4). Each noise trial gets a new pink noise token (generated at 48 kHz by `ffr.make_noise()`,
+  20 Hz to 22.05 kHz, 2-ms raised-cosine ramps), at +10 dB SNR (RMS over the 120 ms): no token is repeated. The old
+  `noise1.wav` to `noise4.wav` are no longer used.
 - One Start is one run: 250 blocks of the 4 conditions shuffled within each block (1000 trials), SOA uniformly random
   between 195 and 205 ms, 1 s of silence before the first trial and 0.5 s after the last one (about 3.4 min). A
   session is 4 runs, so 4 recordings. The recording stops at the end of the run.
@@ -89,16 +91,17 @@ its parameters are in `portiloop/src/core/ffr.py`, the stimuli in `portiloop/sou
 Its recordings have, besides the usual files:
 - the CSV's last column, `trigger` (instead of `stimulation_on`): the trigger code in the row of each onset, 0
   elsewhere;
-- `_trials.csv`: one line per trial (block, condition, code, noise token, onset frame in the sound, SOA to the next
+- `_trials.csv`: one line per trial (block, condition, code, `noise_seed` (0 without noise: the trial's token is
+  `ffr.make_noise(noise_seed, token_frames, noise_rms)`, values in the metadata), onset frame in the sound, SOA to the next
   trial), with the row of its trigger, `offset_us` (onset - time of that row) and `in_csv`;
 - `_triggers.csv`: the triggers as written by `adscapture` (trial, code, row, onset time, `offset_us`, `in_csv`);
-- the `ffr` section of `_metadata.json` (the parameters, the seed, the SHA-256 of the stimulus files) and the
+- the `ffr` section of `_metadata.json` (the parameters, the seed, the SHA-256 of /da/) and the
   `ffr_playback` and `fast_capture.triggers` sections of `_stats.json` (underruns, late triggers).
 
 ### Timing
 
-The whole run is rendered as one sound at 48 kHz (the stimuli are resampled once, with `resample_poly`, so that ALSA
-does not resample them), so the SOAs are exact to the frame (1/48 ms). `ffrplay.c` plays it through `softvol` and,
+The whole run is rendered as one sound at 48 kHz (/da/ is resampled once, with `resample_poly`, and the noise is made at 48 kHz, so
+that ALSA does not resample them), so the SOAs are exact to the frame (1/48 ms). `ffrplay.c` plays it through `softvol` and,
 after each write of 5 ms, reads the frame being played (`snd_pcm_delay()`) with the time (CLOCK_MONOTONIC). It fits a
 line to the last 2 s of these (the clock of the sound output), and sends the time of each onset to `adscapture -e`,
 on its stdin, when it writes it (about 100 ms before it is played). `adscapture` writes the code in the row of the
@@ -133,9 +136,12 @@ The "Click ABR (fast)" pipeline works as the FFR one (same player, triggers and 
 
 - Click: a square of 5 frames at 48 kHz (104.2 us, the nearest to 100 us at the rate of the sound output, so that it
   is not resampled), at 0.1 of the full scale, in positive (trigger code 5) or negative (code 6) polarity.
-- One Start is one run of 2000 clicks in strictly alternating polarity (+ - + - ..., 1000 of each), with a fixed SOA
-  of 32 ms (1536 frames, 31.25 Hz), 1 s of silence before the first click and 0.5 s after the last one (about 66 s).
-  Every run is the same.
+- One Start is one run of 2000 clicks in strictly alternating polarity (+ - + - ..., 1000 of each), with an SOA
+  uniformly random between 40 and 50 ms (mean 45 ms, about 22 Hz), 1 s of silence before the first click and 0.5 s
+  after the last one (about 92 s). The SOAs come from a seed drawn for each run, saved in the metadata.
+- Why the jitter: with a fixed SOA of 32 ms (1.5 audio periods of 1024 frames), the periodic activity of the
+  Portiloop was time-locked to the clicks and left two artifacts in the average (about 1 and 11.7 ms after the
+  trigger, after the + and the - clicks). A random SOA spreads it over the epoch, as the line noise.
 - "Test Sound" plays the clicks of a run for 5 s. With "Cond A", the run is the same, with its triggers, in silence.
 - `_trials.csv` lists the clicks (polarity, code, onset frame, SOA) with the row of their trigger; the parameters are
   in the `click_abr` section of `_metadata.json`, the player's statistics in `click_abr_playback` of `_stats.json`.
