@@ -1,0 +1,7 @@
+numpy
+scipy
+pandas
+matplotlib
+jupyterlab
+pytest            # to run the tests
+# pyxdf           # only to read LabRecorder .xdf files (xdf_to_dataframe)

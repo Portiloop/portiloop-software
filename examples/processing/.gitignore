@@ -1,0 +1,6 @@
+# Data written by the examples
+demo_data/
+group_results/
+*_slow_and_sigma/
+# Original scripts kept locally for reference (they contain local paths); delete when no longer needed
+_originals/
