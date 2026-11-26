@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>05 · The recording files · Portiloop tutorials</title>
+  <meta name="description" content="Where the Portiloop saves a night, how the folders and files are named, what every CSV column and JSON key means (with the real tutorial night), how to retrieve the files, where to download the tutorial dataset, and a first quality check in Python.">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <!-- KaTeX (the conversion formula) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <!-- Prism syntax highlighting (colors come from style.css) -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <style>
+    blockquote.quote { margin: 1.1em 0; padding: 6px 16px; border-left: 3px solid var(--accent); background: var(--bg-elev); border-radius: 0 8px 8px 0; }
+    blockquote.quote p { margin: 0.3em 0; }
+    blockquote.quote cite { display: block; font-style: normal; font-size: 0.86em; color: var(--fg-muted); margin-top: 4px; }
+    .jump { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+    .jump .btn { font-size: 13px; padding: 5px 10px; }
+    .jump .btn[aria-pressed="false"] { background: transparent; color: var(--accent); }
+    table.csv { font-family: var(--font-mono); font-size: 12.5px; margin: 8px 0 0; }
+    table.csv th, table.csv td { padding: 4px 8px; white-space: nowrap; text-align: right; cursor: pointer; }
+    table.csv th { position: sticky; top: 0; }
+    table.csv th:hover, table.csv td:hover { background: var(--accent-soft); }
+    table.csv tr.target td { font-weight: 700; }
+    table.csv tr.stim td { background: color-mix(in srgb, var(--plot-stim) 16%, transparent); }
+    table.csv tr.repeat td { background: color-mix(in srgb, var(--warn) 16%, transparent); }
+    table.csv td.rail { color: var(--danger); font-weight: 700; }
+    table.csv .sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+    table.csv .muted { color: var(--fg-muted); }
+    .explain { margin-top: 10px; background: var(--bg-sunk); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 0.93em; min-height: 3.2em; }
+    .explain h4 { margin: 0 0 4px; font-size: 0.98em; }
+    .explain p { margin: 0.35em 0; }
+    .legend-row { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--fg-muted); margin-top: 6px; }
+    .legend-row span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; background: var(--sw); }
+    .mx-box { max-height: 420px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; position: relative; }
+    table.mx { display: table; margin: 0; min-width: 600px; }
+    table.mx th { position: sticky; top: 0; z-index: 1; }
+    table.mx td, table.mx th { padding: 5px 10px; }
+    table.mx tbody tr { cursor: pointer; }
+    table.mx tbody tr:hover td { background: var(--accent-soft); }
+    table.mx tr.sel td { background: var(--accent-soft); }
+    table.mx td:first-child { font-family: var(--font-mono); font-size: 0.88em; white-space: nowrap; }
+    table.mx td.val { font-family: var(--font-mono); font-size: 0.88em; overflow-wrap: anywhere; max-width: 260px; }
+    .chip { display: inline-block; font-size: 11.5px; padding: 0 7px; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; }
+    .chip.ok { color: var(--tip); border-color: var(--tip); }
+    .chip.diff { color: var(--danger); border-color: var(--danger); }
+    .chip.info { color: var(--fg-muted); }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+    pre.tree { line-height: 1.45; }
+    figure img { border-radius: 8px; border: 1px solid var(--border); }
+  </style>
+</head>
+<body data-page="05-files" data-root="..">
+<main>
+<article class="content">
+
+  <div class="eyebrow">Tutorial 05 · Running a night</div>
+  <h1>The recording files</h1>
+  <p class="lead">At the end of a night the Portiloop leaves a folder of files: one large table of samples and a few small text files that describe the recording. This page shows where they are, what every column and setting means, how to copy them to your computer, and how to check in a few lines of Python that a night is usable, using the real tutorial night.</p>
+
+  <dl class="meta">
+    <div><dt>Time</dt><dd>35 minutes</dd></div>
+    <div><dt>Level</dt><dd>Beginner</dd></div>
+    <div><dt>You need</dt><dd>Tutorial <a href="04-night.html">04</a>; Python with pandas for the last section</dd></div>
+    <div><dt>Runs in browser</dt><dd>Yes, the two explorers use the real tutorial night</dd></div>
+  </dl>
+
+  <div class="objectives">
+    <h3>In this tutorial you will</h3>
+    <ul>
+      <li>Know where a recording is saved (SD card or internal memory) and why the internal memory must not be used for real nights.</li>
+      <li>Read a recording name and know which files to expect in its folder.</li>
+      <li>Understand every column of the CSV file, how the numbers become microvolts, and what <code>detection</code>, <code>stimulation</code> and <code>stimulation_on</code> mean exactly.</li>
+      <li>Go through the settings stored in <code>_metadata.json</code> and the events of <code>_leadoff.json</code> and <code>_stats.json</code>.</li>
+      <li>Copy the files to your computer, download the tutorial dataset, and run a first quality check.</li>
+    </ul>
+  </div>
+
+  <!-- ===================================================================== -->
+  <h2 id="where">Where the files are saved</h2>
+
+  <p>The Portiloop decides where to write each recording when you press <strong>Start</strong>. The rule is in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/constants.py#L31-L49"><code>constants.py</code></a>:</p>
+
+<pre data-file="portiloop/src/core/constants.py (lines 34 to 47)"><code class="language-python">def sd_card_detected():
+    """
+    Whether the SD card is mounted and writable. The card can be inserted at any time (it is mounted by udev), so this
+    is checked again before each recording.
+    """
+    return os.path.ismount(SD_CARD) and os.access(SD_CARD, os.W_OK)
+
+
+def csv_path():
+    """
+    Returns:
+        Path: the recording folder (created if needed): on the SD card when it is detected, in the home folder otherwise
+    """
+    path = (SD_CARD if sd_card_detected() else HOME_FOLDER) / 'workspace' / 'recordings'</code></pre>
+
+  <ul>
+    <li><strong>SD card mounted and writable:</strong> <code>/media/sd_card/workspace/recordings/</code>.</li>
+    <li><strong>Otherwise:</strong> <code>~/workspace/recordings/</code>, in the home folder of the user that runs the software, on the internal memory of the device (<code>/home/mendel/workspace</code>, according to the README).</li>
+  </ul>
+  <p>The check is made again at every Start (<a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/simple_gui/simple_gui.py#L343-L344"><code>simple_gui.py</code>, line 343</a>), so a card inserted after the device was turned on is used from the next recording. The <strong>SD Card</strong> box of the Control tab only <em>shows</em> whether the card is detected; you cannot tick it yourself (Tutorial <a href="03-control-center.html">03</a>). The Advanced tab also shows a "Disk Usage" percentage: of the SD card when it is detected, otherwise of the disk the software runs from (<code>simple_gui.py</code>, lines 392 to 398).</p>
+
+  <div class="callout warning"><span class="callout-title">Never record a night on the internal memory</span>If the SD Card box is not ticked when you press Start, the night goes to the internal memory. The README is explicit about the consequence:
+    <blockquote class="quote"><p>"Recording large CSV files in internal memory will quickly make your <code>Portiloop</code> unusable: the internal memory is quite small and recording CSVs in internal memory should never be done, except for quick testing. In case you inadvertently fill up your <code>Portiloop</code> internal memory, it will refuse to boot and you will have to reflash and reinstall the entire system."</p><cite>portiloop-software README, section "SD card" [3]</cite></blockquote>
+    For scale: the CSV of the tutorial night takes 585 MB for 7.4 hours, and that copy was rewritten with 3 decimals "to make the files smaller" (<code>docs/tools/make_tutorial_dataset.py</code>), so the file the device writes is larger. The protocol's step "In the Control panel, make sure that the SD card is checked on" exists for this reason [4].</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="names">Folder and file names</h2>
+
+  <p>At Start, the Control Center builds the name of the recording from the <em>Recording name</em> of the Advanced tab, the date and time, and the condition:</p>
+
+<pre data-file="portiloop/src/simple_gui/simple_gui.py (lines 321 to 325 and 343 to 344)"><code class="language-python">self.time_started = datetime.now()
+stim_str = "CONDB" if self.stim_on else "CONDA"
+time_str = self.time_started.strftime('%Y-%m-%d_%H-%M-%S')
+prefix = self.custom_exp_name or portiloop_ID
+self.exp_name = f"{prefix}_{time_str}_{stim_str}.csv"
+...
+workspace_dir = csv_path()  # the SD card may have been inserted since the start of the GUI
+self.run_dict['filename'] = os.path.join(workspace_dir, self.exp_name.split('.')[0], self.exp_name)</code></pre>
+
+  <p>So every recording gets its own folder, and all its files share one stem, <code>&lt;name&gt;_&lt;YYYY-MM-DD_HH-MM-SS&gt;_&lt;CONDA|CONDB&gt;</code>:</p>
+  <ul>
+    <li><strong>name</strong>: the Recording name you typed (the protocol suggests <code>CLAS_X</code>, X being the participant number). If the field is empty, the hostname of the device is used: a phone screenshot in the lab's protocol shows <code>purple-dog_2026-10-15_08-25-02_CONDA</code> on the Control tab.</li>
+    <li><strong>date and time</strong>: the moment Start was pressed, read from the device's clock (<code>datetime.now()</code>), in the device's time zone.</li>
+    <li><strong>CONDA or CONDB</strong>: the condition selected on the Control tab. <code>CONDB</code> means sounds were played, <code>CONDA</code> means sham (Tutorial <a href="01-overview.html">01</a>).</li>
+  </ul>
+  <p>The tutorial night is <code>clas-tutorial_2026-11-15_04-01-29_CONDB</code>: started on 15 November 2026 at 04:01:29 by the device's clock, in Cond B.</p>
+
+  <div class="callout warning"><span class="callout-title">Three things the name gives away, or gets wrong</span>
+    <ul>
+      <li><strong>The condition is in the file name</strong> (and in <code>_metadata.json</code>, key <code>stimulate</code>). Whoever handles the files can unblind the night. Blinding must be organised by people (Tutorial <a href="01-overview.html">01</a>).</li>
+      <li><strong>Do not type the participant's name.</strong> The name ends up in the folder, every file name and the metadata. The tutorial dataset had to be renamed for this reason (see <a href="#dataset">below</a>). Use a code.</li>
+      <li><strong>The time is only as good as the device's clock.</strong> "Sync Clock with Browser" sets the clock from the phone (<code>sudo date -u -s @&lt;browser time&gt;</code>, <code>simple_gui.py</code>, lines 537 to 542), but nothing in the code sets the time zone, so the name uses whatever time zone the device is configured with. We do not know which zone the device of the tutorial night used: do not read 04:01 as the local bedtime. Write the real start time in your lab notes.</li>
+    </ul>
+  </div>
+
+  <p>The folder of a recording made with the slow-oscillation pipeline contains:</p>
+<pre class="tree" data-file="/media/sd_card/workspace/recordings/"><code>CLAS_7_2026-11-15_22-41-03_CONDB/              (example name)
+├── CLAS_7_2026-11-15_22-41-03_CONDB.csv            the samples: one row per sample
+├── CLAS_7_2026-11-15_22-41-03_CONDB_metadata.json  all the settings, written at Start
+├── CLAS_7_2026-11-15_22-41-03_CONDB_leadoff.json   lead-off events, written at Start, rewritten at each event
+└── CLAS_7_2026-11-15_22-41-03_CONDB_stats.json     sampling statistics, written when the recording ends</code></pre>
+
+  <div class="scroll-x"><table>
+    <thead><tr><th>File</th><th>Written</th><th>Code</th></tr></thead>
+    <tbody>
+      <tr><td><code>.csv</code></td><td>during the whole recording; only if "Save recording locally" is ticked</td><td><code>capture.py</code> 274 to 283, <code>output.py</code></td></tr>
+      <tr><td><code>_metadata.json</code></td><td>at Start (the full settings dictionary)</td><td><code>capture.py</code> 185 to 196, 302</td></tr>
+      <tr><td><code>_leadoff.json</code></td><td>at Start (empty list), then after every lead-off event; only when lead-off detection is on and the input is the amplifier</td><td><code>capture.py</code> 317 to 334</td></tr>
+      <tr><td><code>_stats.json</code></td><td>when the capture process reports its statistics, at the end of the recording</td><td><code>capture.py</code> 392 to 407</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout note"><span class="callout-title">Stop then Start makes a second folder</span>If the participant wakes up and you press Stop then Start (Tutorial <a href="04-night.html">04</a>), the night is split into two recordings with two time stamps, and there is a short gap between them. Keep both folders; <code>load_recording</code> of the analysis package puts them back on one timeline (Tutorial <a href="06-first-look.html#load">06</a>).</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="csv">The CSV file</h2>
+
+  <p>The <code>.csv</code> file is a plain text table: one header line, then one line per sample (250 lines per second at the protocol's 250 Hz). For the CLAS pipeline the columns are:</p>
+
+  <div class="scroll-x"><table>
+    <thead><tr><th>Column</th><th>Content</th><th>Unit</th></tr></thead>
+    <tbody>
+      <tr><td><code>raw_ch1</code> to <code>raw_ch8</code></td><td>the signal of each ADS1299 input, unfiltered. In the CLAS protocol montage: ch1 ECG1 (black), ch2 ECG2 (brown), ch3 EOG1 (red), ch4 EOG2 (orange), ch5 EMG (yellow), ch6 Cz (green), ch7 Fz (blue), ch8 Fpz (purple), all referenced to the white electrode behind the right ear</td><td>µV</td></tr>
+      <tr><td><code>detection</code></td><td>1 on the sample where the detector fired, 0 elsewhere</td><td>0 or 1</td></tr>
+      <tr><td><code>stimulation</code></td><td>1 on the sample where a sound was played (Cond B) or would have been played (Cond A)</td><td>0 or 1</td></tr>
+      <tr><td><code>stimulation_on</code></td><td>1 while detection is running, 0 while it is paused</td><td>0 or 1</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Two things are <em>not</em> in the file. There is <strong>no time column</strong>: the time of row <em>i</em> (counting from 0 after the header) is <em>i</em> / 250 seconds after Start. There are <strong>no filtered signals</strong>: the default setting is <code>"record_filtered": False</code> (<code>constants.py</code>, line 106). The montage is not stored either: the file says <code>raw_ch6</code>, never "Cz". Keep the montage of each study in your notes.</p>
+
+  <h3 id="units">From amplifier numbers to microvolts</h3>
+  <p>The ADS1299 amplifier delivers a 24-bit integer (a "code") per channel and per sample. The Portiloop converts it before writing it (<code>capture_backend.py</code>, lines 202 to 220, and <code>config_hardware.py</code>, lines 1 to 2):</p>
+<pre data-file="portiloop/src/core/hardware/config_hardware.py and capture_backend.py (excerpts)"><code class="language-python">ADS_GAIN = 24
+ADS_LSB = (2 / ADS_GAIN) / (2**24 - 1)  # needs to be multiplied by VREF
+...
+def filter_scale(value, vref):
+    return value * 1e6 * vref * ADS_LSB</code></pre>
+  <p>With the reference voltage <code>"vref": 4.5</code> V stored in the metadata:</p>
+  $$x_{\mu V} = \text{code} \times \frac{2\,V_\mathrm{REF}}{G\,(2^{24}-1)} \times 10^6 = \text{code} \times \frac{2 \times 4.5}{24 \times 16\,777\,215} \times 10^6 \approx \text{code} \times 0.022352\ \mu V$$
+  <p>One step of the converter is therefore about 0.022 µV, far below the noise of scalp EEG. The codes go from −2<sup>23</sup> to 2<sup>23</sup> − 1, so the largest values the file can contain are <strong>−187,500.011 µV and +187,499.989 µV</strong>: the input range of the ADS1299 at gain 24 (± V<sub>REF</sub> / gain = ±187.5 mV). These are exactly the minimum and maximum found in the tutorial night. A sample at these values means the amplifier was <strong>saturated</strong> ("at the rail"): typically an electrode that came off.</p>
+
+  <div class="callout neuro"><span class="callout-title">For neuroscientists: why the raw values are so large</span>The first row of the tutorial night reads 111,623 µV on ch1 and −20,251 µV on Cz, and at minute 300 Cz sits around +115,600 µV. These are not brain signals. The ADS1299 records from DC (it has no high-pass filter in front of it), so the file contains the electrode offset potentials of the skin-electrode interface (tens of millivolts, drifting over the night) with the EEG riding on top as fluctuations of tens of microvolts. Every analysis starts by removing them: subtract the mean and high-pass filter (Tutorial <a href="06-first-look.html">06</a> and <a href="07-responses.html">07</a>). The first seconds of a recording also show large settling changes (ch1 goes from 111,623 to 20,348 µV in the first 2 seconds of the tutorial night); we do not know their exact origin, so ignore the first seconds.</div>
+
+  <h3 id="markers">detection, stimulation and stimulation_on, exactly</h3>
+  <ul>
+    <li><strong><code>detection</code></strong> is 1 on the single sample where the "Sleep slow oscillations (upstate)" detector fires: the filtered detection channel shows a slow oscillation that meets the fixed criteria (peak-to-peak above 75 µV, negative part beyond 40 µV, 125 to 1500 ms below zero, less than 1000 ms above zero), at the moment its predicted up-state peak is reached (<code>custom_detectors.py</code>, lines 172 to 176 and 242 to 255; explained in Tutorial <a href="01-overview.html">01</a>).</li>
+    <li><strong><code>stimulation</code></strong> is 1 where the stimulator was asked to play the sound. With Min, Max and Inter-stim delay at 0 (the protocol's values), no delay mechanism is used and <code>stimulation</code> is written straight from the detection (<code>custom_stimulators.py</code>, lines 215 to 247); with a delay it marks the delayed delivery. In Cond A the column is filled in exactly the same way, but no sound is played: it marks the sham events. Nothing in the CSV tells the two conditions apart.</li>
+    <li><strong><code>stimulation_on</code></strong> is 1 whenever detection is running, that is when it is not paused by the "Stimulation starts after" delay nor by the lead-off protection (<code>capture.py</code>, lines 464 to 480 and 494 to 495). It does not depend on the condition: it is also 1 during a Cond A night.</li>
+  </ul>
+
+  <div class="callout warning"><span class="callout-title">Which software recorded the night matters for the timing</span>The version that recorded the tutorial night (commit 917f1f3) truncated the up-state estimate to a whole number of samples (<code>custom_detectors.py</code>, line 267), so its stimulations came about 16 to 20 ms (4 to 5 samples) early. This was fixed on main on 2026-11-26 (<a href="https://github.com/Portiloop/portiloop-software/commit/e4959f1">commit e4959f1</a>): devices updated after that date stimulate later by that amount. Note the software version (commit) of each study night in your log; the files themselves only say <code>"software_version": "0.2.0"</code>.</div>
+
+  <div class="callout danger"><span class="callout-title">The main README is wrong about stimulation_on</span>The main README says: "the <code>stimulation_on</code> column is <code>1</code> when the UI stimulation switch is active and <code>0</code> otherwise" [3]. The code does something else: it is 1 when <em>detection</em> runs, in both conditions. Use <code>stimulation_on</code> to know when the device was able to stimulate, and the file name or <code>stimulate</code> in the metadata to know the condition.</div>
+
+  <p>In the tutorial night (Cond B, "Stimulation starts after" 25 minutes):</p>
+  <ul>
+    <li><code>detection</code> and <code>stimulation</code> each contain 1,930 ones, on the same samples (no delay was set);</li>
+    <li><code>stimulation_on</code> goes from 0 to 1 at minute 25.04 (the 25 minute delay; the Control Center checks it every 10 s, so the start can be up to about 10 s late) and back to 0 at minute 373.36, for the rest of the night, when the lead-off protection paused detection;</li>
+    <li>the first stimulation is at minute 30.9 and the last at minute 373.0; the median interval between two stimulations is 3.10 s, and the shortest 0.328 s.</li>
+  </ul>
+
+  <h3 id="explorer">Explore the real file</h3>
+  <p>The explorer below shows real rows of the tutorial night, copied from the file exactly as written, around six moments of the night. Click any column name or value to see what it means; click the plot to move the table to that moment.</p>
+
+  <div class="widget" id="fx">
+    <div class="widget-title">File explorer: the CSV of the tutorial night</div>
+    <p class="widget-desc">What to try: (1) in "A stimulation" (shown first) and find the row where <code>detection</code> and <code>stimulation</code> are both 1; (2) click a <code>raw_ch</code> value to see the amplifier code it comes from (always a whole number, within the rounding of the 3 decimals); (3) open "Cz reaches the limit" and watch <code>raw_ch6</code> stick at −187,500.011 or +187,499.989; (4) open "Detection stops": <code>stimulation_on</code> falls to 0 although Cz is already at the limit for 14 s; (5) open "A lost sample": one row repeats the previous one on all 8 channels.</p>
+    <div class="jump" id="fx-jump" role="group" aria-label="Moments of the night"></div>
+    <div class="controls">
+      <label for="fx-ch">Plot <select id="fx-ch"></select></label>
+      <label for="fx-pos">First row shown <input type="range" id="fx-pos" min="0" max="488" step="1" value="0"><output for="fx-pos"></output></label>
+    </div>
+    <canvas class="plot short" id="fx-plot" role="img" aria-label="The selected column over the 2 seconds of the chosen moment, with the rows shown in the table shaded"></canvas>
+    <div class="scroll-x"><table class="csv" id="fx-table" aria-label="Rows of the CSV file"></table></div>
+    <div class="legend-row"><span style="--sw: color-mix(in srgb, var(--plot-stim) 30%, transparent)">stimulation = 1</span><span style="--sw: color-mix(in srgb, var(--warn) 30%, transparent)">row identical to the previous one</span><span style="--sw: var(--danger)">value at the amplifier limit</span></div>
+    <div class="explain" id="fx-explain" aria-live="polite">Click a column name or a value.</div>
+    <div class="status" id="fx-status">Loading the rows…</div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <h2 id="metadata">The settings: _metadata.json</h2>
+
+  <p>At Start, the Portiloop writes the complete dictionary of settings it runs with to <code>&lt;stem&gt;_metadata.json</code> (<code>dump_metadata(config_dict, config_dict, "metadata")</code>, <code>capture.py</code>, line 302). It is the only record of how the night was recorded: the pipeline, the detection channel, the mains filter, the volume, the delay, the condition, and the impedances measured at the last check. Read it before analysing a night, and compare it with the protocol.</p>
+  <p>The explorer lists the real metadata of the tutorial night. The only change from the file written by the device is <code>filename</code>, which was replaced when the night was renamed for publication.</p>
+
+  <div class="widget" id="mx">
+    <div class="widget-title">Metadata explorer: _metadata.json of the tutorial night</div>
+    <p class="widget-desc">What to try: (1) choose "Set by the protocol" and find the setting that does not match the protocol; (2) click <code>stimulate</code> and think about blinding; (3) look at the impedances: which electrodes would have been red on the Check tab, and does the protocol expect it?</p>
+    <div class="controls">
+      <label for="mx-group">Show <select id="mx-group">
+        <option value="all">All keys</option>
+        <option value="protocol">Set by the protocol</option>
+        <option value="rec">Recording and condition</option>
+        <option value="det">Detection and sound</option>
+        <option value="filt">Filters</option>
+        <option value="hw">Amplifier and acquisition</option>
+        <option value="imp">Impedance check</option>
+        <option value="unused">Not used by this pipeline</option>
+      </select></label>
+    </div>
+    <div class="mx-box scroll-x"><table class="mx" id="mx-table" aria-label="Keys of the metadata file"></table></div>
+    <div class="explain" id="mx-explain" aria-live="polite">Click a key.</div>
+    <div class="status" id="mx-status">Loading the metadata…</div>
+  </div>
+
+  <div class="callout note"><span class="callout-title">What to notice in the tutorial night</span>
+    <ul>
+      <li><code>filter_settings.power_line</code> is 60 Hz. The protocol says "Double-check that the Notch filter frequency (Hz) is set to 50" because the study runs where the mains is 50 Hz; this test night was recorded with 60 Hz, which is also the software default (<code>constants.py</code>, line 90). For a study night, a 60 in this field means the notch did not match the mains.</li>
+      <li>The impedances were measured: ch1 177.5, ch2 156.0, ch3 78.3, ch4 11.6, ch5 4.4, ch6 20.6, ch7 2.3, ch8 8.5 kΩ, reference connected. With the colour thresholds of the Check tab (green under 10 kΩ, yellow 10 to 25 kΩ, red from 25 kΩ; <code>impedance_display.py</code>, line 18), ECG1, ECG2 and EOG1 were red, EOG2 and Cz yellow, and EMG, Fz and Fpz green. The protocol expects red ECG channels: "It is normal that the impedance levels of ch1 (ECG1) and ch2 (ECG2) are not good, because they are far away from the reference electrode" [4].</li>
+      <li><code>impedance_check_time</code> is the same second as the start time in the file name (04:01:29). The time saved is when the last check finished (<code>simple_gui.py</code>, line 290), and Start stops a running check; the most likely explanation is that the Live check was still running when Start was pressed. We have not verified it.</li>
+      <li>The night was recorded with the software of Portiloop v2.3 (version 0.2.0): its 38 keys are those this code writes. Other software versions may write other keys.</li>
+    </ul>
+  </div>
+
+  <!-- ===================================================================== -->
+  <h2 id="leadoff">Lead-off events: _leadoff.json</h2>
+
+  <p>During the recording the Portiloop watches for electrodes that come off (Tutorial <a href="04-night.html">04</a>; <code>portiloop/src/core/leadoff.py</code>). In short: every 10 s it screens the last 2 s of each channel; a channel with more than 800 µV of mains interference, or more than 20% of its samples at (or within 5% of) the limit, is suspect; after two suspect screenings in a row a short DC lead-off test (24 nA) confirms it; a confirmed electrode is removed from the bias loop so that it does not degrade the other channels. Each decision is an event, and the list of events is written to <code>&lt;stem&gt;_leadoff.json</code> at Start and again after every event:</p>
+
+<pre data-file="example of the format (not from the tutorial night)"><code class="language-json">{
+    "events": [
+        {"event": "disabled", "channels": [6], "sample": 5600000, "time": "2026-11-15T10:14:53.512", "reason": "open"}
+    ]
+}</code></pre>
+
+  <div class="scroll-x"><table>
+    <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>event</code></td><td>one of the five event types below (<code>leadoff.py</code>, lines 59 to 63)</td></tr>
+      <tr><td><code>channels</code></td><td>the channels concerned, counted from 1 (6 = <code>raw_ch6</code>)</td></tr>
+      <tr><td><code>sample</code></td><td>the number of samples recorded when the decision was made: a CSV row index (from 0), the point from which the event applies</td></tr>
+      <tr><td><code>time</code></td><td>the device's clock, ISO format with milliseconds (<code>capture.py</code>, line 324)</td></tr>
+      <tr><td><code>reason</code></td><td>only for <code>disabled</code>: <code>"open"</code> (the electrode failed the DC test) or <code>"mains"</code> (it passed, but its mains interference was above 5000 µV)</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="scroll-x"><table>
+    <thead><tr><th>Event</th><th>What happened</th><th>Effect on detection and stimulation</th></tr></thead>
+    <tbody>
+      <tr><td><code>not_connected_at_start</code></td><td>the 2 s DC test at Start found no electrode on these channels; they are left out of the bias loop</td><td>if the detection channel (Cz) is listed: paused for the whole recording</td></tr>
+      <tr><td><code>disabled</code></td><td>an electrode came off during the night and was removed from the bias loop for the rest of the recording (it is still recorded)</td><td>if it is the detection channel: paused for the rest of the recording</td></tr>
+      <tr><td><code>suspect_not_confirmed</code></td><td>a channel looked floating but passed the DC test; it is not tested again for 60 s</td><td>none</td></tr>
+      <tr><td><code>reference_or_bias_off</code></td><td>all the channels in use looked floating at once: the reference (white) or bias (grey) electrode is probably off; nothing is disabled, no test for 600 s</td><td>paused until the matching recovery</td></tr>
+      <tr><td><code>reference_or_bias_recovered</code></td><td>two clean screenings in a row after <code>reference_or_bias_off</code></td><td>resumes</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small muted">Sources: <code>leadoff.py</code>, lines 1 to 74 and 220 to 296; <code>capture.py</code>, lines 317 to 334. The pauses set <code>stimulation_on</code> to 0. The Control Center does not show these events: they are only in this file and in the messages of the software.</p>
+
+  <div class="callout disk"><span class="callout-title">The tutorial night has no _leadoff.json</span>It was not retrieved from the device. The CSV still tells most of the story: a movement shifts every channel at about minute 373.03, then Cz alone reaches the amplifier limit at minute 373.12 and stays there most of the remaining 70 minutes (797,372 samples; the other channels keep recording), and <code>stimulation_on</code> falls to 0 at minute 373.36, 14 s later, for good. That fits a <code>disabled</code> event on channel 6 (two suspect screenings 10 s apart, then a 1.5 s test), but without the file we cannot confirm which event it was. The analysis package reads <code>_leadoff.json</code> to mark the affected samples as missing (<code>read_leadoff_periods</code>); without it, the analysis must catch these samples by itself (Tutorial <a href="06-first-look.html#artifacts">06</a>).</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="stats">Sampling statistics: _stats.json</h2>
+  <p>When the recording ends, the capture process sends its statistics and the Portiloop writes them to <code>&lt;stem&gt;_stats.json</code> (<code>capture.py</code>, lines 392 to 407):</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>os_time</code></td><td>duration of the acquisition measured by the operating system clock, in seconds</td></tr>
+      <tr><td><code>nb_steps</code></td><td>number of samples captured</td></tr>
+      <tr><td><code>os_step_duration</code>, <code>os_sampling_frequency</code></td><td><code>os_time / nb_steps</code> and its inverse: the real sampling rate as seen by the system clock</td></tr>
+      <tr><td><code>nb_lost_samples</code>, <code>lost_samples</code></td><td>how many, and which CSV rows (0 for the first sample), repeat the previous sample because a conversion was missed</td></tr>
+    </tbody>
+  </table></div>
+  <p>How a sample gets "lost" depends on the Clock setting (<code>capture.py</code>, lines 134 to 152). With the protocol's "Coral" clock, the amplifier runs at twice the sampling rate and a software timer reads it; when the timer is late and reads the same conversion twice, the row is a copy of the previous one and its index goes to <code>lost_samples</code>. With the "ADS" clock, missed conversions are filled with the previous sample. Either way, the row count stays right and the timing of the night is preserved, but a few rows are duplicates.</p>
+  <p>The tutorial night has no <code>_stats.json</code> either. Counting rows identical to the previous one on all 8 channels gives 1,970 rows (0.03% of the night, spread over every hour), which is what lost samples look like with the "Coral" clock. Since the file is missing, we cannot check that they are exactly the rows it would have listed.</p>
+  <p>If the device loses power or crashes, the end of the recording never comes: expect <code>_stats.json</code> to be missing (we have not tested it). The CSV is written in blocks while the night goes on, so the samples recorded until then should be in it.</p>
+
+  <!-- ===================================================================== -->
+  <h2 id="retrieve">Retrieving the files</h2>
+
+  <h3 id="sd-card">From the SD card (the protocol's way)</h3>
+  <p>The end of the protocol is: "On the phone, in the Portiloop Control Center, press the Stop button. Turn off the Portiloop: by pressing the Power button (only one short press). Unplug the earphones. Remove the SD card." [4] The README adds: "Remove the SD card only when no recording is running" [3]. Then read the card on a computer and copy the whole folder of each recording from <code>workspace/recordings/</code>, all files together.</p>
+  <figure>
+    <img src="../assets/img/protocol/device-ports.jpg" alt="The Portiloop with its battery port, its SD card slot and its headphone port" loading="lazy" width="1200" height="458">
+    <figcaption>The SD card slot of the Portiloop, next to the headphone port (from the lab's protocol).</figcaption>
+  </figure>
+  <div class="callout note"><span class="callout-title">What is not documented</span>
+    <ul>
+      <li>The README does not say how to format the card. It only asks that it have a partition (checked with <code>lsblk</code>), and the Coral installation mounts it with the file system type <code>auto</code> (<code>Makefile</code>, line 120). We have not checked which formats work.</li>
+      <li>The protocol says one short press of the Power button turns the device off; the README says "press the <code>Power</code> button for 3 seconds again" [3]. We have not verified which is right on the current hardware: wait until the light is off before removing the card.</li>
+    </ul>
+  </div>
+
+  <h3 id="network">Over the network</h3>
+  <p>The Control Center has no download button. Two other routes exist, neither described for this purpose:</p>
+  <ul>
+    <li><strong>SSH.</strong> The README documents logging in from a computer on the same network: <code>ssh mendel@your-hostname.local</code> (user <code>mendel</code>, the default user of the Coral board). From there, the files are in <code>/media/sd_card/workspace/recordings/</code>. Copying with <code>scp</code> is not in the README; the usual command would be the one below. We have not tested it.</li>
+    <li><strong>The Jupyter server</strong> at <code>192.168.4.1:8080</code> (README, "Jupyter UI") has the standard Jupyter file browser, which can download files. This is a Jupyter feature, not Portiloop code, and it is password protected.</li>
+  </ul>
+<pre data-file="terminal (on your computer; untested, not in the README)"><code class="language-bash"># connected to the Portiloop's Wi-Fi, the device is 192.168.4.1
+scp -r mendel@192.168.4.1:/media/sd_card/workspace/recordings/CLAS_7_2026-11-15_22-41-03_CONDB .</code></pre>
+
+  <div class="callout tip"><span class="callout-title">Good practice</span>Copy each folder as a whole and do not rename files: the analysis code finds <code>_metadata.json</code> and <code>_leadoff.json</code> from the name of the CSV, and orders the files of one night by the date and time in their names. Keep the original card contents until the copy is checked (the next section takes a minute).</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="dataset">The tutorial dataset</h2>
+  <p>The tutorial night is a real overnight test recording made by the lab with the CLAS protocol montage and the "Sleep slow oscillations (upstate)" pipeline, in Cond B. It is published so that you can run every step of tutorials 05 to 09 on it.</p>
+  <!-- The release tutorial-night-v1 (with this zip as an asset) must exist on GitHub for this link to work. -->
+  <p><a class="btn" href="https://github.com/Portiloop/portiloop-software/releases/download/tutorial-night-v1/clas-tutorial_2026-11-15_04-01-29_CONDB.zip">Download the tutorial night (zip, about 200 MB)</a></p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>File in the zip</th><th>Size</th><th>Content</th></tr></thead>
+    <tbody>
+      <tr><td><code>clas-tutorial_2026-11-15_04-01-29_CONDB.csv</code></td><td>585 MB</td><td>6,654,051 rows (7.39 h at 250 Hz), the 11 columns described above</td></tr>
+      <tr><td><code>clas-tutorial_2026-11-15_04-01-29_CONDB_metadata.json</code></td><td>2 kB</td><td>the settings (above)</td></tr>
+      <tr><td><code>clas-tutorial_2026-11-15_04-01-29_CONDB_nanosleepnet.csv</code></td><td>102 kB</td><td>not written by the device: automatic sleep stages per 30 s epoch, computed offline (Tutorial <a href="06-first-look.html#staging">06</a>)</td></tr>
+    </tbody>
+  </table></div>
+  <p>How it differs from what the device wrote (<a href="https://github.com/Portiloop/portiloop-software/blob/main/docs/tools/make_tutorial_dataset.py"><code>docs/tools/make_tutorial_dataset.py</code></a>):</p>
+  <ul>
+    <li>the recording name was replaced by <code>clas-tutorial</code>, because "the recording name chosen at the bedside often contains the participant's name", and <code>filename</code> in the metadata was changed to match; the date, time and condition were kept;</li>
+    <li>the samples were rewritten with 3 decimals (0.001 µV, much finer than the 0.022 µV step of the converter, so nothing is lost);</li>
+    <li>there is no <code>_leadoff.json</code> and no <code>_stats.json</code>: they were not retrieved from the device.</li>
+  </ul>
+  <p>Unzip it anywhere. The commands of this page and of the next tutorials assume that you run Python in the folder that contains the unzipped folder <code>clas-tutorial_2026-11-15_04-01-29_CONDB/</code>.</p>
+
+  <!-- ===================================================================== -->
+  <h2 id="check">A first quality check in Python</h2>
+  <p>Before any analysis, check that the night is complete and usable. The script below needs only Python with pandas and NumPy (<code>pip install pandas</code>). It reads the whole file (about 600 MB of memory for a 7 hour night) and prints the companion files, the duration, the stimulations, when detection ran, and for every channel its impedance at the last check, the share of samples at the amplifier limit and the share of samples at exactly 0 (a channel disabled at Start records 0).</p>
+
+<pre data-file="quality_check.py"><code class="language-python">import json
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+folder = Path("clas-tutorial_2026-11-15_04-01-29_CONDB")  # the recording folder
+stem = folder.name
+for suffix in ("metadata", "leadoff", "stats"):
+    print(f"{stem}_{suffix}.json:", "present" if (folder / f"{stem}_{suffix}.json").exists() else "MISSING")
+metadata = json.loads((folder / f"{stem}_metadata.json").read_text())
+data = pd.read_csv(folder / f"{stem}.csv")
+fs = metadata["frequency"]
+
+# 1. Duration and sampling
+print(f"\n{len(data):,} rows at {fs} Hz = {len(data) / fs / 3600:.2f} h")
+raw = data[[f"raw_ch{i}" for i in range(1, 9)]]
+print("rows identical to the previous row:", int((raw.diff() == 0).all(axis=1).sum()))
+
+# 2. Stimulations and stimulation_on
+stim = np.flatnonzero(data["stimulation"] == 1)
+print(f"stimulations: {len(stim)} (first at {stim[0] / fs / 60:.1f} min, last at {stim[-1] / fs / 60:.1f} min)")
+print("same samples as detection:", np.array_equal(stim, np.flatnonzero(data["detection"] == 1)))
+on = data["stimulation_on"].to_numpy()
+switches = np.flatnonzero(np.diff(on)) + 1
+print("stimulation_on changes at minute:", [f"{s / fs / 60:.1f} ({on[s - 1]}->{on[s]})" for s in switches])
+
+# 3. Channels: impedance at the last check, samples at the amplifier limit, samples exactly 0
+names = ["ECG1", "ECG2", "EOG1", "EOG2", "EMG", "Cz", "Fz", "Fpz"]  # montage of the CLAS protocol
+railed = raw.abs() >= 187_000
+minute = np.arange(len(raw)) // (60 * fs)
+mostly_railed = railed.groupby(minute).mean() > 0.5  # minutes with more than half the samples at the limit
+table = pd.DataFrame({
+    "electrode": names,
+    "kOhm": [metadata["impedances_kohm"][f"ch{i}"] for i in range(1, 9)],
+    "state": metadata["channel_states"],
+    "% at limit": (railed.mean() * 100).round(2),
+    "railed minutes": mostly_railed.sum(),
+    "from minute": [mostly_railed.index[m].min() if m.any() else "" for _, m in mostly_railed.items()],
+    "% zero": ((raw == 0).mean() * 100).round(2),
+})
+print()
+print(table.to_string())
+print("\nreference:", metadata["impedances_kohm"]["REF"], "| detection channel:", metadata["channel_detection"],
+      "| notch:", metadata["filter_settings"]["power_line"], "Hz | sound played:", metadata["stimulate"])</code></pre>
+
+  <p>On the tutorial night it prints (about 7 s on a desktop computer):</p>
+<pre data-file="output"><code class="language-none">clas-tutorial_2026-11-15_04-01-29_CONDB_metadata.json: present
+clas-tutorial_2026-11-15_04-01-29_CONDB_leadoff.json: MISSING
+clas-tutorial_2026-11-15_04-01-29_CONDB_stats.json: MISSING
+
+6,654,051 rows at 250 Hz = 7.39 h
+rows identical to the previous row: 1970
+stimulations: 1930 (first at 30.9 min, last at 373.0 min)
+same samples as detection: True
+stimulation_on changes at minute: ['25.0 (0->1)', '373.4 (1->0)']
+
+        electrode   kOhm   state  % at limit  railed minutes from minute  % zero
+raw_ch1      ECG1  177.5  simple        0.00               0                 0.0
+raw_ch2      ECG2  156.0  simple        0.00               0                 0.0
+raw_ch3      EOG1   78.3  simple        0.00               0                 0.0
+raw_ch4      EOG2   11.6  simple        0.00               0                 0.0
+raw_ch5       EMG    4.4  simple        0.00               0                 0.0
+raw_ch6        Cz   20.6  simple       11.98              55         373     0.0
+raw_ch7        Fz    2.3  simple        0.00               0                 0.0
+raw_ch8       Fpz    8.5  simple        0.00               0                 0.0
+
+reference: connected | detection channel: 6 | notch: 60 Hz | sound played: True</code></pre>
+
+  <p>How to read it, line by line:</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Check</th><th>Tutorial night</th><th>Worry if</th></tr></thead>
+    <tbody>
+      <tr><td>Companion files</td><td><code>_leadoff.json</code> and <code>_stats.json</code> missing (not retrieved)</td><td>files are missing from a night you copied yourself: copy again; a missing <code>_stats.json</code> also suggests the recording did not end normally</td></tr>
+      <tr><td>Duration</td><td>7.39 h</td><td>much shorter than the time in bed (a crash, a battery, a Stop then Start: look for a second folder); 10.00 h means the automatic 10 h limit stopped it</td></tr>
+      <tr><td>Repeated rows</td><td>1,970 (0.03%)</td><td>a large share: the capture process was often late</td></tr>
+      <tr><td>Stimulations</td><td>1,930, from minute 30.9 to 373.0</td><td>none in a Cond B night (detection channel, pipeline, electrode off at Start?); in Cond A they are sham events and should be there too</td></tr>
+      <tr><td><code>stimulation_on</code></td><td>on at minute 25.0 (the delay), off at 373.4 for good</td><td>it never turns on; it turns off early (lead-off pause: look at the detection channel)</td></tr>
+      <tr><td>Samples at the limit</td><td>Cz: 11.98%, 55 minutes from minute 373</td><td>the detection channel at the limit during sleep: those minutes have no usable EEG and no stimulation</td></tr>
+      <tr><td>Samples at 0, <code>state</code></td><td>none, all channels <code>simple</code> (enabled)</td><td>100% zeros and <code>disabled</code>: the electrode was OFF at the last impedance check and the channel was not recorded</td></tr>
+      <tr><td>Settings</td><td>notch 60 Hz</td><td>anything that differs from the protocol (here, the 50 Hz notch of the study protocol)</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout tip"><span class="callout-title">Keep the output</span>Paste the printout of every night into your study log, next to the participant code and condition. It takes seconds and is the first thing you will want when a night looks strange months later.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="exercises">Exercises</h2>
+
+  <details class="exercise"><summary>From a value to the amplifier</summary><p>The first row of the tutorial night has <code>raw_ch6</code> = −20,250.947 µV. Which ADS1299 code produced it, and how far is it from the limit of the amplifier?</p></details>
+  <details class="solution"><summary>Answer</summary><p>−20,250.947 / 0.0223517 ≈ −906,012 (a whole number, as it must be). The limit is −2<sup>23</sup> = −8,388,608, that is −187,500.011 µV: Cz is at about 11% of the range. Its value then drifts during the night (about +115,600 µV at minute 300), and from minute 373.12 it sits at the limit.</p></details>
+
+  <details class="exercise"><summary>How long could the device stimulate?</summary><p>Using the numbers on this page, for how many minutes was <code>stimulation_on</code> 1 in the tutorial night, and what fraction of the recording is that? Why did it start and why did it stop?</p></details>
+  <details class="solution"><summary>Answer</summary><p>From minute 25.04 to 373.36: 348.3 minutes, 78.5% of the 443.6 minute recording (the share of ones in the column is 5,224,822 / 6,654,051 = 0.785). It started at the end of the "Stimulation starts after" delay of 25 minutes (<code>sleep_timeout</code> in the metadata) and stopped when the lead-off protection paused detection after Cz reached the amplifier limit.</p></details>
+
+  <details class="exercise"><summary>Cond A or Cond B?</summary><p>A colleague sends you only the CSV file of a night, renamed <code>night3.csv</code>. Can you tell whether sounds were played?</p></details>
+  <details class="solution"><summary>Answer</summary><p>No. The columns are filled in the same way in both conditions: <code>stimulation</code> marks the sounds in Cond B and the sham events in Cond A, and <code>stimulation_on</code> is 1 whenever detection runs. Only the original name (<code>_CONDA</code> or <code>_CONDB</code>) and the key <code>stimulate</code> of <code>_metadata.json</code> tell. This is why files must be copied with their names and companions, and also why handling them can unblind a study.</p></details>
+
+  <details class="exercise"><summary>A night on the internal memory</summary><p>An assistant reports that the SD Card box was not ticked last night, but the recording ran. Where is the file, and what should be done before the next night?</p></details>
+  <details class="solution"><summary>Answer</summary><p>In <code>~/workspace/recordings/&lt;stem&gt;/</code> on the internal memory (<code>/home/mendel/workspace/recordings</code>). Copy it off the device (SSH or the Jupyter file browser), then delete it from the internal memory, since a full internal memory can stop the device from booting. Before the next night, insert the card and check that the box is ticked (it is refreshed every 5 s and when a tab is opened).</p></details>
+
+  <!-- ===================================================================== -->
+  <h2 id="references">References</h2>
+  <ol class="refs">
+    <li>Valenchon N, Bouteiller Y, Jourde HR, et al. (2022). The Portiloop: a deep learning-based open science tool for closed-loop brain stimulation. <em>PLOS ONE</em> 17(8): e0270696. <a href="https://doi.org/10.1371/journal.pone.0270696">doi:10.1371/journal.pone.0270696</a></li>
+    <li>Texas Instruments. ADS1299-x Low-Noise, 4-, 6-, 8-Channel, 24-Bit, Analog-to-Digital Converter for EEG and Biopotential Measurements, datasheet SBAS499C (revised January 2017). <a href="https://www.ti.com/lit/gpn/ADS1299">ti.com/lit/gpn/ADS1299</a></li>
+    <li>Portiloop software for Portiloop v2.3 (branch main; the code and line numbers cited on this page are those of commit 917f1f3, which recorded the tutorial night), README. <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/README.md">github.com/Portiloop/portiloop-software</a>; the code cited on this page is in <a href="https://github.com/Portiloop/portiloop-software/tree/917f1f3/portiloop/src"><code>portiloop/src</code></a>.</li>
+    <li>CLAS protocol of the lab (internal document, not public): sections III "Turn on the Portiloop and start the recording" and IV "End of overnight recording and cleaning".</li>
+  </ol>
+
+</article>
+</main>
+
+<script src="../assets/js/portiloop.js"></script>
+<script src="../assets/js/data.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = PL.ui.$;
+  const LSB = 4.5e6 * (2 / 24) / (Math.pow(2, 24) - 1); // uV per ADS1299 code
+  const RAIL = 187000;
+  const VISIBLE = 12;
+  const MONTAGE = [
+    ["ECG1", "black", "left upper abdomen, just below the rib cage"],
+    ["ECG2", "brown", "right upper chest, below the clavicle"],
+    ["EOG1", "red", "above the outer corner of the left eye"],
+    ["EOG2", "orange", "below the outer corner of the right eye"],
+    ["EMG", "yellow", "middle of the chin"],
+    ["Cz", "green", "vertex, the detection channel"],
+    ["Fz", "blue", "midline, 30% of nasion to inion"],
+    ["Fpz", "purple", "midline, 10% of nasion to inion"],
+  ];
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const fmtInt = (v) => Math.round(v).toLocaleString("en-US");
+
+  /* ------------------------------------------------------------ the CSV explorer */
+  let D = null, ctx = null, rows = null, pos = 0, sel = null, plotTr = null, plotT = null;
+
+  function clock(row) {
+    // start time from the file name (device clock), plus row / fs
+    const m = D.recording.match(/_(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})_/);
+    let s = (+m[4]) * 3600 + (+m[5]) * 60 + (+m[6]) + row / D.fs;
+    const day = Math.floor(s / 86400); s -= day * 86400;
+    const hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60;
+    return String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0") + ":" + ss.toFixed(3).padStart(6, "0") + (day ? " (next day)" : "");
+  }
+
+  const COLS = () => ["row", "time (s)"].concat(D.header.split(","));
+  function explainColumn(col, row, value) {
+    const fs = D.fs;
+    let h = "", p = [];
+    if (col === "row") {
+      h = "Row number (not in the file)";
+      p.push("The file has no time column. Counting rows from 0 after the header line, row <em>i</em> was recorded <em>i</em> / " + fs + " s after Start.");
+      if (row !== null) p.push("Row " + fmtInt(row) + " of " + fmtInt(D.n_rows) + ".");
+    } else if (col === "time (s)") {
+      h = "Time since Start (computed, not in the file)";
+      p.push("Row / " + fs + " Hz. Add it to the date and time in the file name to get the device's clock time (whose time zone is not recorded).");
+      if (row !== null) p.push("Row " + fmtInt(row) + ": " + (row / fs).toFixed(3) + " s = minute " + (row / fs / 60).toFixed(3) + "; device clock " + clock(row) + ".");
+    } else if (/^raw_ch\d$/.test(col)) {
+      const ch = +col.slice(6), mt = MONTAGE[ch - 1];
+      h = col + ": " + mt[0] + " (" + mt[1] + " wire, " + mt[2] + ")";
+      p.push("Unfiltered signal of ADS1299 input " + ch + " in microvolts, referenced to the white electrode behind the right ear. Electrode names follow the CLAS protocol montage; the file itself only says <code>" + col + "</code>.");
+      p.push("Values are code × 0.022352 µV, where the code is the 24-bit integer of the amplifier; the range is −187,500.011 to +187,499.989 µV. Large values are electrode offsets (DC), not EEG.");
+      if (value !== null) {
+        const code = value / LSB;
+        let s = "This value: " + value.toFixed(3) + " µV = code " + code.toFixed(3) + ", which rounds to " + fmtInt(code) + " (the 3 decimals of the file round the value by at most 0.0005 µV, that is 0.022 code).";
+        if (Math.abs(value) >= RAIL) s += " <strong>At the amplifier limit:</strong> the input is saturated, typically an electrode that came off.";
+        p.push(s);
+      }
+      if (ch === 1 || ch === 2) p.push("Each ECG channel is one chest electrode against the mastoid reference; the difference raw_ch1 − raw_ch2 gives the bipolar ECG.");
+    } else if (col === "detection") {
+      h = "detection";
+      p.push("1 on the single sample where the up-state detector fired on the filtered Cz signal (a slow oscillation that met the criteria, at its predicted up-state), 0 elsewhere. Always 0 while detection is paused.");
+    } else if (col === "stimulation") {
+      h = "stimulation";
+      p.push("1 where the stimulator was asked to play the 15 ms sound. With the protocol's delays at 0 it is the same sample as <code>detection</code> (true for all 1,930 events of this night). In Cond A it is filled the same way, but no sound is played (sham).");
+    } else if (col === "stimulation_on") {
+      h = "stimulation_on";
+      p.push("1 while detection runs, 0 while it is paused by the \"Stimulation starts after\" delay or by the lead-off protection. It does not say whether sound was played: it is also 1 in Cond A (the README says otherwise; the code is what counts).");
+    }
+    if (row !== null && /^raw_ch\d$/.test(col) && rows) {
+      const i = row - ctx.first_row;
+      if (i > 0 && rows[i].join() === rows[i - 1].join()) p.push("<strong>This whole row repeats the previous one</strong> on all 8 channels: a lost sample (the same conversion read twice).");
+    }
+    $("#fx-explain").innerHTML = "<h4>" + h + "</h4>" + p.map((x) => "<p>" + x + "</p>").join("");
+  }
+
+  function drawTable() {
+    const cols = COLS();
+    const raw = D.header.split(",");
+    let html = "<thead><tr>" + cols.map((c, k) => '<th data-col="' + esc(c) + '"' + (sel && sel.col === c && sel.row === null ? ' class="sel"' : "") + ">" + esc(c) + "</th>").join("") + "</tr></thead><tbody>";
+    for (let i = pos; i < Math.min(rows.length, pos + VISIBLE); i++) {
+      const r = rows[i], row = ctx.first_row + i;
+      const stimCol = raw.indexOf("stimulation");
+      const cls = [];
+      if (row === ctx.row) cls.push("target");
+      if (+r[stimCol] === 1) cls.push("stim");
+      if (i > 0 && r.join() === rows[i - 1].join()) cls.push("repeat");
+      html += '<tr class="' + cls.join(" ") + '">';
+      const vals = [fmtInt(row), (row / D.fs).toFixed(3)].concat(r);
+      vals.forEach(function (v, k) {
+        const c = cols[k];
+        const rail = k >= 2 && /^raw_ch/.test(c) && Math.abs(+v) >= RAIL;
+        const isSel = sel && sel.col === c && sel.row === row;
+        html += '<td data-col="' + esc(c) + '" data-row="' + row + '" class="' + (rail ? "rail" : "") + (k < 2 ? " muted" : "") + (isSel ? " sel" : "") + '">' + esc(v) + "</td>";
+      });
+      html += "</tr>";
+    }
+    $("#fx-table").innerHTML = html + "</tbody>";
+  }
+
+  function drawPlot() {
+    if (!ctx) return;
+    const raw = D.header.split(",");
+    const k = raw.indexOf($("#fx-ch").value);
+    const y = rows.map((r) => +r[k]);
+    const isRaw = /^raw_ch/.test(raw[k]);
+    let med = 0;
+    if (isRaw) { const s = y.slice().sort((a, b) => a - b); med = s[Math.floor(s.length / 2)]; }
+    const t = rows.map((_, i) => (ctx.first_row + i - ctx.row) / D.fs);
+    const stimCol = raw.indexOf("stimulation");
+    const markers = [];
+    rows.forEach((r, i) => { if (+r[stimCol] === 1) markers.push({ x: t[i] }); });
+    plotT = t;
+    plotTr = PL.plot($("#fx-plot"), {
+      xRange: [t[0], t[t.length - 1]], xLabel: "Time from the chosen row (s)",
+      yLabel: isRaw ? "µV (minus " + fmtInt(med) + ")" : raw[k],
+      yRange: isRaw ? undefined : [-0.1, 1.15],
+      series: [{ x: t, y: y.map((v) => v - med), color: PL.color("signal"), width: 1.2, step: !isRaw, label: raw[k] }],
+      regions: [{ x0: t[pos], x1: t[Math.min(rows.length - 1, pos + VISIBLE - 1)], color: "rgba(128,128,128,0.18)", label: "rows in the table" }],
+      markers: markers,
+      margin: { l: 64 },
+    });
+  }
+
+  function setContext(i) {
+    ctx = D.contexts[i];
+    rows = ctx.lines.map((l) => l.split(","));
+    pos = Math.max(0, Math.min(rows.length - VISIBLE, ctx.row - ctx.first_row - 3));
+    $("#fx-pos").value = pos;
+    sel = null;
+    PL.ui.$$("#fx-jump .btn").forEach((b, j) => b.setAttribute("aria-pressed", j === i ? "true" : "false"));
+    const def = { start: "raw_ch1", on: "stimulation_on", stim: "raw_ch6", repeat: "raw_ch6", rail: "raw_ch6", off: "stimulation_on" }[ctx.key] || "raw_ch6";
+    $("#fx-ch").value = def;
+    update();
+    $("#fx-status").textContent = ctx.title + ": rows " + fmtInt(ctx.first_row) + " to " + fmtInt(ctx.first_row + rows.length - 1) +
+      " (minute " + (ctx.first_row / D.fs / 60).toFixed(2) + " to " + ((ctx.first_row + rows.length - 1) / D.fs / 60).toFixed(2) + ") of the " + fmtInt(D.n_rows) + " rows. Row of interest (bold): " + fmtInt(ctx.row) + ".";
+  }
+  function update() {
+    const out = document.querySelector('output[for="fx-pos"]');
+    out.textContent = fmtInt(ctx.first_row + pos);
+    drawTable(); drawPlot();
+  }
+
+  fetch("../assets/data/05-files.json").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (j) {
+    D = j;
+    const labels = { start: "First rows", on: "Detection starts (25.0 min)", stim: "A stimulation (123.0 min)", repeat: "A lost sample (60.3 min)", rail: "Cz reaches the limit (373.1 min)", off: "Detection stops (373.4 min)" };
+    $("#fx-jump").innerHTML = D.contexts.map((c, i) => '<button type="button" class="btn" aria-pressed="false" data-i="' + i + '">' + esc(labels[c.key] || c.title) + "</button>").join("");
+    PL.ui.$$("#fx-jump .btn").forEach((b) => b.addEventListener("click", () => setContext(+b.dataset.i)));
+    $("#fx-ch").innerHTML = D.header.split(",").map((c, k) => '<option value="' + c + '">' + c + (k < 8 ? " (" + MONTAGE[k][0] + ")" : "") + "</option>").join("");
+    $("#fx-ch").addEventListener("change", drawPlot);
+    $("#fx-pos").max = 500 - VISIBLE;
+    $("#fx-pos").addEventListener("input", function () { pos = +this.value; update(); });
+    $("#fx-table").addEventListener("click", function (e) {
+      const cell = e.target.closest("th, td"); if (!cell) return;
+      const col = cell.dataset.col;
+      const row = cell.dataset.row !== undefined ? +cell.dataset.row : null;
+      let value = null;
+      if (row !== null && /^raw_ch/.test(col)) value = +rows[row - ctx.first_row][D.header.split(",").indexOf(col)];
+      sel = { col: col, row: row };
+      if (/^raw_ch|^detection|^stimulation/.test(col)) $("#fx-ch").value = col;
+      explainColumn(col, row, value); drawTable(); drawPlot();
+    });
+    $("#fx-plot").addEventListener("click", function (e) {
+      if (!plotTr || !rows) return;
+      const r = $("#fx-plot").getBoundingClientRect();
+      const x = plotTr.fromPx(e.clientX - r.left, e.clientY - r.top)[0];
+      const i = Math.round((x - plotT[0]) * D.fs);
+      pos = Math.max(0, Math.min(rows.length - VISIBLE, i - Math.floor(VISIBLE / 2)));
+      $("#fx-pos").value = pos; update();
+    });
+    setContext(2);
+    explainColumn("stimulation", null, null);
+    PL.onRedraw(drawPlot);
+    renderMeta(D.metadata);
+  }).catch(function (e) {
+    $("#fx-status").textContent = "Could not load the rows (" + e.message + "). Serve the docs folder over HTTP to use the explorers.";
+    $("#mx-status").textContent = "Could not load the metadata.";
+  });
+
+  /* ------------------------------------------------------------ the metadata explorer */
+  // group, protocol check, explanation (from the code; line numbers refer to commit 917f1f3 of branch main, the software of Portiloop v2.3 that recorded the tutorial night)
+  const IMP_TXT = "Impedance in kΩ of this electrode at the last impedance check (Check tab), rounded to 0.1 kΩ; \"&lt;1\" below 1 kΩ, \"OFF\" for no contact, \"?\" if not measured. Colours of the Check tab: green under 10 kΩ, yellow 10 to 25 kΩ, red from 25 kΩ (impedance_display.py, line 18). An electrode OFF at the check is disabled in the next recording, except the detection channel.";
+  const META = {
+    software_version: ["rec", null, "Version of portiloop-software (portiloop/__init__.py). Here 0.2.0, the software of Portiloop v2.3. Other versions may write other keys."],
+    hardware_version: ["hw", null, "2 = Portiloop V2 (v2.3: a Google Coral Dev Board Mini and the Portiloop board), detected from the board model (utils.py, lines 7 to 20)."],
+    nb_channels: ["hw", null, "Number of channels of the ADS1299, read from the chip (4, 6 or 8)."],
+    frequency: ["hw", ["ok", "250 (step 13)"], "Sampling frequency in Hz: 250 rows per second in the CSV. Protocol: \"Double-check that the Sample frequency (Hz) is set to 250.\""],
+    duration: ["rec", null, "Maximum length of a recording in seconds: 36000 s = 10 h. The capture stops on its own after it (capture.py, line 127); the Control Center never changes it."],
+    filter: ["det", null, "Run the pipeline's filters (capture.py, line 269). Must be true for detection to see filtered data."],
+    record: ["rec", ["ok", "ticked (step 21)"], "\"Save recording locally\". If false, no CSV or JSON file is written at all."],
+    detect: ["det", null, "Create the detector and stimulator of the pipeline (capture.py, lines 270 to 271)."],
+    stimulate: ["rec", ["info", "Cond A or B"], "The condition: true = Cond B (the sound is played), false = Cond A (sham: detection runs and is logged, no sound). Anyone who opens this file sees the condition: plan blinding accordingly."],
+    lsl: ["rec", ["ok", "unchecked (step 20)"], "\"Stream LSL\": send the signals and markers over the network with Lab Streaming Layer. Protocol: \"Double-check that Stream LSL is unchecked.\""],
+    display: ["unused", null, "Live plot of the Jupyter interface; not used by the Control Center."],
+    display_raw: ["unused", null, "Whether the Jupyter live plot shows raw or filtered data; not used by the Control Center."],
+    threshold: ["unused", null, "Detection threshold of the spindle detector (0.75). The slow-oscillation detector ignores it: its criteria are fixed in the code."],
+    signal_input: ["hw", null, "\"ADS\": read the amplifier. \"File\" would replay <code>signal_sample</code> instead (capture.py, line 259)."],
+    python_clock: ["hw", ["ok", "Clock: Coral (step 16)"], "true = the \"Coral\" clock of the Advanced tab: the ADS1299 runs at twice the rate and a software timer reads it at 250 Hz; duplicate readings are counted as lost samples. false = the \"ADS\" clock."],
+    signal_labels: ["hw", null, "Generic channel labels ch1 to ch8. The montage (which electrode is on which channel) is not stored anywhere in the files."],
+    channel_states: ["hw", null, "Per channel: \"simple\" = recorded; \"disabled\" = powered down and recording 0, because the electrode was OFF at the last impedance check (simple_gui.py, lines 171 to 183). All 8 are recorded in this night."],
+    channel_detection: ["det", ["ok", "6 (step 15)"], "Channel used for detection, from 1: 6 = Cz in the protocol montage."],
+    detection_sound: ["det", null, "Sound file played at each stimulation: 15 ms, 48 kHz, stereo. The name suggests pink noise (\"PN\"), but the code never says so, and one spectral check found a roughly flat (white) spectrum; not confirmed."],
+    stim_delay_mode: ["det", null, "\"Time\" (default). With Min, Max and Inter-stim delay all 0, no delay mechanism is used and the sound is played on detection."],
+    min_delay: ["det", ["ok", "0 (step 23)"], "\"Min stim delay (ms)\", stored in seconds (the Control Center divides by 1000)."],
+    max_delay: ["det", ["ok", "0 (step 23)"], "\"Max stim delay (ms)\", stored in seconds."],
+    inter_stim_delay: ["det", ["ok", "0 (step 23)"], "\"Inter-stim delay (ms)\", stored in seconds. With 0, the only spacing between sounds is the 0.1 s built into the stimulator."],
+    volume: ["det", ["ok", "50% (step 19)"], "\"Sound output volume\" in %: the software volume of the sound card (ALSA SoftMaster), not a calibrated sound level."],
+    "filter_settings.power_line": ["filt", ["diff", "protocol: 50"], "Mains frequency removed by the notch filter, 50 or 60 Hz; the software default is 60. Protocol: \"Double-check that the Notch filter frequency (Hz) is set to 50.\" This test night used 60."],
+    "filter_settings.custom_fir": ["unused", null, "Replace the default FIR filter by a custom low-pass (order and cut-off below). false here."],
+    "filter_settings.custom_fir_order": ["unused", null, "Order of the custom FIR, used only if custom_fir is true."],
+    "filter_settings.custom_fir_cutoff": ["unused", null, "Cut-off (Hz) of the custom FIR, used only if custom_fir is true."],
+    "filter_settings.polyak_mean": ["unused", null, "Online standardization of the spindle pipeline (custom_processors.py, line 113); not used by the slow-oscillation filter."],
+    "filter_settings.polyak_std": ["unused", null, "Online standardization of the spindle pipeline; not used by the slow-oscillation filter."],
+    "filter_settings.epsilon": ["unused", null, "Small constant of the spindle pipeline's standardization; not used by the slow-oscillation filter."],
+    "filter_settings.filter_args": ["unused", null, "Switches of the spindle pipeline's filter stages (custom_processors.py, line 116); not used by the slow-oscillation filter."],
+    width_display: ["unused", null, "Width of the Jupyter live plot in samples."],
+    filename: ["rec", null, "Path of the CSV file on the device. In the tutorial dataset it was replaced by the new name (docs/tools/make_tutorial_dataset.py); in your own files it contains the Recording name, so it can contain whatever was typed at the bedside."],
+    record_raw: ["rec", null, "Write the raw_ch columns."],
+    record_filtered: ["rec", null, "Write filtered_ch columns too; false by default, so the filtered signals the device used are not in the file (the simulator of Tutorial 08 recomputes them)."],
+    signal_sample: ["unused", null, "File replayed when signal_input is \"File\" (a path on the device); not used here."],
+    offline_speed: ["unused", null, "Replay speed for signal_input \"File\"; not used here."],
+    vref: ["hw", null, "Reference voltage of the ADS1299 in volts, used to convert codes to µV (code × vref × 2 / 24 / (2²⁴ − 1) × 10⁶). The comment in constants.py says \"Valid only after Portiloop 2.3\"; the analysis README mentions a 2.64/4.5 correction that \"compensated a wrong VREF in older versions\"."],
+    leadoff_detection: ["hw", null, "Lead-off detection during the recording (on by default, not in the Control Center). It writes _leadoff.json and pauses detection when the detection electrode, the reference or the bias is off."],
+    pipeline_name: ["det", ["ok", "step 12"], "Name of the pipeline selected in the Advanced tab."],
+    pipeline: ["det", ["ok", "step 12"], "Same as pipeline_name. \"Sleep slow oscillations (upstate)\": filters, slow-oscillation detector timed to the up-state, sound."],
+    sleep_timeout: ["det", ["info", "set per study"], "\"Stimulation starts after\", in minutes: detection and stimulation are paused this long after Start, in both conditions. The protocol gives 45 minutes as an example, to adjust to the time needed to fall asleep. 25 here."],
+    impedance_check_time: ["imp", null, "When the last impedance check finished (device clock), or \"?\" if none was made. Here it is the same second as the start of the recording; the most likely explanation is that the Live check was running when Start was pressed (not verified)."],
+  };
+  ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7", "ch8"].forEach(function (c, i) {
+    META["impedances_kohm." + c] = ["imp", null, "<strong>" + MONTAGE[i][0] + " (" + MONTAGE[i][1] + " wire).</strong> " + IMP_TXT + (i < 2 ? " The protocol expects the ECG channels to be red: they are far from the reference." : "")];
+  });
+  META["impedances_kohm.REF"] = ["imp", null, "The reference (white) electrode cannot be measured, only detected: \"connected\", \"OFF\" or \"?\" (impedance.py, lines 19 to 22)."];
+
+  function impColor(v) {
+    if (typeof v !== "number") return "var(--fg-muted)";
+    return v < 10 ? "var(--tip)" : v < 25 ? "var(--warn)" : "var(--danger)";
+  }
+  let flat = [];
+  function renderMeta(meta) {
+    flat = [];
+    Object.keys(meta).forEach(function (k) {
+      const v = meta[k];
+      if (v && typeof v === "object" && !Array.isArray(v)) Object.keys(v).forEach((k2) => flat.push([k + "." + k2, v[k2]]));
+      else flat.push([k, v]);
+    });
+    $("#mx-group").addEventListener("change", drawMeta);
+    $("#mx-table").addEventListener("click", function (e) {
+      const tr = e.target.closest("tr[data-k]"); if (!tr) return;
+      showMeta(tr.dataset.k);
+    });
+    drawMeta();
+    showMeta("filter_settings.power_line");
+    $("#mx-status").textContent = flat.length + " values in " + Object.keys(meta).length + " keys (nested keys are shown with a dot).";
+  }
+  let mxSel = null;
+  function drawMeta() {
+    const g = $("#mx-group").value;
+    let html = "<thead><tr><th>Key</th><th>Value</th><th>Protocol</th></tr></thead><tbody>";
+    flat.forEach(function ([k, v]) {
+      const m = META[k] || ["unused", null, "No explanation available for this key."];
+      if (g === "protocol" && !m[1]) return;
+      if (g !== "all" && g !== "protocol" && m[0] !== g) return;
+      const chip = m[1] ? '<span class="chip ' + m[1][0] + '">' + (m[1][0] === "ok" ? "✓ " : m[1][0] === "diff" ? "✗ " : "") + esc(m[1][1]) + "</span>" : "";
+      const dot = k.startsWith("impedances_kohm.") && k !== "impedances_kohm.REF" ? '<span class="dot" style="background:' + impColor(v) + '"></span>' : "";
+      html += '<tr data-k="' + esc(k) + '"' + (k === mxSel ? ' class="sel"' : "") + "><td>" + esc(k) + '</td><td class="val">' + dot + esc(JSON.stringify(v)) + "</td><td>" + chip + "</td></tr>";
+    });
+    $("#mx-table").innerHTML = html + "</tbody>";
+  }
+  function showMeta(k) {
+    mxSel = k;
+    const m = META[k] || ["unused", null, "No explanation available for this key."];
+    const v = flat.find((x) => x[0] === k);
+    $("#mx-explain").innerHTML = "<h4><code>" + esc(k) + "</code> = " + esc(JSON.stringify(v ? v[1] : null)) + "</h4><p>" + m[2] + "</p>";
+    drawMeta();
+  }
+})();
+</script>
+</body>
+</html>

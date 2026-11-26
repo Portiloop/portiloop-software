@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>03 · The Control Center · Portiloop tutorials</title>
+  <meta name="description" content="Turning the Portiloop on, connecting the phone, and every tab and setting of the Control Center: the impedance check and its colours, the Advanced settings of the CLAS protocol and what the code does with them, what the device remembers, and where the protocol and the software disagree.">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <style>
+    /* page-local styles for tutorial 03 */
+    .quote { margin: 1em 0; padding: 8px 14px; border-left: 3px solid var(--border); color: var(--fg); background: var(--bg-elev); border-radius: 0 8px 8px 0; }
+    .quote cite { display: block; font-style: normal; font-size: 0.88em; color: var(--fg-muted); margin-top: 4px; }
+    .shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin: 1.2em 0; }
+    .shots figure { margin: 0; }
+    .shots img { display: block; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 10px; }
+    .wide-img { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--border); }
+    .legend-row { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.92em; margin: 0.6em 0; }
+    .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
+    /* impedance tiles: the colours are those of impedance_display.py (COLORS) */
+    .imp-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 6px; margin: 10px 0; }
+    .imp-tile { font: inherit; border: 0; border-radius: 8px; min-height: 62px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; padding: 4px; }
+    .imp-tile b { font-size: 15px; }
+    .imp-tile span { font-size: 13px; }
+    .imp-tile small { font-size: 11px; opacity: 0.85; }
+    .imp-tile[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .imp-legend { font-size: 13px; color: var(--fg-muted); }
+    .imp-hint { font-weight: 650; color: var(--danger); font-size: 14px; min-height: 1.2em; }
+    .imp-explain { background: var(--bg-sunk); border-radius: 8px; padding: 10px 14px; font-size: 0.95em; margin-top: 10px; }
+    .imp-explain p { margin: 0.35em 0; }
+    .imp-try { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; font-size: 14px; color: var(--fg-muted); }
+    .imp-try .imp-tile { width: 96px; cursor: default; }
+    /* Control Center mock */
+    .cc-grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 18px; align-items: start; margin-top: 8px; }
+    @media (max-width: 760px) { .cc-grid { grid-template-columns: minmax(0, 1fr); } }
+    .cc-phone { border: 2px solid var(--border); border-radius: 22px; background: var(--bg); padding: 12px 12px 16px; font-size: 14px; }
+    .cc-mock { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--warn); font-weight: 650; text-align: center; margin-bottom: 6px; }
+    .cc-head { font-family: var(--font-mono); }
+    .cc-head .t1 { font-size: 22px; } .cc-head .t2 { font-size: 16px; } .cc-head .t3 { font-family: var(--font-sans); font-size: 12px; color: var(--fg-muted); margin: 4px 0 8px; }
+    .cc-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+    .cc-tabs button { flex: 1; font: inherit; font-size: 12px; font-weight: 600; text-transform: uppercase; padding: 8px 2px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--fg-muted); cursor: pointer; }
+    .cc-tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+    .cc-panel { display: flex; flex-direction: column; gap: 10px; }
+    .cc-panel[hidden] { display: none !important; }
+    .cc-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }
+    .cc-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--fg-muted); }
+    .cc-field select, .cc-field input[type="text"], .cc-field input[type="number"] { font: inherit; font-size: 14px; padding: 5px 7px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--fg); width: 100%; }
+    .cc-field input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .cc-chk { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--fg); }
+    .cc-tog { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .cc-tog button { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 14px; border: 0; background: var(--bg-elev); color: var(--fg-muted); cursor: pointer; }
+    .cc-tog button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+    .cc-tog button:disabled, .cc-b:disabled { opacity: 0.45; cursor: default; }
+    .cc-b { font: inherit; font-size: 14px; font-weight: 650; padding: 7px 14px; border-radius: 8px; border: 0; cursor: pointer; background: var(--accent); color: var(--accent-fg); }
+    .cc-b.go { background: #43a047; color: #fff; font-size: 18px; }
+    .cc-b.stop { background: #ef8f00; color: #fff; font-size: 18px; }
+    .cc-warn { color: var(--warn); font-size: 13px; text-align: center; }
+    .cc-msg { font-size: 13px; color: var(--fg-muted); text-align: center; min-height: 1.2em; }
+    .cc-big { font-size: 18px; font-weight: 650; text-align: center; }
+    .cc-file { font-size: 13px; text-align: center; overflow-wrap: anywhere; }
+    .cc-list { display: flex; flex-direction: column; gap: 6px; }
+    .cc-sum { font-weight: 650; margin-bottom: 4px; }
+    .cc-item { border: 1px solid var(--border); border-left: 4px solid var(--tip); border-radius: 8px; background: var(--bg-elev); }
+    .cc-item.bad { border-left-color: var(--danger); }
+    .cc-item.info { border-left-color: var(--note); }
+    .cc-item > button { width: 100%; text-align: left; font: inherit; font-size: 14px; padding: 7px 10px; background: none; border: 0; color: var(--fg); cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+    .cc-item .mark { font-weight: 700; min-width: 1.2em; }
+    .cc-item.bad .mark { color: var(--danger); } .cc-item.ok .mark { color: var(--tip); } .cc-item.info .mark { color: var(--note); }
+    .cc-item .body { padding: 0 12px 8px 30px; font-size: 13.5px; color: var(--fg); }
+    .cc-item .body p { margin: 0.3em 0; }
+    .cc-item .val { color: var(--fg-muted); font-size: 13px; }
+    .disc td:first-child { white-space: normal; }
+  </style>
+</head>
+<body data-page="03-control-center" data-root="..">
+<main>
+<article class="content">
+
+  <div class="eyebrow">Tutorial 03 · Running a night</div>
+  <h1>The Control Center</h1>
+  <p class="lead">The Portiloop has no screen: you control it from a phone, through a web page that the device serves on its own Wi-Fi network. This tutorial turns the device on, opens that page, and goes through every tab and every setting that the CLAS protocol asks you to check, with what the software really does with each of them.</p>
+
+  <dl class="meta">
+    <div><dt>Time</dt><dd>40 minutes</dd></div>
+    <div><dt>Level</dt><dd>Beginner</dd></div>
+    <div><dt>You need</dt><dd><a href="02-preparation.html">Tutorial 02</a> (electrodes in place); for the real thing, a Portiloop and a phone</dd></div>
+    <div><dt>Runs in browser</dt><dd>Yes: the two widgets use the tutorial night</dd></div>
+  </dl>
+
+  <div class="objectives">
+    <h3>In this tutorial you will</h3>
+    <ul>
+      <li>Turn the Portiloop on, read its light, and connect a phone to its Wi-Fi and to <code>http://192.168.4.1:8081/</code></li>
+      <li>Find your way through the four tabs: Control, Check, Output and Advanced</li>
+      <li>Run the impedance check, read its colours, and know what an "OFF" electrode does to the next recording</li>
+      <li>Set every Advanced setting of the protocol, knowing its default and what it changes in the device</li>
+      <li>Avoid the traps of settings that the device remembers from one night to the next (the condition and the recording name among them)</li>
+      <li>Know where the protocol and the software disagree</li>
+    </ul>
+  </div>
+
+  <div class="callout note"><span class="callout-title">Sources</span>The steps quoted below come from the lab's CLAS protocol [1] (section III, "Turn on the Portiloop and start the recording"). Every statement about what the software does comes from the code of the <code>main</code> branch of <a href="https://github.com/Portiloop/portiloop-software/tree/main">portiloop-software</a>, the software of the Portiloop v2.3 shown in the protocol, as of <a href="https://github.com/Portiloop/portiloop-software/tree/917f1f3">commit 917f1f3</a>, the version that recorded the tutorial night (the code links point to that commit, so that the quoted lines stay valid); mainly the Control Center itself, <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/simple_gui/simple_gui.py"><code>simple_gui.py</code></a> [2]. The screenshots are from the protocol; some were taken with an older version of the software, and we point out the differences.</div>
+
+  <h2 id="power">Turning the Portiloop on</h2>
+  <p>Before you power the device, the earphones and the SD card go in. The protocol's order is:</p>
+  <ol class="steps">
+    <li><strong>Earphones.</strong> "Plug the earphones into the Portiloop's earphones jack." The software README agrees: "plug the headphones in before powering the device" [8].</li>
+    <li><strong>SD card.</strong> "Insert the SD card into the Portiloop with the printed side facing downward and the contact side facing the device. Be careful not to push it too much: it is normal that the SD card is not fully inserted."</li>
+    <li><strong>Battery on.</strong> "Make sure that the battery is turned on. To do so, press on the side button (short press), and the battery level number should appear."</li>
+    <li><strong>Battery cable.</strong> "Connect the battery to the USB-C port on the Portiloop closest to the power button, then check the battery level."</li>
+    <li><strong>Power button.</strong> "Press the Power button of the Portiloop for 2 - 3 seconds. If it does not turn on, make sure that the battery is turned on (you have to be quick, otherwise it turns back off)."</li>
+    <li><strong>Wait for green.</strong> "The LED light located between the two USB-C ports will turn orange. After some seconds, it will turn green."</li>
+  </ol>
+
+  <figure>
+    <img class="wide-img" src="../assets/img/protocol/device-ports.jpg" alt="Three photos of the Portiloop: the battery connection port on the side, the SD card slot with the card sticking out slightly, and the headphones connection port next to the SD card" width="1200" height="458" loading="lazy">
+    <figcaption>The ports of the Portiloop (from the protocol [1]): battery connection port, SD card (it sticks out a little, which is normal), and headphones port. The white label on the box carries the device's name.</figcaption>
+  </figure>
+
+  <p><strong>What the light means.</strong> The light between the two USB-C ports belongs to the computer board inside the Portiloop (a Google Coral Dev Board Mini on the hardware version 2 shown in the protocol). The README lists it as "orange: boot in progress", "green: boot complete" [8]. Its colour is set by the board, not by the Portiloop software. The README also warns that "if the power light gets stuck on orange and never turns green", the board needs to be reflashed: that is a job for the technical team, not something to fix at the bedside.</p>
+  <p><strong>A sound at start-up.</strong> When the Portiloop software starts, it plays a short sound file once (<code>os.system('aplay /home/mendel/portiloop-software/portiloop/sounds/sample1.wav')</code>, in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/__init__.py#L16-L17"><code>portiloop/src/__init__.py</code></a>), and the README says the device "should play a sound in the headphones when the light turns green" [8]. If the earphones are already plugged in, this is a first, free check that they work. We have not measured how long after the green light the Control Center page becomes reachable; if it does not load at once, wait a little. The Control Center runs as a system service that the device restarts 60 s after a failure (<code>RestartSec=60s</code> in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/setup_files/simplegui.service"><code>simplegui.service</code></a>).</p>
+
+  <h2 id="wifi">Connecting the phone</h2>
+  <p>The protocol says:</p>
+  <blockquote class="quote">"Once the LED light is green, connect the phone to the Portiloop Wifi. → Wifi name: &lt;name_of_the_Portiloop&gt; → Password: portiloop. On the phone, go to the Portiloop Control Center: http://192.168.4.1:8081/"<cite>CLAS protocol [1], steps 7 and 8</cite></blockquote>
+  <p>The Portiloop creates its own Wi-Fi network (an "access point"); it does not need, and does not give, access to the internet. The network name and password are <em>not</em> written in the Portiloop software: they are chosen when the software is installed on each device. The installation script asks for both, giving only examples:</p>
+<pre data-file="create_ap.sh (excerpt) [7]"><code class="language-bash">echo "ACTION REQUIRED: Enter the desired access point wifi SSID (example: portiloop-wifi):"
+read portiloop_SSID
+echo "ACTION REQUIRED: Enter the desired access point wifi password (example: portiloop):"
+read portiloop_password</code></pre>
+  <p>So the network name is whatever the person who installed the device typed. The protocol's "&lt;name_of_the_Portiloop&gt;" suggests that the lab named each network after its device; the device's own name ("purple-dog" on the label in the photo above and in the screenshots below) is the host name of its Coral board, which the README describes as "randomly-generated" unless a custom one is set [8]. The password is "portiloop" according to the protocol; we cannot check either from the code. If several Portiloops are in the same building, make sure the phone joins the network of the device on the participant's bedside table.</p>
+  <p>The address <code>http://192.168.4.1:8081/</code> is fixed in the code: the Control Center listens on the device's address on its own network, <code>192.168.4.1</code>, port <code>8081</code> (<code>SimpleUI.run(host='192.168.4.1', port=8081, title='Portiloop Control Center', ...)</code> in [2]). Port 8080 of the same address serves a Jupyter notebook for developers; experimenters do not need it.</p>
+  <div class="callout tip"><span class="callout-title">Tip</span>Phones often warn that a Wi-Fi network "has no internet access" and may switch back to mobile data on their own. If the page does not load, accept to stay connected to the Portiloop network, or turn mobile data off while you set up. Type the address with <code>http://</code> (not https). A bookmark saves time on the next nights.</div>
+
+  <h2 id="page">The page: header and tabs</h2>
+  <p>The page opens with the title "Portiloop 🧠 Control Center" and one line about the device, built by the code as <code>Connected to: &lt;strong&gt;{portiloop_ID}&lt;/strong&gt; (v{hardware_version} - {nb_channels} channels)</code> [2]:</p>
+  <ul>
+    <li><strong>The device name</strong> (<code>portiloop_ID</code>, the computer's host name), for example "purple-dog". It is also used as the start of the file name when no recording name is given (see <a href="#name">Recording name</a>).</li>
+    <li><strong>The hardware version</strong>: <code>v2</code> for the Portiloop v2.3, built on the Coral board (the device of the protocol).</li>
+    <li><strong>The number of channels</strong> read from the amplifier chip (an ADS1299): 8 on the lab's devices.</li>
+  </ul>
+  <p>Below it are four tabs: <strong>Control</strong>, <strong>Check</strong> (with an Ω sign), <strong>Output</strong> and <strong>Advanced</strong>. Each time you switch tab, the device re-checks the SD card.</p>
+  <div class="shots">
+    <figure><img src="../assets/img/protocol/cc-control.jpg" alt="Phone screenshot of the Control tab: SD Card box ticked, Test Sound button, Cond A and Cond B toggle, Start and Stop buttons" width="267" height="594" loading="lazy"><figcaption>Control tab (older version: no Check tab).</figcaption></figure>
+    <figure><img src="../assets/img/protocol/cc-check-live.jpg" alt="Phone screenshot of the Check tab with coloured tiles for ch1 to ch8 and REF connected" width="262" height="584" loading="lazy"><figcaption>Check tab, Live mode.</figcaption></figure>
+    <figure><img src="../assets/img/protocol/cc-advanced-1.jpg" alt="Phone screenshot of the top of the Advanced tab: warning text, disk usage, Preset, Pipeline, Sample frequency and Notch filter frequency" width="263" height="585" loading="lazy"><figcaption>Advanced tab, top.</figcaption></figure>
+    <figure><img src="../assets/img/protocol/cc-advanced-2.jpg" alt="Phone screenshot of the middle of the Advanced tab: detection channel, Clock toggle, Sync clock button, Stimulation starts after slider at 45 minutes, volume slider at 59 percent, Stream LSL, Save recording locally" width="264" height="588" loading="lazy"><figcaption>Advanced tab, middle.</figcaption></figure>
+    <figure><img src="../assets/img/protocol/cc-advanced-3.jpg" alt="Phone screenshot of the bottom of the Advanced tab: Recording name, Min stim delay, Max stim delay, Inter-stim delay, Preset name and Save preset" width="261" height="582" loading="lazy"><figcaption>Advanced tab, bottom.</figcaption></figure>
+  </div>
+
+  <h2 id="control">The Control tab</h2>
+  <p>This is the tab you use at the start and the end of the night. From top to bottom [2]:</p>
+  <ul>
+    <li><strong>SD Card.</strong> A tick box that the device ticks when an SD card is mounted and writable. You cannot tick it yourself: the code builds it as <code>ui.checkbox('SD Card').bind_value_from(exp_state, 'sd_card').disable()</code>, a read-only indicator. It is refreshed every 5 s, when a phone connects and when you change tab. The protocol's step 10, "make sure that the SD card is checked on", means: make sure the device <em>shows</em> it ticked. If it is not: "try to turn off the Portiloop, and then, unplug and replug the SD card and try again" [1].</li>
+    <li><strong>Test Sound 🔊.</strong> Plays the stimulation sound once at the current volume. It is silent when the selected pipeline has no stimulator, and it plays in Cond A as well as in Cond B. Details in <a href="04-night.html#sound">tutorial 04</a>.</li>
+    <li><strong>Cond A / Cond B.</strong> The experimental condition. In the code, Cond B means that sounds are played (<code>forward=lambda x: x == 'Cond B'</code> turns it into <code>stim_on = True</code>); Cond A is the sham condition: detection runs and is logged in exactly the same way, but no sound is played. The condition is written in the file name (<code>CONDA</code> or <code>CONDB</code>). See <a href="01-overview.html">tutorial 01</a> for the design and blinding. The toggle is locked during a recording.</li>
+    <li><strong>Start ▶ and Stop.</strong> Only one of them is active at a time. What Start creates is described in <a href="04-night.html#start">tutorial 04</a>.</li>
+    <li><strong>Timer and Current experiment.</strong> During a recording the tab shows <code>Timer: H:MM:SS</code> since Start, and <code>Current experiment:</code> followed by the file name without <code>.csv</code>.</li>
+  </ul>
+  <div class="callout warning"><span class="callout-title">Warning: the condition is remembered</span>The Cond A/B toggle keeps the value of the last recording, even after the device is turned off and on (see <a href="#memory">What the Control Center remembers</a>). Never assume it is on the right condition: set it from tonight's instruction every night (protocol step 11: "select Cond A or Cond B, depending on the experimenter's instructions").</div>
+
+  <h2 id="check">The Check tab: electrode impedance</h2>
+  <p>The protocol's step 9: "Check the impedance by going to the Check panel. Press on the check button. Good impedance levels should be displayed in green." The tab has a <strong>Check ⚡</strong> button (one measurement), a <strong>Live</strong> switch (repeated measurements until you switch it off, useful while you fix an electrode), the coloured tiles, a status line and this note from the code:</p>
+  <blockquote class="quote">"chN is the electrode on pin N of the connector. The impedance of the reference cannot be measured, only its connection. Electrodes OFF at the last check are disabled in the next recording (except the detection channel)."<cite>simple_gui.py [2]</cite></blockquote>
+
+  <div class="callout neuro"><span class="callout-title">For neuroscientists</span><strong>Impedance</strong> is the electrical "resistance" of the contact between the skin and the electrode, for an alternating current (hence "impedance" rather than resistance). A high impedance means a poor contact: the electrode picks up more mains hum and more movement artifacts, and its signal drifts more. It does not make the brain signal smaller, but it makes the noise larger. Abrasion (Nuprep), enough gel and pressure lower it; the protocol's skin preparation in <a href="02-preparation.html">tutorial 02</a> is there for that.</div>
+
+  <h3 id="method">How the Portiloop measures it</h3>
+  <p>The method is described at the top of <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/hardware/impedance.py"><code>impedance.py</code></a> [3]. In plain language:</p>
+  <ol class="steps">
+    <li><strong>Is each electrode connected?</strong> The amplifier chip pushes a tiny constant current (24 nA) into each electrode input. Through a connected electrode it flows away into the body; on an input with no electrode it has nowhere to go, the input's voltage climbs to the limit, and the chip flags the electrode as off. Electrodes that fail this test are shown <strong>OFF</strong>.</li>
+    <li><strong>How good is the contact?</strong> Only the connected electrodes then receive a small alternating current: a square wave of 6 nA at 31.25 Hz. It flows through the electrode into the scalp and back through the bias (ground) electrode, and produces a 31.25 Hz voltage on that channel. After 0.25 s of settling, the code records 1 s at 250 samples per second and measures the amplitude of the 31.25 Hz component (a least-squares fit that also models slow drift and 50/60 Hz mains hum, so that they do not bias the result).</li>
+    <li><strong>Ohm's law.</strong> Voltage divided by current gives the impedance. The Portiloop board has a 5 kΩ resistor in series with each electrode, which the code subtracts (<code>PORTILOOP_SERIES_RESISTANCE = 5e3</code>).</li>
+  </ol>
+  <p>A single check takes a few seconds: our sum of the durations in the code is about 3.4 s of measurement (a 2 s first connection test, a 0.1 s second one, 0.25 s of settling and 1 s of recording), plus the time to configure the chip. The check cannot run during a recording (the status line reads "Unavailable during a recording."), and pressing Start stops it.</p>
+
+  <h3 id="colours">The colours</h3>
+  <p>The tiles follow fixed thresholds, <code>DEFAULT_THRESHOLDS_KOHM = (10, 25)</code> in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/impedance_display.py"><code>impedance_display.py</code></a> [4]:</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Tile</th><th>Rule in the code</th><th>Meaning at the bedside</th></tr></thead>
+    <tbody>
+      <tr><td><span class="sw" style="background:#43a047"></span>green</td><td>below 10 kΩ</td><td>Good contact: what the protocol asks for.</td></tr>
+      <tr><td><span class="sw" style="background:#fdd835"></span>yellow</td><td>10 kΩ or more, below 25 kΩ</td><td>Usable, but worth improving if you have time, especially on the detection electrode (Cz).</td></tr>
+      <tr><td><span class="sw" style="background:#e53935"></span>red</td><td>25 kΩ or more, or OFF</td><td>Poor contact or no contact: fix it (except the two ECG electrodes, see below).</td></tr>
+      <tr><td><span class="sw" style="background:#bdbdbd"></span>grey</td><td>uncertain: below 1 kΩ, a saturated channel, or not measured</td><td>"&lt; 1 kΩ" is below the accuracy of the method; it is not a problem. A grey "?" means the channel saturated, usually because the reference is off.</td></tr>
+    </tbody>
+  </table></div>
+  <p>The legend under the tiles reads "&gt; 25 kΩ or OFF" for red; the code's rule is "25 kΩ or more", so exactly 25.0 kΩ is red too. The first screenshot of the protocol (Check tab) shows a tile at 0.5 kΩ in green: that was an older version; the current code shows such a value as grey "&lt; 1 kΩ".</p>
+
+  <h3 id="reference">Why the reference only says "connected" or "OFF"</h3>
+  <p>The protocol notes: "Regarding the reference (i.e., the white electrode), it should be displayed whether the electrode is attached or not." This is a limit of the hardware, explained in the code:</p>
+  <blockquote class="quote">"On Portiloop (v2.3), the impedance of the reference electrode cannot be measured: it only reaches the ADS1299 through SRB1, which has no lead-off current source (all INxN pins are unconnected). Its connection is inferred instead: when the reference is unplugged, SRB1 floats and the channels whose electrode passes the DC lead-off check saturate."<cite>impedance.py [3]</cite></blockquote>
+  <p>In other words: the reference (white, behind the right ear) is the common point that every channel is measured against, and the chip has no test current on that side. When it falls off, all the connected channels jump to the limit of the amplifier at once, and the code concludes "reference OFF". The REF tile is green "connected", red "OFF", or grey "?" when no electrode is connected at all (then the code cannot tell). Two hints may appear under the tiles: "The reference electrode is off: reconnect it to measure the electrodes." and "All electrodes are off: check the ground (bias) electrode first." [4].</p>
+
+  <h3 id="ecg">The ECG electrodes</h3>
+  <p>The protocol warns: "It is normal that the impedance levels of ch1 (ECG1) and ch2 (ECG2) are not good, because they are far away from the reference electrode." The code says nothing about ECG. As the method above shows, the test current returns through the bias electrode (grey, on the right earlobe), not through the reference, so the value mostly reflects the electrode's own contact, plus the tissue between the chest and the earlobe; we do not know how large that tissue contribution is. Another difference may contribute: the protocol cleans the chest with alcohol only, while the scalp sites are exfoliated. Either way, the ECG signal (the heartbeat) is much larger than the EEG, and in the tutorial night the heartbeats are clearly visible on ch1 despite its red tile (see the lead-off excerpt in <a href="04-night.html#leadoff">tutorial 04</a>). Check the ECG on the Output tab rather than chasing a green tile.</p>
+
+  <h3 id="off-disabled">An OFF electrode is switched off for the next recording</h3>
+  <p>The result of the last check does more than inform you. When you press Start, the code powers down every channel whose electrode was OFF at the last check (it then records 0 all night), except the detection channel, and except when <em>all</em> electrodes were OFF (then the bias electrode was probably off, and all channels are kept) (<code>_channel_states</code> in [2]). The check is kept in memory and reused at every following Start, until the next check or until the device restarts. Its values are written in the recording's <code>_metadata.json</code> (<code>impedances_kohm</code>, <code>impedance_check_time</code>; see <a href="05-files.html">tutorial 05</a>).</p>
+  <div class="callout warning"><span class="callout-title">Warning: check again after fixing an electrode</span>If an electrode was OFF at the check and you attach it afterwards without pressing Check again, its channel is still powered down at Start and records zeros all night. Always run a last check after the last fix, just before Start. If the detection electrode (Cz, ch6) is OFF, it is not powered down, but the lead-off protection described in <a href="04-night.html#leadoff">tutorial 04</a> will find it unconnected at Start and keep detection and stimulation paused for the whole recording.</div>
+
+  <div class="widget" id="imp">
+    <div class="widget-title">Reading an impedance check</div>
+    <p class="widget-desc">What to try: the tiles show the check stored in the tutorial night's <code>_metadata.json</code>, coloured with the rules of the code. Tap a tile for its electrode, its colour and what to do. Then switch to the other cases (illustrations of what the code would display, not real measurements) and type your own value in "Try a value".</p>
+    <div class="controls">
+      <label for="imp-scn">Case <select id="imp-scn">
+        <option value="night">The tutorial night (real check)</option>
+        <option value="fz">Fz (ch7) unplugged</option>
+        <option value="cz">Cz (ch6, detection) unplugged</option>
+        <option value="ref">Reference (white) off</option>
+        <option value="bias">Bias (grey, ground) off</option>
+      </select></label>
+    </div>
+    <div class="imp-tiles" id="imp-tiles" role="group" aria-label="Impedance tiles"></div>
+    <div class="imp-legend"><span class="sw" style="background:#43a047"></span>&lt; 10 kΩ &nbsp; <span class="sw" style="background:#fdd835"></span>10-25 kΩ &nbsp; <span class="sw" style="background:#e53935"></span>&gt; 25 kΩ or OFF &nbsp; <span class="sw" style="background:#bdbdbd"></span>uncertain (&lt; 1 kΩ is below the accuracy)</div>
+    <div class="imp-hint" id="imp-hint"></div>
+    <div class="readout">
+      <div><div class="k">Green</div><div class="v" id="imp-ng">…</div></div>
+      <div><div class="k">Yellow</div><div class="v" id="imp-ny">…</div></div>
+      <div><div class="k">Red</div><div class="v" id="imp-nr">…</div></div>
+      <div><div class="k">Disabled at next Start</div><div class="v" id="imp-dis">…</div></div>
+    </div>
+    <div class="imp-explain" id="imp-explain" aria-live="polite"></div>
+    <div class="imp-try">
+      <label for="imp-val">Try a value (kΩ) <input type="number" id="imp-val" min="0" max="999" step="0.1" value="20.6" style="width:6em"></label>
+      <label><input type="checkbox" id="imp-off"> OFF</label>
+      <div class="imp-tile" id="imp-trytile" aria-live="polite"></div>
+      <span id="imp-trytxt"></span>
+    </div>
+    <div class="status" id="imp-status">Loading the tutorial night…</div>
+  </div>
+
+  <h2 id="output">The Output tab</h2>
+  <p>The protocol suggests: "If the impedance for the other electrodes is not good, please check the signals first (in the panel Output, select the channel of interest). If the signals are not good, redo the electrode positioning (remove the electrode, check if the amount of gel is sufficient and add more if not, replace the electrode and press on it)." What the tab does in the code [2]:</p>
+  <ul>
+    <li>It plots <strong>one channel at a time</strong>, chosen with <strong>Display Channel</strong> (default "Channel 2"), as the <strong>Raw</strong> signal or after the pipeline's <strong>Filter</strong>.</li>
+    <li>The plot covers the last 5 s, drawing 1 point out of 4 (<code>LINE_PLOT_WINDOW = 5</code>, <code>LINE_PLOT_STRIDE = 4</code>), and is refreshed about every 2 s.</li>
+    <li><strong>The plot is visible only while a recording is running</strong> (<code>line_plot.bind_visibility_from(start_button, 'enabled', backward=lambda x: not x)</code>).</li>
+  </ul>
+  <div class="callout warning"><span class="callout-title">Warning: no signal before Start</span>Because the plot only exists during a recording, "check the signals first" before the night means pressing Start, looking at the channels, pressing Stop, and pressing Start again for the night. That first short recording is a separate file (it is harmless, but name and file it accordingly), and the impedance check cannot run while it records. The channel numbers are the same as in the Check tab: ch6 is Cz, the detection channel.</div>
+
+  <h2 id="advanced">The Advanced tab, setting by setting</h2>
+  <p>The tab starts with a warning in orange, "If you are a subject in an experiment, do not change any of these options unless explicitly prompted to!", and a disk usage line (of the SD card when it is present, otherwise of the device's internal memory). Every control of this tab is locked while a recording runs. The protocol's steps 12 to 23 set them as follows; the defaults are those of the code [2], used on a fresh installation and after a software update (see <a href="#memory">below</a>).</p>
+
+  <div class="scroll-x"><table>
+    <thead><tr><th>Setting (as on screen)</th><th>Protocol</th><th>Code default</th><th>What it changes</th></tr></thead>
+    <tbody>
+      <tr><td><a href="#pipeline">Pipeline</a></td><td>Sleep slow oscillations (upstate)</td><td>Acquisition only</td><td>What the device computes and whether it can play sounds</td></tr>
+      <tr><td><a href="#freq">Sample frequency (Hz)</a></td><td>250</td><td>250</td><td>Samples per second, per channel</td></tr>
+      <tr><td><a href="#notch">Notch filter frequency (Hz)</a></td><td>50</td><td><strong>60</strong></td><td>Mains frequency removed before detection</td></tr>
+      <tr><td><a href="#detch">Detection channel</a></td><td>6</td><td>6</td><td>Electrode whose slow oscillations trigger the sound (ch6 = Cz)</td></tr>
+      <tr><td><a href="#clock">Clock</a></td><td>Coral</td><td>Coral</td><td>Which clock paces the sampling</td></tr>
+      <tr><td><a href="#sync">Sync Clock with Browser 🕒</a></td><td>press it</td><td>(button)</td><td>Sets the device clock from the phone</td></tr>
+      <tr><td><a href="#delay">Stimulation starts after</a></td><td>"desired delay" (example 45 min)</td><td>0 minutes</td><td>No detection and no sound for that long after Start</td></tr>
+      <tr><td><a href="#volume">Sound output volume</a></td><td>50%</td><td>not fixed (see below)</td><td>Software volume of the sound</td></tr>
+      <tr><td><a href="#lsl">Stream LSL</a></td><td>unchecked</td><td>unchecked</td><td>Streaming of the data on the network</td></tr>
+      <tr><td><a href="#save">Save recording locally</a></td><td>checked</td><td>checked</td><td>Whether any file is written</td></tr>
+      <tr><td><a href="#name">Recording name</a></td><td>CLAS_X (X = participant number)</td><td>empty (device name used)</td><td>Start of the file and folder names</td></tr>
+      <tr><td><a href="#delays">Min / Max / Inter-stim delay (ms)</a></td><td>0, 0, 0</td><td>0, 0, 0</td><td>Extra delays between detection and sound</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="pipeline">Pipeline</h3>
+  <p>Protocol step 12: "make sure that the Pipeline is set to Sleep slow oscillations (upstate)". The list comes from <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_pipelines.py"><code>custom_pipelines.py</code></a>: Acquisition only, Sleep spindles, Sleep slow oscillations and Sleep slow oscillations (upstate). The default is the first one, "Acquisition only", which records but has no detector and no stimulator: no sound, ever, and Test Sound is silent. Be careful with the name: "Sleep slow oscillations" without "(upstate)" fires as soon as a slow wave meets the criteria, which can be during its negative half-wave; only the "(upstate)" pipeline aims the sound at the up-state (see <a href="01-overview.html">tutorial 01</a>).</p>
+
+  <h3 id="freq">Sample frequency (Hz)</h3>
+  <p>Protocol step 13: "Double-check that the Sample frequency (Hz) is set to 250." The choices are 50, 100, 250, 500 and 1000 Hz (<code>possible_freqs = [50, 100, 250, 500, 1000]</code>), default 250. 250 Hz is the rate the filters of the pipeline were designed for: the notch filter uses precomputed coefficients only at 250 Hz, "from the Portiloop PLOS ONE paper" [9, 10]. From our reading of the code (not tested on a device), at 50 Hz the pipeline's 0.5 to 30 Hz filter cannot even be built, because 30 Hz is above half the sampling rate. Keep 250.</p>
+
+  <h3 id="notch">Notch filter frequency (Hz)</h3>
+  <p>Protocol step 14: "Double-check that the Notch filter frequency (Hz) is set to 50." The choices are 60 and 50, and <strong>the code's default is 60</strong> (<code>self.power_line = 60</code>), the mains frequency of North America. 50 Hz is the mains frequency in Zambia, where the study runs; in another country, use the local mains frequency.</p>
+  <p>What it changes: the notch only filters the signal the detector sees. The CSV file stores the raw signals, which are the same whatever the notch. We computed the gain of the upstate pipeline's whole filter chain at 250 Hz (the 0.5 to 30 Hz filter, the notch and the final 0.16 to 4 Hz filter, with the coefficients of <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_processors.py"><code>custom_processors.py</code></a> [9]): even with the wrong 60 Hz notch, 50 Hz hum is attenuated by about 81 dB before detection, because the final slow-wave filter already removes it. So a wrong notch probably matters little for slow-oscillation detection; it matters more for the other pipelines, and the value is stored in the metadata (<code>filter_settings.power_line</code>), where a wrong value is confusing later. This is our computation, not a measurement on the device. Set 50, as the protocol asks. The tutorial night was recorded with 60.</p>
+
+  <h3 id="detch">Detection channel</h3>
+  <p>Protocol step 15: "Double-check that the Detection channel is set to 6." Channels 1 to 8; the default is 6 (<code>"channel_detection": 6</code> in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/constants.py"><code>constants.py</code></a> [6]). With the protocol's montage, ch6 is Cz (green electrode), where slow oscillations are large. The detection channel is also the one that the device never powers down after an OFF check, and the one whose loss pauses stimulation during the night (<a href="04-night.html#leadoff">tutorial 04</a>).</p>
+
+  <h3 id="clock">Clock</h3>
+  <p>Protocol step 16: "Double-check that the Clock is set to Coral." The toggle offers <strong>ADS</strong> and <strong>Coral</strong>; Coral is the default (<code>"python_clock": True</code>). With Coral, the amplifier runs at twice the target rate and the device's own timer reads one sample every 4 ms (at 250 Hz); with ADS, the device waits for each conversion of the amplifier. Missed samples are counted in the recording's <code>_stats.json</code> (<a href="05-files.html">tutorial 05</a>).</p>
+
+  <h3 id="sync">Sync Clock with Browser 🕒</h3>
+  <p>Protocol step 17: "Click on the 'Sync clock with browser' button." The device takes the time of the phone and sets its own clock to it. It already does this by itself each time a phone opens the page, when the two clocks differ by 1.5 s or more; the button forces it. It never changes the clock during a recording, "to prevent timestamp jumps" [2]. A green notification "Portiloop clock synchronized with browser (HH:MM:SS)" confirms it.</p>
+  <p>Why it matters: the date and time in the file name, and the times in the metadata and in the lead-off log, come from the device clock. The device writes them in its own time zone, which the Portiloop software does not set; we do not know which time zone the lab's devices use, so compare the file name with the real start time once, and note the difference in your lab notebook. If the phone's clock is wrong, the device copies the wrong time.</p>
+
+  <h3 id="delay">Stimulation starts after</h3>
+  <p>Protocol step 18: "Use the slider labeled 'Stimulation starts after' to set the desired delay before stimulation begins (example: 45 minutes). This duration corresponds to the period during which no sound is played at the beginning of the recording. It can be adjusted based on the expected time needed to fall asleep." The slider goes from 0 to 180 minutes, default 0 (no delay), and the label reads "Stimulation starts after: {x} minutes". During the delay the device neither detects nor stimulates, in both conditions. How it works, and what happens when you stop and restart, is in <a href="04-night.html#delay">tutorial 04</a>. The tutorial night used 25 minutes.</p>
+
+  <h3 id="volume">Sound output volume</h3>
+  <p>Protocol step 19: "Double-check that the Sound output volume is set to 50%." The slider goes from 0 to 100% in steps of 1 and changes the device's volume immediately, so that Test Sound plays at the new level. It sets a software volume control of the sound system (the ALSA control named <code>SoftMaster</code>). Two facts matter:</p>
+  <ul>
+    <li><strong>There is no 50% default.</strong> The slider starts at the value of the last recording (it is remembered), or at the sound system's current level, or at 100 if that cannot be read (<code>self.volume = int(self.mixer.getvolume()[0])</code>, fallback <code>"volume": 100</code>). Check it every night.</li>
+    <li><strong>50% is not a sound level.</strong> It is a position of a software control; the loudness at the ear also depends on the earphones and their fit. If your study reports a level in dB, it must be measured with the actual earphones.</li>
+  </ul>
+
+  <h3 id="lsl">Stream LSL</h3>
+  <p>Protocol step 20: "Double-check that Stream LSL is unchecked." LSL (Lab Streaming Layer) sends the signals and markers over the network to another computer, for example for live monitoring in the lab. Nobody receives them at a participant's home; default unchecked.</p>
+
+  <h3 id="save">Save recording locally</h3>
+  <p>Protocol step 21: "make sure that 'Save Recording Locally' is checked on." Default checked (config key <code>record</code>). <strong>If it is unchecked, no CSV and no JSON file is written</strong>: the device detects and stimulates all night and keeps nothing. "Locally" means on the device: on the SD card when the card is detected, otherwise in the device's internal memory, which the README warns against ("Recording large CSV files in internal memory will quickly make your Portiloop unusable") [8].</p>
+
+  <h3 id="name">Recording name</h3>
+  <p>Protocol step 22: "under 'Recording name', write down the name of the recording (example: CLAS_X), where X is the participant number." The name becomes the start of the folder and file names: <code>&lt;name&gt;_YYYY-MM-DD_HH-MM-SS_CONDA.csv</code> or <code>..._CONDB.csv</code> (<a href="04-night.html#start">tutorial 04</a>). If the box is empty, the device name is used instead (<code>prefix = self.custom_exp_name or portiloop_ID</code>). The box has a clear (×) button.</p>
+  <div class="callout warning"><span class="callout-title">Warning: the name is remembered too</span>The recording name of the previous night is still in the box when you open the page, even after a restart. If you do not change it, tonight's file carries the previous participant's number. Never put a participant's real name in this box: it ends up in the file names that are copied and shared.</div>
+
+  <h3 id="delays">Min stim delay, Max stim delay, Inter-stim delay (ms)</h3>
+  <p>Protocol step 23: all three equal to 0. They are in milliseconds and converted to seconds by the code (<code>int(self.min_delay) / 1000</code>). When all three are 0, the sound is played as soon as the detector fires, which is what the upstate pipeline is designed for (the only spacing left is a minimum of 0.1 s between sounds, <a href="04-night.html#during">tutorial 04</a>). If any of them is not 0, the code switches to a different scheme: after a detection it waits a random time drawn between Min and Max, then plays the sound, then ignores detections for the Inter-stim delay (<code>RandomTimingDelayer</code> in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_stimulators.py"><code>custom_stimulators.py</code></a>). That would move the sound away from the up-state.</p>
+
+  <h3 id="presets">Preset, Preset name, Save preset</h3>
+  <p>A preset is a saved copy of the settings, stored as a file in <code>~/workspace/app_state/</code> on the device. "Save preset" saves the current settings under the name typed in "Preset name"; choosing a preset in the "Preset" list loads it immediately. The list always includes "Previous run", which the device writes automatically at every Start. A preset contains everything the device remembers, <strong>including the condition and the recording name</strong>: loading a preset can silently switch Cond A to Cond B. Check the Control tab after loading one.</p>
+
+  <h2 id="memory">What the Control Center remembers</h2>
+  <p>The settings live in the memory of the device while it is on: reloading the page, or opening it from another phone, shows the same values. In addition, at every Start, the device saves them in <code>Previous run.json</code>, and it reloads that file when it starts up [2]. The saved fields are listed in the code:</p>
+<pre data-file="portiloop/src/simple_gui/simple_gui.py (PERSISTED_FIELDS) [2]"><code class="language-python">PERSISTED_FIELDS = (
+    "lsl", "save_local", "selected_channel", "display_data",
+    "min_delay", "max_delay", "inter_stim_delay", "sleep_timeout", "volume",
+    "select_freq", "power_line", "channel_detection",
+    "pipeline_key", "custom_exp_name", "stim_on", "python_clock",
+)</code></pre>
+  <p>In words: Stream LSL, Save recording locally, the Output tab's channel and Raw/Filter, the three delays, "Stimulation starts after", the volume, the sample frequency, the notch, the detection channel, the pipeline, <strong>the recording name</strong>, <strong>the condition (Cond A/B)</strong> and the clock. Consequences:</p>
+  <ul>
+    <li>After a normal night, most settings are already right the next evening; that is convenient, and it is also how the previous participant's name and condition come back.</li>
+    <li>Changes made <em>without</em> pressing Start are not saved: if the device restarts before Start, it comes back with the settings of the last Start.</li>
+    <li>The saved file is ignored when the software version or the number of channels differs (<code>if state.get("nb_channels") != NB_CHANNELS or state.get("software_version") != __version__: return</code>). <strong>After a software update, every setting returns to the code defaults</strong>: Acquisition only, notch 60 Hz, delay 0, empty name, Cond A.</li>
+    <li>The impedance check is not saved: after a restart, the metadata says <code>"?"</code> until you run a new check.</li>
+  </ul>
+
+  <h2 id="practice">Practice: set up a (mock) Control Center</h2>
+  <p>The widget below is a simplified mock of the Control Center, written for this tutorial; it is not the real software and it controls nothing. It reproduces the controls, their defaults and their behaviour as found in the code, and checks your settings against the protocol.</p>
+
+  <div class="widget" id="cc">
+    <div class="widget-title">Settings checklist on a mock Control Center</div>
+    <p class="widget-desc">What to try: start from "Left over from the previous night", fix everything the checklist flags (tap an item for the protocol's words and what the code does), press Sync and Test Sound, then Start. Then try "Fresh installation or software update", and load the "Previous run" preset to see what it brings back.</p>
+    <div class="controls">
+      <label for="cc-scn">Starting point <select id="cc-scn">
+        <option value="prev">Left over from the previous night</option>
+        <option value="fresh">Fresh installation or software update</option>
+        <option value="ok">As the protocol asks</option>
+      </select></label>
+      <label for="cc-pid">Tonight's participant number <input type="number" id="cc-pid" min="1" max="999" step="1" value="12" style="width:5em"></label>
+      <label for="cc-cond">Tonight's condition (instruction sheet) <select id="cc-cond"><option value="A">Cond A</option><option value="B">Cond B</option></select></label>
+      <label><input type="checkbox" id="cc-sdin" checked> SD card inserted</label>
+    </div>
+    <div class="cc-grid">
+      <div class="cc-phone" aria-label="Simplified mock of the Control Center">
+        <div class="cc-mock">Simplified mock, not the real software</div>
+        <div class="cc-head"><div class="t1">Portiloop 🧠</div><div class="t2">Control Center</div><div class="t3">Connected to: <strong>mock-portiloop</strong> (v2 - 8 channels)</div></div>
+        <div class="cc-tabs" role="tablist">
+          <button type="button" role="tab" data-tab="control" aria-selected="true">Control</button>
+          <button type="button" role="tab" data-tab="check" aria-selected="false">Ω Check</button>
+          <button type="button" role="tab" data-tab="output" aria-selected="false">Output</button>
+          <button type="button" role="tab" data-tab="advanced" aria-selected="false">Advanced</button>
+        </div>
+        <div class="cc-panel" data-panel="control">
+          <div class="cc-row"><label class="cc-chk"><input type="checkbox" id="cc-sd" disabled> SD Card</label></div>
+          <div class="cc-row"><button type="button" class="cc-b" id="cc-test">Test Sound 🔊</button></div>
+          <div class="cc-msg" id="cc-testmsg"></div>
+          <div class="cc-row"><span class="cc-tog" id="cc-condtog"><button type="button" data-v="A">Cond A</button><button type="button" data-v="B">Cond B</button></span></div>
+          <div class="cc-row"><button type="button" class="cc-b go" id="cc-start">Start ▶</button><button type="button" class="cc-b stop" id="cc-stop" disabled>Stop</button></div>
+          <div class="cc-big" id="cc-timer"></div>
+          <div class="cc-file" id="cc-file">Current experiment:</div>
+        </div>
+        <div class="cc-panel" data-panel="check" hidden>
+          <div class="cc-big">Electrode impedance check</div>
+          <div class="cc-row"><button type="button" class="cc-b" id="cc-checkbtn">Check ⚡</button><label class="cc-chk"><input type="checkbox" id="cc-live"> Live</label></div>
+          <div class="imp-tiles" id="cc-tiles"></div>
+          <div class="cc-msg" id="cc-checkstatus">No check performed yet.</div>
+          <div class="cc-msg">chN is the electrode on pin N of the connector. The impedance of the reference cannot be measured, only its connection. Electrodes OFF at the last check are disabled in the next recording (except the detection channel).</div>
+        </div>
+        <div class="cc-panel" data-panel="output" hidden>
+          <div class="cc-msg" id="cc-plotmsg">The 5 s plot of one channel appears here only during a recording.</div>
+          <div class="cc-field"><label for="cc-dispch">Display Channel</label><select id="cc-dispch"></select></div>
+          <div class="cc-row"><span class="cc-tog" id="cc-rawtog"><button type="button" data-v="Raw">Raw</button><button type="button" data-v="Filter">Filter</button></span></div>
+        </div>
+        <div class="cc-panel" data-panel="advanced" hidden>
+          <div class="cc-warn">If you are a subject in an experiment, do not change any of these options unless explicitly prompted to!</div>
+          <div class="cc-big" id="cc-disk">Disk Usage:</div>
+          <div class="cc-field"><label for="cc-preset">Preset</label><select id="cc-preset" data-lock></select></div>
+          <div class="cc-field"><label for="cc-pipe">Pipeline</label><select id="cc-pipe" data-lock></select></div>
+          <div class="cc-field"><label for="cc-freq">Sample frequency (Hz)</label><select id="cc-freq" data-lock></select></div>
+          <div class="cc-field"><label for="cc-notch">Notch filter frequency (Hz)</label><select id="cc-notch" data-lock><option>60</option><option>50</option></select></div>
+          <div class="cc-field"><label for="cc-det">Detection channel</label><select id="cc-det" data-lock></select></div>
+          <div class="cc-field" style="align-items:center">Clock:<span class="cc-tog" id="cc-clocktog"><button type="button" data-v="ADS">ADS</button><button type="button" data-v="Coral">Coral</button></span></div>
+          <div class="cc-row"><button type="button" class="cc-b" id="cc-sync" data-lock>Sync Clock with Browser 🕒</button></div>
+          <div class="cc-field"><input type="range" id="cc-delay" min="0" max="180" step="1" data-lock aria-label="Stimulation starts after"><span id="cc-delaylab" style="text-align:center;color:var(--fg)"></span></div>
+          <div class="cc-field"><input type="range" id="cc-vol" min="0" max="100" step="1" data-lock aria-label="Sound output volume"><span id="cc-vollab" style="text-align:center;color:var(--fg)"></span></div>
+          <label class="cc-chk"><input type="checkbox" id="cc-lsl" data-lock> Stream LSL</label>
+          <label class="cc-chk"><input type="checkbox" id="cc-save" data-lock> Save recording locally</label>
+          <div class="cc-field"><label for="cc-name">Recording name</label><input type="text" id="cc-name" data-lock autocomplete="off"></div>
+          <div class="cc-field"><label for="cc-mind">Min stim delay (ms)</label><input type="number" id="cc-mind" data-lock></div>
+          <div class="cc-field"><label for="cc-maxd">Max stim delay (ms)</label><input type="number" id="cc-maxd" data-lock></div>
+          <div class="cc-field"><label for="cc-isd">Inter-stim delay (ms)</label><input type="number" id="cc-isd" data-lock></div>
+          <div class="cc-field"><label for="cc-pname">Preset name</label><input type="text" id="cc-pname" data-lock autocomplete="off"></div>
+          <div class="cc-row"><button type="button" class="cc-b" id="cc-psave" data-lock>Save preset</button></div>
+        </div>
+      </div>
+      <div>
+        <div class="cc-sum" id="cc-sum" aria-live="polite"></div>
+        <div class="cc-list" id="cc-list"></div>
+      </div>
+    </div>
+    <div class="status" id="cc-status"></div>
+  </div>
+
+  <h2 id="discrepancies">Protocol and software: where they differ</h2>
+  <div class="callout danger"><span class="callout-title">Protocol versus software</span>
+    <p>The protocol is right about what to set. On the following points the software behaves differently from what its words suggest; follow the "What to do" column.</p>
+    <div class="scroll-x"><table class="disc">
+      <thead><tr><th>Protocol</th><th>What the code does</th><th>What to do</th></tr></thead>
+      <tbody>
+        <tr><td>Notch "is set to 50" (step 14)</td><td>Default is 60 Hz; the last value is remembered, but a software update resets it to 60.</td><td>Read the value every night; select 50 when it shows 60.</td></tr>
+        <tr><td>"make sure that the SD card is checked on" (step 10)</td><td>The SD Card box is a read-only indicator; you cannot tick it.</td><td>If it is not ticked, turn the device off, reseat the card, try again (protocol). Do not start without it.</td></tr>
+        <tr><td>Volume "is set to 50%" (step 19)</td><td>No 50% default: last value, or the sound system's level, or 100. The percentage is a software volume, not a calibrated level.</td><td>Read and set it every night.</td></tr>
+        <tr><td>"in the panel Output, select the channel of interest" (step 9)</td><td>Output shows one channel at a time, and only while a recording runs.</td><td>Start, look, Stop, then Start again for the night (two files), or rely on the Check tab.</td></tr>
+        <tr><td>No sound on Test Sound "is normal if the Pipeline is set to 'Acquisition only'" (step 24)</td><td>True: Acquisition only is the one pipeline without a stimulator. It plays in Cond A as well as in Cond B.</td><td>Set the upstate pipeline before testing the sound.</td></tr>
+        <tr><td>"Wifi name: &lt;name_of_the_Portiloop&gt;", "Password: portiloop" (step 7)</td><td>Neither is in the code: both are typed at installation (the prompts give "portiloop-wifi" and "portiloop" as examples).</td><td>Write each device's network name and password on its label or in the lab notebook.</td></tr>
+        <tr><td>ECG impedance is high "because they are far away from the reference electrode" (step 9)</td><td>The test current returns through the bias electrode, not the reference; the code says nothing about ECG.</td><td>Accept red ECG tiles if the heartbeat is visible.</td></tr>
+        <tr><td>Cond and recording name: set each night (steps 11, 22)</td><td>Both are remembered from the last Start, and both are inside presets.</td><td>Set both every night, after loading any preset.</td></tr>
+        <tr><td>(not in the protocol)</td><td>Electrodes OFF at the last check are powered down in the next recording, except the detection channel.</td><td>Run Check again after the last fix, just before Start.</td></tr>
+        <tr><td>Clock "is set to Coral" (step 16)</td><td>Correct: Coral is the default.</td><td>Keep Coral.</td></tr>
+        <tr><td>Screenshots</td><td>Some screenshots of the protocol show an older version: no Check tab, and 0.5 kΩ shown green (now grey "&lt; 1 kΩ").</td><td>Trust the screen of your device.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Points about the night itself (Test Sound, the delay, the power button, the 10 h limit) are in <a href="04-night.html#discrepancies">tutorial 04</a>.</p>
+  </div>
+
+  <h2 id="exercises">Exercises</h2>
+  <details class="exercise"><summary>The previous participant's settings</summary>
+    <p>You open the Control Center for participant 12, whose instruction sheet says Cond A. The Recording name box shows <code>CLAS_11</code> and the toggle shows Cond B. Everything else matches the protocol. What do you change, and what file name would the device have created if you had pressed Start right away?</p>
+  </details>
+  <details class="solution"><summary>Answer</summary>
+    <p>Change the name to <code>CLAS_12</code> and the toggle to Cond A. Without the changes, the file would have been <code>CLAS_11_&lt;date&gt;_&lt;time&gt;_CONDB.csv</code>: the wrong participant and the wrong condition, with sounds played to a participant who should have had the sham night. Both values are remembered from the last Start (<code>custom_exp_name</code> and <code>stim_on</code> in <code>PERSISTED_FIELDS</code>).</p>
+  </details>
+  <details class="exercise"><summary>Every tile is red</summary>
+    <p>You press Check. All eight tiles show "OFF" in red and the REF tile shows a grey "?". Which electrode do you check first, and what will happen to the channels if you press Start without fixing anything?</p>
+  </details>
+  <details class="solution"><summary>Answer</summary>
+    <p>The bias (ground) electrode, grey, on the right earlobe: the code's hint is "All electrodes are off: check the ground (bias) electrode first." When all electrodes are OFF, the code does not power any channel down (it assumes the bias is off), so all channels are recorded; but with no ground contact the signals are useless, and at Start the lead-off protection will find the electrodes unconnected and pause detection. Fix the bias, then run Check again.</p>
+  </details>
+  <details class="exercise"><summary>Does the notch change the data?</summary>
+    <p>A night was recorded with the notch at 60 Hz in a country with 50 Hz mains. Is the CSV file contaminated by the wrong setting? Was detection affected?</p>
+  </details>
+  <details class="solution"><summary>Answer</summary>
+    <p>The CSV stores the raw signals, which do not depend on the notch, so the file is the same; you filter it offline anyway (<a href="06-first-look.html">tutorial 06</a>). The notch only acts on the signal the detector sees. By our computation, the upstate pipeline's filter chain attenuates 50 Hz by about 81 dB even with the 60 Hz notch, so detection was probably barely affected; but this is a computation, not a test, and the metadata will record <code>power_line: 60</code>. Note the deviation in the lab notebook.</p>
+  </details>
+  <details class="exercise"><summary>The detection electrode is yellow</summary>
+    <p>In the tutorial night's check, Cz (ch6) was 20.6 kΩ. What colour was its tile, and what would you do in a real session?</p>
+  </details>
+  <details class="solution"><summary>Answer</summary>
+    <p>Yellow (10 to below 25 kΩ). Cz is the detection electrode, so it deserves the most care: press on it, add gel or rework the skin preparation, and use Live mode to watch the value go down, aiming for green. In the tutorial night this electrode is the one that came off near the end (<a href="04-night.html#leadoff">tutorial 04</a>); one night cannot tell whether the two facts are related.</p>
+  </details>
+
+  <h2 id="references">References</h2>
+  <ol class="refs">
+    <li>CLAS-Zambia protocol, sections III and IV (lab document, not public).</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/simple_gui/simple_gui.py">portiloop/src/simple_gui/simple_gui.py</a>, the Control Center (portiloop-software, branch main).</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/hardware/impedance.py">portiloop/src/core/hardware/impedance.py</a>, the impedance measurement.</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/impedance_display.py">portiloop/src/core/impedance_display.py</a>, the tiles, colours and hints.</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/leadoff.py">portiloop/src/core/leadoff.py</a>, the lead-off protection during recordings.</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/constants.py">portiloop/src/core/constants.py</a>, default settings.</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/create_ap.sh">create_ap.sh</a>, the Wi-Fi access point installation.</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/README.md">README.md</a> of portiloop-software (power, LEDs, SD card, headphones).</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_processors.py">portiloop/src/custom/custom_processors.py</a>, the filters of the pipelines.</li>
+    <li>Valenchon N, Bouteiller Y, Jourde HR, et al. (2022). The Portiloop: a deep learning-based open science tool for closed-loop brain stimulation. <em>PLOS ONE</em> 17(8): e0270696. <a href="https://doi.org/10.1371/journal.pone.0270696">doi:10.1371/journal.pone.0270696</a></li>
+  </ol>
+
+</article>
+</main>
+
+<script src="../assets/js/portiloop.js"></script>
+<script src="../assets/js/data.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = PL.ui.$, $$ = PL.ui.$$;
+
+  /* ---------------- impedance rules (portiloop/src/core/impedance_display.py) ---------------- */
+  const TILE = { green: ["#43a047", "#ffffff"], yellow: ["#fdd835", "#000000"], red: ["#e53935", "#ffffff"], grey: ["#bdbdbd", "#000000"] };
+  const LOW = 10, HIGH = 25, DETECTION = 6;
+  function impColor(v) {
+    if (v === "OFF") return "red";
+    if (v === undefined || v === null || v === "?" || v === "<1") return "grey";
+    const k = Number(v);
+    if (!isFinite(k)) return "grey";
+    if (k < 1) return "grey"; // below the resolution (RESOLUTION = 1 kOhm)
+    return k < LOW ? "green" : k < HIGH ? "yellow" : "red";
+  }
+  function impText(v) {
+    if (v === undefined || v === null) return "-";
+    if (v === "OFF" || v === "?") return v;
+    if (v === "<1" || Number(v) < 1) return "< 1 kΩ";
+    return Number(v).toFixed(1) + " kΩ";
+  }
+  function refTile(r) { return r === "connected" ? ["green", "connected"] : r === "OFF" ? ["red", "OFF"] : ["grey", "?"]; }
+  const MONT = [
+    { name: "ECG1", wire: "black", where: "left upper abdomen, just below the rib cage" },
+    { name: "ECG2", wire: "brown", where: "right upper chest, below the clavicle" },
+    { name: "EOG1", wire: "red", where: "above the outer corner of the left eye" },
+    { name: "EOG2", wire: "orange", where: "below the outer corner of the right eye" },
+    { name: "EMG", wire: "yellow", where: "middle of the chin" },
+    { name: "Cz", wire: "green", where: "top of the head (half of nasion to inion, half of ear to ear)" },
+    { name: "Fz", wire: "blue", where: "30 % of the nasion to inion distance" },
+    { name: "Fpz", wire: "purple", where: "10 % of the nasion to inion distance" },
+  ];
+  const RULE = {
+    green: "Green: below 10 kΩ, a good contact.",
+    yellow: "Yellow: 10 kΩ or more and below 25 kΩ, usable but worth improving.",
+    red: "Red: 25 kΩ or more, or OFF.",
+    grey: "Grey: uncertain (below the 1 kΩ accuracy of the method, a saturated channel, or not measured).",
+  };
+  function tileHTML(label, color, text, extra) {
+    const c = TILE[color];
+    return '<b>' + label + '</b><span>' + text + '</span>' + (extra ? '<small>' + extra + '</small>' : '');
+  }
+  function paint(el, color) { el.style.background = TILE[color][0]; el.style.color = TILE[color][1]; }
+  /* channels powered down at the next Start (ExperimentState._channel_states) */
+  function disabledChannels(vals) {
+    const off = vals.map((v) => v === "OFF");
+    if (off.every(Boolean)) return [];
+    const out = [];
+    off.forEach((o, i) => { if (o && i + 1 !== DETECTION) out.push(i + 1); });
+    return out;
+  }
+  function hintFor(vals, ref) {
+    if (ref === "OFF") return "The reference electrode is off: reconnect it to measure the electrodes.";
+    if (vals.length && vals.every((v) => v === "OFF")) return "All electrodes are off: check the ground (bias) electrode first.";
+    return "";
+  }
+
+  /* ---------------- widget 1: impedance reader ---------------- */
+  let night = null, sel = 6;
+  const NOTES = { // comments on the tutorial night's real values
+    1: "The protocol: \"It is normal that the impedance levels of ch1 (ECG1) and ch2 (ECG2) are not good\". Check that the heartbeat is visible on the Output tab; in the tutorial night it is (see the lead-off excerpt of tutorial 04).",
+    2: "Same as ch1: high ECG values are expected by the protocol. A heartbeat clearly visible on the Output tab is what counts.",
+    3: "This one is not expected. The protocol: check the signal first (Output tab, Channel 3); \"If the signals are not good, redo the electrode positioning (remove the electrode, check if the amount of gel is sufficient and add more if not, replace the electrode and press on it).\" The EOG site is only cleaned with alcohol in the protocol; clean it again, add gel, press, and watch the value in Live mode. EOG is not used for detection, but it is needed to score REM sleep and slow eye movements later. The tutorial night was recorded with this value.",
+    4: "Close to the green threshold. Pressing on the electrode or adding a little gel usually helps.",
+    5: "Good.",
+    6: "Cz is the detection electrode: its slow oscillations trigger the sounds, so it deserves the most care. Aim for green. In the tutorial night, Cz is the electrode that came off near the end of the night (tutorial 04).",
+    7: "Good.",
+    8: "Good.",
+  };
+  function scenario(key) {
+    const v = night.impedances_kohm;
+    let vals = [1, 2, 3, 4, 5, 6, 7, 8].map((i) => v["ch" + i]);
+    let ref = v.REF;
+    if (key === "fz") vals[6] = "OFF";
+    if (key === "cz") vals[5] = "OFF";
+    if (key === "ref") { vals = vals.map(() => "?"); ref = "OFF"; }
+    if (key === "bias") { vals = vals.map(() => "OFF"); ref = "?"; }
+    return { vals, ref };
+  }
+  function explain(key, s, ch) {
+    const box = $("#imp-explain");
+    if (ch === 9) {
+      const [col, txt] = refTile(s.ref);
+      let h = "<p><strong>REF: reference electrode</strong> (white wire), on the bone behind the right ear. Shown: <strong>" + txt + "</strong>.</p>" +
+        "<p>Its impedance cannot be measured: the chip has no test current on the reference side (SRB1). The code infers its connection: if every connected channel saturates at once, the reference is OFF.</p>";
+      if (s.ref === "?") h += "<p>Grey \"?\": no electrode passed the connection test, so the code cannot tell whether the reference is attached.</p>";
+      box.innerHTML = h; return;
+    }
+    const m = MONT[ch - 1], val = s.vals[ch - 1], col = impColor(val);
+    let h = "<p><strong>ch" + ch + ": " + m.name + "</strong> (" + m.wire + " wire), " + m.where + ". Shown: <strong>" + impText(val) + "</strong>. " + RULE[col] + "</p>";
+    if (val === "OFF") {
+      h += "<p>OFF: the electrode failed the connection test (no current could flow through it). ";
+      if (s.vals.every((x) => x === "OFF")) h += "Since all electrodes are OFF, the code powers none down: it assumes the bias electrode is off.</p>";
+      else if (ch === DETECTION) h += "Being the detection channel, ch6 is <em>not</em> powered down at Start; but the lead-off protection will find it unconnected at Start and pause detection and stimulation for the whole recording. Never start a stimulation night like this.</p>";
+      else h += "If you press Start now, ch" + ch + " is powered down and records 0 for the whole recording. Fix it, then press Check again.</p>";
+    } else if (val === "?") {
+      h += "<p>\"?\": the channel saturated during the measurement. When all channels show \"?\" and REF is OFF, the reference is off: reattach it (white, behind the right ear) and check again.</p>";
+    } else if (key === "night" || key === "fz" || key === "cz") {
+      h += "<p>" + NOTES[ch] + "</p>";
+    }
+    box.innerHTML = h;
+  }
+  function drawImp() {
+    if (!night) return;
+    const key = $("#imp-scn").value, s = scenario(key);
+    const wrap = $("#imp-tiles");
+    wrap.innerHTML = "";
+    const counts = { green: 0, yellow: 0, red: 0, grey: 0 };
+    s.vals.forEach((v, i) => {
+      const col = impColor(v); counts[col]++;
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "imp-tile"; b.setAttribute("aria-pressed", String(sel === i + 1));
+      b.innerHTML = tileHTML("ch" + (i + 1), col, impText(v), MONT[i].name);
+      b.setAttribute("aria-label", "ch" + (i + 1) + " " + MONT[i].name + ": " + impText(v) + ", " + col);
+      paint(b, col);
+      b.addEventListener("click", () => { sel = i + 1; drawImp(); });
+      wrap.appendChild(b);
+    });
+    const [rc, rt] = refTile(s.ref);
+    const r = document.createElement("button");
+    r.type = "button"; r.className = "imp-tile"; r.setAttribute("aria-pressed", String(sel === 9));
+    r.innerHTML = tileHTML("REF", rc, rt, "white");
+    r.setAttribute("aria-label", "Reference: " + rt);
+    paint(r, rc);
+    r.addEventListener("click", () => { sel = 9; drawImp(); });
+    wrap.appendChild(r);
+    $("#imp-hint").textContent = hintFor(s.vals, s.ref);
+    $("#imp-ng").textContent = counts.green;
+    $("#imp-ny").textContent = counts.yellow;
+    $("#imp-nr").textContent = counts.red;
+    const dis = disabledChannels(s.vals);
+    $("#imp-dis").textContent = dis.length ? dis.map((c) => "ch" + c).join(", ") : "none";
+    explain(key, s, sel);
+  }
+  function drawTry() {
+    const off = $("#imp-off").checked, raw = parseFloat($("#imp-val").value);
+    const v = off ? "OFF" : (isFinite(raw) ? (raw < 1 ? "<1" : Math.round(raw * 10) / 10) : "?");
+    const col = impColor(v), t = $("#imp-trytile");
+    t.innerHTML = tileHTML("chN", col, impText(v));
+    paint(t, col);
+    $("#imp-trytxt").textContent = RULE[col];
+  }
+  $("#imp-scn").addEventListener("change", () => { sel = $("#imp-scn").value === "fz" ? 7 : $("#imp-scn").value === "cz" ? 6 : $("#imp-scn").value === "ref" ? 9 : $("#imp-scn").value === "bias" ? 1 : 3; drawImp(); });
+  $("#imp-val").addEventListener("input", drawTry);
+  $("#imp-off").addEventListener("change", drawTry);
+  drawTry();
+
+  /* ---------------- widget 2: mock Control Center and checklist ---------------- */
+  const PIPES = ["Acquisition only", "Sleep spindles", "Sleep slow oscillations", "Sleep slow oscillations (upstate)"]; // custom_pipelines.py (main)
+  const STIM = { "Sleep spindles": true, "Sleep slow oscillations": true, "Sleep slow oscillations (upstate)": true };
+  const UPSTATE = "Sleep slow oscillations (upstate)";
+  const FIELDS = ["cond", "pipe", "freq", "notch", "det", "clock", "delay", "vol", "lsl", "save", "name", "mind", "maxd", "isd", "dispch", "raw"];
+  let S = {}, presets = {}, timerId = null, t0 = null;
+  const pid = () => Math.max(1, parseInt($("#cc-pid").value, 10) || 1);
+  const target = () => "CLAS_" + pid();
+  function base(kind) {
+    const tonight = $("#cc-cond").value;
+    if (kind === "fresh") return { cond: "A", pipe: "Acquisition only", freq: 250, notch: 60, det: 6, clock: "Coral", delay: 0, vol: 100, lsl: false, save: true, name: "", mind: 0, maxd: 0, isd: 0, dispch: 2, raw: "Raw" };
+    if (kind === "ok") return { cond: tonight, pipe: UPSTATE, freq: 250, notch: 50, det: 6, clock: "Coral", delay: 45, vol: 50, lsl: false, save: true, name: target(), mind: 0, maxd: 0, isd: 0, dispch: 2, raw: "Raw" };
+    return { cond: tonight === "A" ? "B" : "A", pipe: UPSTATE, freq: 250, notch: 50, det: 6, clock: "Coral", delay: 45, vol: 59, lsl: false, save: true, name: "CLAS_" + Math.max(1, pid() - 1), mind: 0, maxd: 0, isd: 0, dispch: 2, raw: "Raw" };
+  }
+  function load(kind) {
+    stopRec(true);
+    S = Object.assign(base(kind), { synced: false, tested: false, checked: false, rec: false, file: "", kind: kind });
+    presets = {};
+    if (kind !== "fresh") presets["Previous run"] = snapshot();
+    $("#cc-testmsg").textContent = "";
+    $("#cc-checkstatus").textContent = "No check performed yet.";
+    $("#cc-tiles").innerHTML = "";
+    $("#cc-status").textContent = kind === "fresh"
+      ? "Code defaults: what you get on a new device, or after a software update (the saved state is ignored when the software version changes)."
+      : kind === "prev" ? "Settings left by the previous night's Start (remembered in Previous run.json): participant " + Math.max(1, pid() - 1) + ", the other condition, and a volume of 59%."
+      : "Everything set as the protocol asks; Sync and Test Sound still to do.";
+    syncUI(); check();
+  }
+  function snapshot() { const o = {}; FIELDS.forEach((f) => { o[f] = S[f]; }); return o; }
+  function opt(sel, values, cur) {
+    sel.innerHTML = "";
+    values.forEach((v) => { const o = document.createElement("option"); o.value = String(v); o.textContent = String(v); if (String(v) === String(cur)) o.selected = true; sel.appendChild(o); });
+  }
+  function setTog(id, v) { $$("#" + id + " button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === String(v)))); }
+  function syncUI() {
+    $("#cc-sd").checked = $("#cc-sdin").checked;
+    setTog("cc-condtog", S.cond); setTog("cc-clocktog", S.clock); setTog("cc-rawtog", S.raw);
+    opt($("#cc-preset"), [""].concat(Object.keys(presets)), "");
+    opt($("#cc-pipe"), PIPES, S.pipe);
+    opt($("#cc-freq"), [50, 100, 250, 500, 1000], S.freq);
+    $("#cc-notch").value = String(S.notch);
+    opt($("#cc-det"), [1, 2, 3, 4, 5, 6, 7, 8], S.det);
+    opt($("#cc-dispch"), [1, 2, 3, 4, 5, 6, 7, 8].map((i) => "Channel " + i), "Channel " + S.dispch);
+    $("#cc-delay").value = S.delay; $("#cc-delaylab").textContent = "Stimulation starts after: " + S.delay + " minutes";
+    $("#cc-vol").value = S.vol; $("#cc-vollab").textContent = "Sound output volume: " + S.vol + "%";
+    $("#cc-lsl").checked = S.lsl; $("#cc-save").checked = S.save;
+    $("#cc-name").value = S.name; $("#cc-mind").value = S.mind; $("#cc-maxd").value = S.maxd; $("#cc-isd").value = S.isd;
+    $("#cc-disk").textContent = "Disk Usage: " + ($("#cc-sdin").checked ? "(of the SD card)" : "(of the internal memory)");
+    lock();
+  }
+  function lock() {
+    const r = S.rec;
+    $$("#cc [data-lock]").forEach((el) => { el.disabled = r; });
+    $$("#cc-condtog button, #cc-clocktog button").forEach((b) => { b.disabled = r; });
+    $("#cc-start").disabled = r; $("#cc-stop").disabled = !r;
+    $("#cc-checkbtn").disabled = r; $("#cc-live").disabled = r;
+    $("#cc-plotmsg").textContent = r ? "(Real device: the last 5 s of Channel " + S.dispch + ", " + S.raw + ", plotted here, refreshed about every 2 s.)" : "The 5 s plot of one channel appears here only during a recording.";
+    if (r) $("#cc-checkstatus").textContent = "Unavailable during a recording.";
+  }
+  function fmt2(n) { return String(n).padStart(2, "0"); }
+  function stamp(d) { return d.getFullYear() + "-" + fmt2(d.getMonth() + 1) + "-" + fmt2(d.getDate()) + "_" + fmt2(d.getHours()) + "-" + fmt2(d.getMinutes()) + "-" + fmt2(d.getSeconds()); }
+  function startRec() {
+    const bad = items().filter((it) => it.state === "bad");
+    presets["Previous run"] = snapshot(); // written at every Start
+    t0 = new Date();
+    S.rec = true;
+    S.file = (S.name || "mock-portiloop") + "_" + stamp(t0) + "_" + (S.cond === "B" ? "CONDB" : "CONDA");
+    $("#cc-file").textContent = "Current experiment: " + S.file;
+    tick(); timerId = setInterval(tick, 1000);
+    syncUI();
+    const where = !S.save ? "Save recording locally is unchecked: no file is written."
+      : $("#cc-sdin").checked ? "Folder: /media/sd_card/workspace/recordings/" + S.file + "/"
+      : "No SD card: the files go to the internal memory (~/workspace/recordings/" + S.file + "/), which the README warns against.";
+    $("#cc-status").textContent = (bad.length ? "Started with " + bad.length + " setting(s) that differ from the protocol. " : "Started with every checked setting as in the protocol. ") + where;
+  }
+  function stopRec(silent) {
+    if (timerId) clearInterval(timerId);
+    timerId = null;
+    if (S.rec) { S.rec = false; $("#cc-timer").textContent = ""; syncUI(); if (!silent) $("#cc-status").textContent = "Stopped. A new Start would create a new file and restart the delay (tutorial 04)."; }
+  }
+  function tick() {
+    const s = Math.floor((Date.now() - t0.getTime()) / 1000);
+    $("#cc-timer").textContent = "Timer: " + Math.floor(s / 3600) + ":" + fmt2(Math.floor(s / 60) % 60) + ":" + fmt2(s % 60);
+  }
+  const P = (q) => "<p class=\"val\">Protocol: \"" + q + "\"</p>";
+  function items() {
+    const tonight = $("#cc-cond").value, sd = $("#cc-sdin").checked;
+    const L = [];
+    const add = (step, title, ok, val, body, info) => L.push({ step, title, state: info ? "info" : ok ? "ok" : "bad", val, body });
+    add(10, "SD Card ticked", sd, sd ? "ticked" : "not ticked",
+      P("In the Control panel, make sure that the SD card is checked on") + "<p>The box is an indicator that the device ticks itself (it is disabled in the code). If it is not ticked: turn the device off, reseat the card, try again. Without a card, the files go to the internal memory.</p>");
+    add(11, "Condition matches tonight's instruction", S.cond === tonight, "Cond " + S.cond + " (instruction: Cond " + tonight + ")",
+      P("select Cond A or Cond B, depending on the experimenter's instructions") + "<p>Cond B plays the sounds; Cond A is the sham. The toggle keeps the value of the last Start, and presets contain it.</p>");
+    add(12, "Pipeline", S.pipe === UPSTATE, S.pipe,
+      P("make sure that the Pipeline is set to Sleep slow oscillations (upstate)") + "<p>Code default: \"Acquisition only\" (records, never plays a sound). \"Sleep slow oscillations\" without \"(upstate)\" does not aim at the up-state.</p>");
+    add(13, "Sample frequency", S.freq === 250, S.freq + " Hz",
+      P("Double-check that the Sample frequency (Hz) is set to 250") + "<p>Default 250. The notch coefficients from the Portiloop paper exist only for 250 Hz.</p>");
+    add(14, "Notch filter", S.notch === 50, S.notch + " Hz",
+      P("Double-check that the Notch filter frequency (Hz) is set to 50") + "<p><strong>Code default 60.</strong> It filters only the signal used for detection; the CSV stores raw signals.</p>");
+    add(15, "Detection channel", S.det === 6, "ch" + S.det,
+      P("Double-check that the Detection channel is set to 6") + "<p>ch6 is Cz (green). Default 6.</p>");
+    add(16, "Clock", S.clock === "Coral", S.clock,
+      P("Double-check that the Clock is set to Coral") + "<p>Default Coral: the device's timer reads the amplifier at the target rate.</p>");
+    add(17, "Clock synchronized", S.synced, S.synced ? "pressed" : "not pressed yet",
+      P("Click on the “Sync clock with browser” button") + "<p>Sets the device clock from the phone (file names and metadata use it). The device also syncs by itself when a phone connects and the clocks differ by 1.5 s or more; never during a recording.</p>");
+    add(18, "Stimulation starts after", S.delay > 0, S.delay + " min",
+      P("set the desired delay before stimulation begins (example: 45 minutes)") + "<p>Default 0: detection and sound can start at once. Any value chosen by the study is fine; 0 is flagged because the participant is still awake.</p>");
+    add(19, "Volume", S.vol === 50, S.vol + "%",
+      P("Double-check that the Sound output volume is set to 50%") + "<p>No 50% default: the last value, the system's level, or 100. A software volume, not a calibrated level.</p>");
+    add(20, "Stream LSL off", !S.lsl, S.lsl ? "checked" : "unchecked",
+      P("Double-check that Stream LSL is unchecked") + "<p>Default unchecked; nobody receives the stream at home.</p>");
+    add(21, "Save recording locally", S.save, S.save ? "checked" : "unchecked",
+      P("make sure that “Save Recording Locally” is checked on") + "<p>Unchecked means no file at all.</p>");
+    const nm = S.name.trim();
+    add(22, "Recording name", nm === target(), nm ? nm : "(empty: the device name would be used)",
+      P("write down the name of the recording (example: CLAS_X), where X is the participant number") + "<p>Expected tonight: <code>" + target() + "</code>. The name is remembered from the last Start, so the previous participant's number comes back.</p>");
+    add(23, "Min, Max and Inter-stim delays", S.mind === 0 && S.maxd === 0 && S.isd === 0, S.mind + ", " + S.maxd + ", " + S.isd + " ms",
+      P("Min stim delay (ms) = 0. Max stim delay (ms) = 0. Inter-stim delay (ms) = 0.") + "<p>Any non-zero value adds a random delay between detection and sound, away from the up-state.</p>");
+    add(24, "Test Sound heard", S.tested, S.tested ? "played" : (STIM[S.pipe] ? "not pressed yet" : "silent with this pipeline"),
+      P("make sure the sound is properly delivered in both ears by pressing “Test Sound”") + "<p>Silent when the pipeline has no stimulator. Plays in Cond A too.</p>");
+    return L;
+  }
+  function check() {
+    const L = items(), bad = L.filter((x) => x.state === "bad").length;
+    const list = $("#cc-list"), open = {}, prev = {};
+    $$("#cc-list .cc-item").forEach((d) => { open[d.dataset.step] = !d.querySelector(".body").hidden; prev[d.dataset.step] = d.dataset.state; });
+    list.innerHTML = "";
+    L.forEach((it) => {
+      const d = document.createElement("div");
+      d.className = "cc-item " + it.state; d.dataset.step = it.step; d.dataset.state = it.state;
+      const b = document.createElement("button"); b.type = "button";
+      b.innerHTML = '<span class="mark">' + (it.state === "ok" ? "✓" : it.state === "bad" ? "✗" : "i") + '</span><span>Step ' + it.step + " · " + it.title + ' <span class="val">(' + it.val + ")</span></span>";
+      const body = document.createElement("div"); body.className = "body"; body.innerHTML = it.body;
+      // keep what the reader opened or closed; open an item when it becomes flagged, close it when it becomes right
+      body.hidden = (it.step in open && prev[it.step] === it.state) ? !open[it.step] : it.state !== "bad";
+      b.setAttribute("aria-expanded", String(!body.hidden));
+      b.addEventListener("click", () => { body.hidden = !body.hidden; b.setAttribute("aria-expanded", String(!body.hidden)); });
+      d.appendChild(b); d.appendChild(body); list.appendChild(d);
+    });
+    $("#cc-sum").textContent = bad ? bad + " of " + L.length + " checks differ from the protocol" : "All " + L.length + " checks match the protocol";
+  }
+  function upd(field, v) { S[field] = v; if (field === "pipe") S.tested = false; syncUI(); check(); }
+  $$("#cc .cc-tabs button").forEach((b) => b.addEventListener("click", () => {
+    $$("#cc .cc-tabs button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+    $$("#cc .cc-panel").forEach((p) => { p.hidden = p.dataset.panel !== b.dataset.tab; });
+  }));
+  $$("#cc-condtog button").forEach((b) => b.addEventListener("click", () => upd("cond", b.dataset.v)));
+  $$("#cc-clocktog button").forEach((b) => b.addEventListener("click", () => upd("clock", b.dataset.v)));
+  $$("#cc-rawtog button").forEach((b) => b.addEventListener("click", () => upd("raw", b.dataset.v)));
+  $("#cc-pipe").addEventListener("change", (e) => { upd("pipe", e.target.value); $("#cc-testmsg").textContent = ""; });
+  $("#cc-freq").addEventListener("change", (e) => upd("freq", parseInt(e.target.value, 10)));
+  $("#cc-notch").addEventListener("change", (e) => upd("notch", parseInt(e.target.value, 10)));
+  $("#cc-det").addEventListener("change", (e) => upd("det", parseInt(e.target.value, 10)));
+  $("#cc-dispch").addEventListener("change", (e) => upd("dispch", parseInt(e.target.value.split(" ")[1], 10)));
+  $("#cc-delay").addEventListener("input", (e) => upd("delay", parseInt(e.target.value, 10)));
+  $("#cc-vol").addEventListener("input", (e) => upd("vol", parseInt(e.target.value, 10)));
+  $("#cc-lsl").addEventListener("change", (e) => upd("lsl", e.target.checked));
+  $("#cc-save").addEventListener("change", (e) => upd("save", e.target.checked));
+  $("#cc-name").addEventListener("input", (e) => { S.name = e.target.value; check(); });
+  ["mind", "maxd", "isd"].forEach((f) => $("#cc-" + f).addEventListener("input", (e) => { S[f] = Number(e.target.value) || 0; check(); }));
+  $("#cc-sync").addEventListener("click", () => { S.synced = true; check(); $("#cc-status").textContent = "Portiloop clock synchronized with browser (" + new Date().toTimeString().slice(0, 8) + ")"; });
+  $("#cc-test").addEventListener("click", () => {
+    if (STIM[S.pipe]) { S.tested = true; $("#cc-testmsg").textContent = "The device would play the 15 ms stimulus once at " + S.vol + "% (in Cond " + S.cond + ", like in any condition)."; }
+    else { S.tested = false; $("#cc-testmsg").textContent = "Silence: \"" + S.pipe + "\" has no stimulator (see protocol step 24)."; }
+    check();
+  });
+  $("#cc-start").addEventListener("click", startRec);
+  $("#cc-stop").addEventListener("click", () => stopRec(false));
+  $("#cc-preset").addEventListener("change", (e) => {
+    const p = presets[e.target.value];
+    if (!p) return;
+    const before = S.cond, beforeName = S.name;
+    Object.assign(S, p); S.tested = false;
+    syncUI(); check();
+    $("#cc-status").textContent = "Loaded preset \"" + e.target.value + "\": condition " + (before === S.cond ? "unchanged (Cond " + S.cond + ")" : "changed from Cond " + before + " to Cond " + S.cond) +
+      ", recording name " + (beforeName === S.name ? "unchanged" : "changed to \"" + (S.name || "(empty)") + "\"") + ".";
+  });
+  $("#cc-psave").addEventListener("click", () => {
+    const n = $("#cc-pname").value.trim();
+    if (!n) { $("#cc-status").textContent = "Preset name cannot be empty (nothing saved)."; return; }
+    presets[n] = snapshot(); syncUI();
+    $("#cc-status").textContent = "Saved preset \"" + n + "\", including the condition (Cond " + S.cond + ") and the recording name.";
+  });
+  $("#cc-checkbtn").addEventListener("click", () => {
+    if (!night) return;
+    const s = scenario("night"), wrap = $("#cc-tiles");
+    wrap.innerHTML = "";
+    s.vals.forEach((v, i) => { const t = document.createElement("div"); t.className = "imp-tile"; t.style.cursor = "default"; t.innerHTML = tileHTML("ch" + (i + 1), impColor(v), impText(v)); paint(t, impColor(v)); wrap.appendChild(t); });
+    const [rc, rt] = refTile(s.ref); const t = document.createElement("div"); t.className = "imp-tile"; t.style.cursor = "default"; t.innerHTML = tileHTML("REF", rc, rt); paint(t, rc); wrap.appendChild(t);
+    $("#cc-checkstatus").textContent = "Last check: " + new Date().toTimeString().slice(0, 8) + " (saved with the next recording). Values: the tutorial night.";
+  });
+  $("#cc-scn").addEventListener("change", (e) => load(e.target.value));
+  $("#cc-pid").addEventListener("input", () => check());
+  $("#cc-cond").addEventListener("change", () => check());
+  $("#cc-sdin").addEventListener("change", () => { syncUI(); check(); });
+  load("prev");
+
+  PL.data.night().then((j) => {
+    night = j;
+    drawImp();
+    $("#imp-status").textContent = "Impedances from the tutorial night's _metadata.json (impedances_kohm); colours computed with the thresholds of impedance_display.py.";
+  }).catch((e) => {
+    $("#imp-status").textContent = "Could not load the tutorial night: " + e.message + " (serve the docs folder over HTTP).";
+  });
+})();
+</script>
+</body>
+</html>

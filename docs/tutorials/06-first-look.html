@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>06 · A first look at the night · Portiloop tutorials</title>
+  <meta name="description" content="Load a Portiloop night with portiloop_analysis, read the whole night at a glance (spectrogram, stimulations, sound, electrode off), see an automatic sleep staging made offline with NanoSleepNet and why it must be checked, and learn what EEG, EOG, EMG and ECG look like in each state, on the real tutorial night.">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <!-- Prism syntax highlighting (colors come from style.css) -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <style>
+    blockquote.quote { margin: 1.1em 0; padding: 6px 16px; border-left: 3px solid var(--accent); background: var(--bg-elev); border-radius: 0 8px 8px 0; }
+    blockquote.quote p { margin: 0.3em 0; }
+    blockquote.quote cite { display: block; font-style: normal; font-size: 0.86em; color: var(--fg-muted); margin-top: 4px; }
+    .jump { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+    .jump .btn { font-size: 13px; padding: 5px 10px; }
+    .jump .btn[aria-pressed="false"] { background: transparent; color: var(--accent); }
+    canvas.plot.night { height: 440px; cursor: grab; touch-action: pan-y; }
+    canvas.plot.night.dragging { cursor: grabbing; }
+    canvas.plot.traces { height: 430px; }
+    .chans { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; margin: 6px 0; }
+    .chans label { display: inline-flex; align-items: center; gap: 5px; color: var(--fg-muted); }
+    .chans .sw { display: inline-block; width: 12px; height: 3px; border-radius: 2px; }
+    .explain { margin-top: 10px; background: var(--bg-sunk); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 0.93em; }
+    .explain h4 { margin: 0 0 4px; font-size: 0.98em; }
+    .explain p { margin: 0.35em 0; }
+    .readout .v.small { font-size: 1rem; }
+    .stage-table td:nth-child(n+2), .stage-table th:nth-child(n+2) { text-align: right; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body data-page="06-first-look" data-root="..">
+<main>
+<article class="content">
+
+  <div class="eyebrow">Tutorial 06 · Processing the recordings</div>
+  <h1>A first look at the night</h1>
+  <p class="lead">Before averaging anything, look at the night. This page loads the tutorial night with the Portiloop analysis package, shows the whole night on one screen, adds an automatic sleep staging made offline with a small neural network (and shows why it cannot be trusted blindly), and walks through what the EEG, eye, chin and heart channels look like in wake, sleep, movement and at the moment the Cz electrode comes off at the end of the night.</p>
+
+  <dl class="meta">
+    <div><dt>Time</dt><dd>40 minutes</dd></div>
+    <div><dt>Level</dt><dd>Beginner in Python</dd></div>
+    <div><dt>You need</dt><dd>The tutorial dataset (Tutorial <a href="05-files.html#dataset">05</a>); Python 3 with numpy, scipy, pandas, matplotlib</dd></div>
+    <div><dt>Runs in browser</dt><dd>Yes, both viewers use the real night</dd></div>
+  </dl>
+
+  <div class="objectives">
+    <h3>In this tutorial you will</h3>
+    <ul>
+      <li>Load a recording with <code>load_recording</code>, choose the montage and read its summary; know what a <code>Recording</code> contains.</li>
+      <li>Read a whole-night spectrogram: wake alpha, the sigma band of spindles, cycles of slow-wave sleep, the stimulations, and the electrode that came off at the end.</li>
+      <li>Use an automatic sleep staging made offline with the NanoSleepNet model, and see on this night why automatic stages must be checked by an expert.</li>
+      <li>Recognize wake, N2, deep sleep, REM, a movement and an electrode coming off on all eight channels, including ECG, EOG and EMG.</li>
+      <li>Know which artifacts this night has and how Tutorial 07 deals with them.</li>
+    </ul>
+  </div>
+
+  <!-- ===================================================================== -->
+  <h2 id="load">Loading the night</h2>
+
+  <h3 id="install">Install the analysis package</h3>
+  <p>The analysis code lives in <a href="https://github.com/Portiloop/portiloop-software/tree/main/examples/processing"><code>examples/processing</code></a> of the portiloop-software repository: a small Python package, <code>portiloop_analysis</code>, and two notebooks used in Tutorials <a href="07-responses.html">07</a> and <a href="09-study.html">09</a>. It needs only standard scientific Python:</p>
+<pre data-file="terminal"><code class="language-bash">git clone https://github.com/Portiloop/portiloop-software.git
+cd portiloop-software/examples/processing
+pip install -r requirements.txt      # numpy, scipy, pandas, matplotlib, jupyterlab, pytest</code></pre>
+  <p>The notebooks import <code>portiloop_analysis</code> from this folder, "so start Jupyter here (or add this folder to <code>PYTHONPATH</code>)" (README of <code>examples/processing</code>). Put the unzipped tutorial dataset next to it, or give its full path below.</p>
+
+  <h3 id="load-recording">load_recording</h3>
+<pre data-file="first_look.py"><code class="language-python">from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from portiloop_analysis import MONTAGES, load_recording
+
+folder = Path("clas-tutorial_2026-11-15_04-01-29_CONDB")  # the unzipped tutorial dataset
+csv = folder / f"{folder.name}.csv"
+recording = load_recording(csv, channel="Cz", montage="default")
+print(recording.summary())</code></pre>
+<pre data-file="output (about 3 s)"><code class="language-none">clas-tutorial_2026-11-15_04-01-29_CONDB.csv: 6654051 samples (443.6 min), 1930 stimulations, no _leadoff.json
+channel                          Cz
+files                             1
+duration (h, with gaps)       7.393
+missing samples                   0
+samples with electrode off        0
+stimulation markers            1930
+dtype: object</code></pre>
+
+  <p><code>load_recording</code> loads <strong>one channel</strong> and the stimulation markers. Its arguments:</p>
+  <ul>
+    <li><code>files</code>: one CSV, or a list of the CSVs of one night (after a Stop then Start). They are sorted by the date and time in their names and placed on a single timeline; "the time between two files is kept as missing data (NaN), so that event times stay correct" (docstring of <code>load_recording</code>).</li>
+    <li><code>channel</code> and <code>montage</code>: the electrode you want, and which electrode is on which <code>raw_ch</code> column. Two montages are defined; <code>"default"</code> is the CLAS protocol montage. You can also pass the 8 names yourself.</li>
+    <li><code>fs</code>: read from <code>_metadata.json</code> (250 Hz if the file is missing).</li>
+  </ul>
+<pre data-file="MONTAGES (portiloop_analysis/recording.py)"><code class="language-python">{'default': ('ECG1', 'ECG2', 'EOG1', 'EOG2', 'EMG', 'Cz', 'Fz', 'Fpz'),
+ 'no_ecg': ('Fpz', 'Cz', 'Pz', 'Fz', 'EOG1', 'EOG2', 'EMG1', 'EMG2')}</code></pre>
+  <div class="callout warning"><span class="callout-title">The montage is your responsibility</span>The files only say <code>raw_ch1</code> to <code>raw_ch8</code> (Tutorial <a href="05-files.html#csv">05</a>). <code>load_recording(csv, channel="Cz", montage="no_ecg")</code> would happily return <code>raw_ch2</code>, which in the CLAS montage is the ECG. The README of the package says it plainly: "Check them against the wiring of your cap."</div>
+
+  <h3 id="recording">What a Recording contains</h3>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Attribute</th><th>Content</th><th>Tutorial night</th></tr></thead>
+    <tbody>
+      <tr><td><code>eeg</code></td><td>the channel in µV, one value per sample; NaN where data are missing (gaps between files, periods listed in <code>_leadoff.json</code>)</td><td>6,654,051 values, none missing</td></tr>
+      <tr><td><code>markers</code></td><td>1 where a stimulation was sent (the <code>stimulation</code> column), 0 elsewhere; <code>events</code> gives their sample numbers</td><td>1,930 markers</td></tr>
+      <tr><td><code>fs</code>, <code>channel</code></td><td>sampling frequency, electrode name</td><td>250.0, "Cz"</td></tr>
+      <tr><td><code>leadoff</code></td><td>True for samples recorded with the electrode, the reference or the bias off (from <code>_leadoff.json</code>)</td><td>all False: no <code>_leadoff.json</code></td></tr>
+      <tr><td><code>breaks</code>, <code>files</code></td><td>where each file after the first starts; one row per file</td><td>no break, 1 file</td></tr>
+      <tr><td><code>stages</code></td><td>optional sleep stage of each sample ("" where unknown)</td><td>None until you add it (below)</td></tr>
+      <tr><td><code>metadata</code></td><td>the content of the first file's <code>_metadata.json</code></td><td>the 38 keys of Tutorial <a href="05-files.html#metadata">05</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout danger"><span class="callout-title">Railed samples are not missing data</span>The summary says "missing samples 0" and "samples with electrode off 0", yet Cz is at the amplifier limit for 797,372 samples at the end of the night. <code>load_recording</code> only marks as missing what <code>_leadoff.json</code> lists, and this night has no such file. Check it yourself:
+<pre data-file="first_look.py (continued)"><code class="language-python">railed = np.abs(recording.eeg) >= 187_000
+print(railed.sum(), "Cz samples at the amplifier limit")   # 797372
+# optional: treat them as missing, like a lead-off period
+# recording.eeg[railed] = np.nan</code></pre>
+  Tutorial <a href="07-responses.html">07</a> keeps the file as it is and relies on its rejection rules; only 2 of the 1,930 stimulations fall in a 30 s epoch where Cz is at the limit.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="overview">The night at a glance</h2>
+
+  <p>The best first look at a night is a <strong>spectrogram</strong>: time runs from left to right, frequency from bottom to top, and the colour gives the power of the EEG at that time and frequency (in decibels, so each step of 10 dB is a factor of 10 in power). Below it, the viewer stacks what the device did and the automatic sleep stages. It was computed from Cz, after a 0.3 to 35 Hz band-pass, as one Welch spectrum (4 s windows) per 30 s epoch, with the samples at the amplifier limit left out (<a href="https://github.com/Portiloop/portiloop-software/blob/main/docs/tools/build_assets.py"><code>docs/tools/build_assets.py</code></a>).</p>
+
+  <div class="widget" id="nv">
+    <div class="widget-title">The tutorial night: spectrogram, stages, stimulations</div>
+    <p class="widget-desc">What to try: (1) "Falling asleep": find the band near 10 Hz and where it stops; (2) "Stimulation-rich W": the stages say awake while the spectrogram shows slow waves and the device keeps stimulating; (3) "The end": the dark block is Cz at the amplifier limit, and the green "detection running" strip stops a few seconds after it starts; (4) drag the plot sideways to move through the night, click it to read one 30 s epoch.</p>
+    <div class="jump" id="nv-jump" role="group" aria-label="Parts of the night">
+      <button type="button" class="btn" data-a="0" data-b="443.5">Whole night</button>
+      <button type="button" class="btn" data-a="0" data-b="45">Falling asleep</button>
+      <button type="button" class="btn" data-a="105" data-b="150">Slow-wave sleep and sounds</button>
+      <button type="button" class="btn" data-a="190" data-b="235">A gap without sounds</button>
+      <button type="button" class="btn" data-a="228" data-b="288">Stimulation-rich W</button>
+      <button type="button" class="btn" data-a="355" data-b="443.5">The end</button>
+    </div>
+    <div class="controls">
+      <label for="nv-win">Window <select id="nv-win"><option value="443.5">whole night</option><option value="180">3 h</option><option value="60">1 h</option><option value="20">20 min</option><option value="5">5 min</option></select></label>
+      <label for="nv-start">Start (min) <input type="range" id="nv-start" min="0" max="0" step="0.5" value="0"><output for="nv-start"></output></label>
+      <label for="nv-floor">Colour floor (dB) <input type="range" id="nv-floor" min="-20" max="20" step="1" value="-4"><output for="nv-floor"></output></label>
+    </div>
+    <canvas class="plot night" id="nv-plot" role="img" aria-label="Spectrogram of Cz over the night with automatic sleep stages, stimulations per epoch, detection running and Cz at the amplifier limit"></canvas>
+    <div class="readout">
+      <div><div class="k">Epoch</div><div class="v small" id="nv-t">…</div></div>
+      <div><div class="k">Automatic stage</div><div class="v small" id="nv-stage">…</div></div>
+      <div><div class="k">Stimulations</div><div class="v small" id="nv-stims">…</div></div>
+      <div><div class="k">Detection running</div><div class="v small" id="nv-sound">…</div></div>
+      <div><div class="k">Cz at the limit</div><div class="v small" id="nv-rail">…</div></div>
+      <div><div class="k">Cz power (δ 0.5 to 4, α 8 to 12, σ 11 to 16 Hz)</div><div class="v small" id="nv-pow">…</div></div>
+    </div>
+    <div class="status" id="nv-status">Loading the night…</div>
+  </div>
+
+  <h3 id="reading">How to read it</h3>
+  <ul>
+    <li><strong>Wake alpha (first 25 minutes).</strong> A band near 10 Hz from about minute 9 to minute 25: the alpha rhythm of relaxed wakefulness with the eyes closed. In those epochs 40 to 65% of the Cz power (0.5 to 30 Hz) is in the 8 to 12 Hz band; at minute 25.5 it drops to 10%, and the automatic staging moves to N1 at minute 28 and N2 at minute 31.5. The first 8 minutes are disturbed by large deflections on the eye channels (probably movements of the eyes and body; we cannot tell more from the file).</li>
+    <li><strong>The sigma band.</strong> A faint horizontal band between about 12 and 15 Hz across most of the sleep period: sleep spindles, the 11 to 16 Hz bursts of N2 (and N3) sleep.</li>
+    <li><strong>Slow-wave cycles.</strong> The bright bottom of the spectrogram (below 4 Hz) waxes and wanes: periods rich in slow waves alternate with periods without them, the cycles of NREM and REM sleep. The stimulations (pink bars) cluster in the slow-wave periods, as they should: the detector looks for large slow waves. Per hour of recording: 157, 301, 390, 210, 388, 361 and 123 stimulations.</li>
+    <li><strong>Gaps.</strong> The longest stretch without any stimulation while detection was running goes from minute 202.4 to 220.3 (17.8 minutes), a period with little slow-wave power.</li>
+    <li><strong>Vertical stripes.</strong> Short bright stripes across all frequencies are movements: an artifact has power everywhere.</li>
+    <li><strong>The end.</strong> From minute 373.1, Cz is at the amplifier limit most of the time (red strip) and the spectrogram of Cz is dark: no Cz EEG is left (the other channels keep recording). Detection stops at minute 373.36 (green strip) for the rest of the recording.</li>
+  </ul>
+
+  <div class="callout tip"><span class="callout-title">Make the same plot from Python</span>
+<pre data-file="first_look.py (continued)"><code class="language-python">import matplotlib.pyplot as plt
+from scipy.signal import spectrogram
+from portiloop_analysis import filter_band
+
+fs = recording.fs
+cz = filter_band(recording.eeg, (0.3, 35), fs, notch_hz=60)  # zero-phase, mean removed
+f, t, power = spectrogram(np.nan_to_num(cz), fs=fs, nperseg=int(4 * fs), noverlap=0)
+keep = f &lt;= 25
+plt.figure(figsize=(12, 4))
+plt.pcolormesh(t / 60, f[keep], 10 * np.log10(power[keep] + 1e-3), vmin=-10, vmax=30, shading="auto")
+plt.plot(recording.events / fs / 60, np.full(len(recording.events), 24), "|", color="w")  # stimulations
+plt.xlabel("Minutes from the start"); plt.ylabel("Frequency (Hz)"); plt.colorbar(label="dB")
+plt.show()</code></pre>
+  It takes about a second after loading. Use <code>notch_hz=50</code> where the mains is 50 Hz.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="staging">Automatic sleep staging with NanoSleepNet</h2>
+
+  <p>The stages in the viewer were not scored by a person. They come from <strong>NanoSleepNet</strong>, a small neural network that stages each 30 s epoch (W, N1, N2, N3 or REM) from the Fpz minus Cz derivation, using that epoch and the 9 before it. It was trained on Sleep-EDF recordings (Fpz-Cz at 100 Hz) [2]. Its own README ends with a warning:</p>
+  <blockquote class="quote"><p>"Not validated on Portiloop recordings: no expert-scored Portiloop data was available."</p><cite>README of the NanoSleepNet model</cite></blockquote>
+
+  <div class="callout note"><span class="callout-title">NanoSleepNet is not part of v2.3</span>The model and its code come with the next software release (branch rdkx5), so <code>docs/tools/stage_night.py</code> needs that branch's code to run. Nothing else in these tutorials depends on it: the analyses of Tutorials 07 to 09 run with v2.3 and <code>portiloop_analysis</code> alone, and the stages are already in the dataset (<code>_nanosleepnet.csv</code>).</div>
+
+  <h3 id="run-staging">How the stages of the tutorial night were made</h3>
+  <p>The script <a href="https://github.com/Portiloop/portiloop-software/blob/main/docs/tools/stage_night.py"><code>docs/tools/stage_night.py</code></a> feeds the raw recording, 30 s at a time, to two classes of that release: <code>Preprocessor</code> (Fpz minus Cz, a 0.5 Hz high-pass, resampling from 250 to 100 Hz, clipping to ±192 µV, 30 s epochs; with the CLAS montage Fpz is <code>raw_ch8</code> and Cz <code>raw_ch6</code>) and <code>NanoSleepNetStep</code> (the network, in NumPy).</p>
+<pre data-file="terminal (the script copied to docs/tools/ of a checkout of that release)"><code class="language-bash">python docs/tools/stage_night.py ../clas-tutorial_2026-11-15_04-01-29_CONDB/clas-tutorial_2026-11-15_04-01-29_CONDB.csv stages.csv
+# 887 epochs staged in 9 s: stages.csv</code></pre>
+  <p>The output has one row per 30 s epoch (<code>epoch</code>, <code>start_s</code>, <code>stage</code>, and <code>p_W</code> to <code>p_REM</code>, the probabilities of the five stages); it is identical to the <code>_nanosleepnet.csv</code> file of the dataset. The script stages every epoch of the file, including the last 70 minutes recorded with Cz at the amplifier limit.</p>
+
+  <p>To attach the stages to the recording, one stage per sample:</p>
+<pre data-file="first_look.py (continued)"><code class="language-python">stages = pd.read_csv(folder / f"{folder.name}_nanosleepnet.csv")
+per_sample = np.repeat(stages["stage"].to_numpy(), int(30 * recording.fs))
+recording.stages = np.full(recording.n_samples, "", dtype=object)
+recording.stages[:len(per_sample)] = per_sample[:recording.n_samples]
+print(stages["stage"].value_counts())
+print(pd.Series(recording.stages[recording.events]).value_counts())   # stage of each stimulation</code></pre>
+
+  <div class="scroll-x"><table class="stage-table">
+    <thead><tr><th>Automatic stage</th><th>30 s epochs</th><th>Stimulations in them</th></tr></thead>
+    <tbody>
+      <tr><td>N2</td><td>375</td><td>1,157</td></tr>
+      <tr><td>W</td><td>300</td><td>683</td></tr>
+      <tr><td>REM</td><td>158</td><td>64</td></tr>
+      <tr><td>N1</td><td>54</td><td>26</td></tr>
+      <tr><td>N3</td><td>0</td><td>0</td></tr>
+      <tr><td><strong>Total</strong></td><td>887</td><td>1,930</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="check-staging">Why these stages must be checked</h3>
+  <p>Three observations on this night show that the automatic staging is wrong in places:</p>
+  <ol>
+    <li><strong>"Awake" epochs full of slow waves and sounds.</strong> More than a third of the stimulations (683) fall in epochs labelled W. Between minutes 235 and 280, 73 of the 90 epochs are labelled W (mean probability of W 0.76) and they contain 274 of the 313 stimulations of that period. During the stimulation period, the median Cz delta power (0.5 to 4 Hz) of the epochs labelled W is 441 µV², higher than that of the epochs labelled N2 (381 µV²) and 15 times that of the real wake of minutes 9 to 25 (30 µV²). Large slow waves and a stream of up-state detections are signs of NREM sleep, not of wakefulness.</li>
+    <li><strong>No N3 at all.</strong> The probability of N3 never exceeds 0.21 in the whole night, yet the excerpt "Deep sleep" below (minute 123, labelled N2) has slow waves down to −113 µV on Cz. Whether this night contains N3 can only be decided by a scorer.</li>
+    <li><strong>Stages without EEG.</strong> After minute 373 Cz is at the amplifier limit, so Fpz minus Cz is meaningless; the model still produces 64 REM, 37 W, 26 N2 and 14 N1 epochs there.</li>
+  </ol>
+  <p>Why the model fails here we do not know. It was trained and evaluated on one dataset (Sleep-EDF), recorded with other amplifiers and electrodes, and never on Portiloop data; the sounds themselves, and their evoked responses, are also absent from its training data. These are possible reasons, not verified ones.</p>
+
+  <div class="callout warning"><span class="callout-title">What to do in a study</span>Use the automatic stages to navigate a night, never as results. For analyses by sleep stage (Tutorials <a href="07-responses.html">07</a> and <a href="09-study.html">09</a>), have the nights scored by a trained scorer following the standard rules, using the EEG, EOG and chin EMG channels the protocol records. <code>load_hypnogram</code> reads such a scoring (a table with the columns <code>Annotation</code> and <code>Duration</code>). In Tutorial 07, results "by automatic stage" are shown only to illustrate the code.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="signals">What the signals look like</h2>
+
+  <p>Six 30 s windows of the night, on all eight channels. Five are band-pass filtered from 0.3 to 35 Hz (zero phase, which removes the large electrode offsets and the mains); the last one, "Cz comes off", shows the raw signal with only its median over the previous minute removed. All of them are stored in steps of 0.1 µV, so values beyond ±3,276.7 µV are clipped.</p>
+
+  <div class="widget" id="ex">
+    <div class="widget-title">Excerpt viewer: eight channels in six moments of the night</div>
+    <p class="widget-desc">What to try: (1) in "Wake", set the window to 5 s and count the alpha waves in one second on Cz; (2) in "N2", find the spindles on Cz at 5 s; (3) in "Deep sleep", look where each pink marker falls on the slow wave; (4) compare EOG1 and EOG2 in "Wake" (opposite) and in "Deep sleep" (together); (5) in "Movement", raise the scale and count the sounds sent during the artifact.</p>
+    <div class="jump" id="ex-jump" role="group" aria-label="Excerpts"></div>
+    <div class="chans" id="ex-chans" role="group" aria-label="Channels shown"></div>
+    <div class="controls">
+      <label for="ex-gain">Lane height <select id="ex-gain"><option value="50">50 µV</option><option value="100">100 µV</option><option value="200">200 µV</option><option value="500">500 µV</option><option value="1000">1 mV</option><option value="3000">3 mV</option></select></label>
+      <label for="ex-win">Window <select id="ex-win"><option value="30">30 s</option><option value="10">10 s</option><option value="5">5 s</option></select></label>
+      <label for="ex-start">Start (s) <input type="range" id="ex-start" min="0" max="0" step="0.5" value="0"><output for="ex-start"></output></label>
+      <label><input type="checkbox" id="ex-stim" checked> Stimulations</label>
+      <label><input type="checkbox" id="ex-clip" checked> Keep each trace in its lane</label>
+    </div>
+    <canvas class="plot traces" id="ex-plot" role="img" aria-label="Eight channels of the selected 30 second excerpt, with stimulation markers"></canvas>
+    <div class="readout">
+      <div><div class="k">Start of the window</div><div class="v small" id="ex-t">…</div></div>
+      <div><div class="k">Automatic stage</div><div class="v small" id="ex-stage">…</div></div>
+      <div><div class="k">Stimulations (30 s)</div><div class="v small" id="ex-n">…</div></div>
+      <div><div class="k">Detection running</div><div class="v small" id="ex-on">…</div></div>
+    </div>
+    <div class="explain" id="ex-text" aria-live="polite"></div>
+    <div class="status" id="ex-status">Loading the excerpts…</div>
+  </div>
+
+  <h3 id="ecg">ECG on ch1 and ch2</h3>
+  <p>The protocol places ECG2 (brown) on the right upper chest and ECG1 (black) on the left upper abdomen, but each is recorded against the same mastoid reference as the EEG. Each channel is therefore "chest electrode minus mastoid": ECG1 shows tall positive R waves (about 1.7 to 2 mV in the excerpts), ECG2 smaller negative ones. The usual bipolar lead is their difference:</p>
+<pre data-file="python"><code class="language-python">data = pd.read_csv(csv, usecols=["raw_ch1", "raw_ch2"])
+ecg = data["raw_ch1"] - data["raw_ch2"]   # bipolar ECG, black minus brown</code></pre>
+  <p>In the sleep excerpts the heart beats at about 71 to 75 times per minute (R peaks counted in the N2, deep sleep and REM windows). The high impedances of these channels (177.5 and 156.0 kΩ at the check) do not matter much for a signal of millivolts, which is why the protocol accepts them.</p>
+
+  <h3 id="eog">EOG on ch3 and ch4</h3>
+  <p>EOG1 sits above the outer corner of the left eye and EOG2 below the outer corner of the right eye. The eye is an electrical dipole (the cornea is positive with respect to the retina), so when both eyes move together, one electrode sees the cornea approach while the other sees it move away: eye movements give <strong>deflections of opposite sign</strong> on the two channels. Brain activity reaching both electrodes from the front of the head gives deflections of the <strong>same sign</strong>. The excerpts show it: below 2 Hz, the correlation between EOG1 and EOG2 is −0.61 in the wake window (eye movements) and +0.80 in the deep sleep window (frontal slow waves, which EOG1 follows closely: correlation +0.94 with Fpz). Fpz, close to the eyes, also picks up eye movements.</p>
+
+  <h3 id="emg">EMG on ch5</h3>
+  <p>The chin electrode records muscle tone, again against the mastoid reference (a single electrode, not the bipolar chin EMG of clinical recordings). Muscle activity is mostly fast, so compare power at high frequencies: between 16 and 30 Hz, the EMG channel has 139 µV² in the wake window, 16 to 19 µV² in N2 and deep sleep, and 1.3 µV² in the REM window, the lowest of all, as expected from the loss of muscle tone in REM sleep. The 35 Hz low-pass of the viewer hides most of the EMG; for a real measure of muscle tone, filter the raw <code>raw_ch5</code> above 30 Hz (the mains notch is then needed).</p>
+
+  <!-- ===================================================================== -->
+  <h2 id="artifacts">Artifacts in this night</h2>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Artifact</th><th>Where in the tutorial night</th><th>How it is handled</th></tr></thead>
+    <tbody>
+      <tr><td>Electrode offsets and drifts (tens of mV)</td><td>every channel, all night</td><td>removed by the mean subtraction and band-pass filters of <code>filter_band</code></td></tr>
+      <tr><td>Movements: large, fast deflections on several channels</td><td>vertical stripes of the spectrogram; the "Movement" excerpt (minute 283.5, 11 sounds in 30 s)</td><td>Tutorial 07 rejects every epoch whose 0.1 to 20 Hz signal exceeds 350 µV peak to peak ("artifact": 173 of the 1,930 epochs)</td></tr>
+      <tr><td>Jumps between consecutive samples (electrode pops)</td><td>scattered</td><td>epochs with a raw jump above 1000 µV are rejected ("jump": 50 epochs)</td></tr>
+      <tr><td>Eye movements on Fpz and the EOG</td><td>wake, REM, the first minutes</td><td>analyse Cz, the detection channel; they affect Fpz most</td></tr>
+      <tr><td>Electrode off: signal at the amplifier limit</td><td>Cz from minute 373.1 to the end (797,372 samples)</td><td>periods listed in <code>_leadoff.json</code> become missing data; here there is no such file, but no stimulation happened after minute 373.0, and epochs touching the rail are rejected by the two rules above</td></tr>
+    </tbody>
+  </table></div>
+  <p>With these rules, 1,707 of the 1,930 epochs are kept in Tutorial <a href="07-responses.html">07</a>. For whole-night measures (spectral power, spindle density), the package also has <code>bad_sections</code>, which removes off-head runs, jumps and short clean stretches with the thresholds of an earlier study (its docstring).</p>
+
+  <div class="callout neuro"><span class="callout-title">For neuroscientists: the device stimulates artifacts too</span>The slow-oscillation detector checks that a wave is <em>large enough</em> (peak to peak above 75 µV, negative part beyond 40 µV) and has the right durations, but there is no upper limit on its amplitude (<code>custom_detectors.py</code>, lines 242 to 247). A movement on Cz can therefore pass the test, and the "Movement" excerpt shows 8 sounds sent at the start of, or during, a movement artifact. These events are real sounds heard by the participant, possibly during an arousal. They are rejected from the averages, but they are part of the stimulation the participant received: report how many there were, by condition.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="exercises">Exercises</h2>
+
+  <details class="exercise"><summary>Load another channel</summary><p>Load Fpz instead of Cz, and print its summary. Which column of the CSV does it come from, and what would happen with <code>montage="no_ecg"</code>?</p></details>
+  <details class="solution"><summary>Answer</summary><p><code>load_recording(csv, channel="Fpz", montage="default")</code> reads <code>raw_ch8</code>. With <code>montage="no_ecg"</code>, Fpz is the first electrode, so it would read <code>raw_ch1</code>, which in this night is the ECG: the code cannot know, which is why the montage must match the wiring.</p></details>
+
+  <details class="exercise"><summary>Find the sleep onset</summary><p>In the night viewer, at which minute does the alpha band disappear, and how does that compare with the "Stimulation starts after" delay of this night?</p></details>
+  <details class="solution"><summary>Answer</summary><p>Alpha dominates Cz until minute 25 and drops at minute 25.5; the automatic staging gives N1 from minute 28 and N2 from minute 31.5. The delay was 25 minutes, so detection started at minute 25.0, about when the participant fell asleep; the first stimulation came at minute 30.9. A longer delay (the protocol's example is 45 minutes) is safer for participants who take longer to fall asleep.</p></details>
+
+  <details class="exercise"><summary>Would you trust "stimulations in N2"?</summary><p>A colleague reports "1,157 stimulations in N2 and 683 in wake" for this night. What do you answer?</p></details>
+  <details class="solution"><summary>Answer</summary><p>That these stages are automatic and not validated on Portiloop data, and that the "wake" epochs of the stimulation period have more slow-wave power than the "N2" epochs (median 441 vs 381 µV² at 0.5 to 4 Hz), against 30 µV² in real wake. The split by stage needs an expert scoring of the night.</p></details>
+
+  <!-- ===================================================================== -->
+  <h2 id="references">References</h2>
+  <ol class="refs">
+    <li>Valenchon N, Bouteiller Y, Jourde HR, et al. (2022). The Portiloop: a deep learning-based open science tool for closed-loop brain stimulation. <em>PLOS ONE</em> 17(8): e0270696. <a href="https://doi.org/10.1371/journal.pone.0270696">doi:10.1371/journal.pone.0270696</a></li>
+    <li>Kemp B, Zwinderman AH, Tuk B, Kamphuisen HAC, Oberyé JJL (2000). Analysis of a sleep-dependent neuronal feedback loop: the slow-wave microcontinuity of the EEG. <em>IEEE Transactions on Biomedical Engineering</em> 47(9): 1185 to 1194. <a href="https://doi.org/10.1109/10.867928">doi:10.1109/10.867928</a> (the source of the Sleep-EDF recordings)</li>
+    <li>Portiloop software for Portiloop v2.3, branch main: <a href="https://github.com/Portiloop/portiloop-software/tree/main/examples/processing"><code>examples/processing</code></a> (README and <code>portiloop_analysis</code>) and <a href="https://github.com/Portiloop/portiloop-software/blob/main/docs/tools/stage_night.py"><code>docs/tools/stage_night.py</code></a>. The device code cited on this page (<code>custom_detectors.py</code>) is that of commit <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_detectors.py#L242-L247">917f1f3</a>, which recorded the tutorial night.</li>
+  </ol>
+
+</article>
+</main>
+
+<script src="../assets/js/portiloop.js"></script>
+<script src="../assets/js/data.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = PL.ui.$;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  function css(name, fb) { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v || fb; }
+  function niceStep(span, n) {
+    const s0 = span / Math.max(1, n), mag = Math.pow(10, Math.floor(Math.log10(s0))), e = s0 / mag;
+    return (e >= 7.5 ? 10 : e >= 3.5 ? 5 : e >= 1.5 ? 2 : 1) * mag;
+  }
+  function sizeCanvas(cv) {
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 600, h = cv.clientHeight || 300;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    g.font = "12px " + css("--font-sans", "system-ui, sans-serif");
+    return { g, w, h };
+  }
+  const VIRIDIS = [[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]];
+  function cmap(u) {
+    u = Math.max(0, Math.min(1, u)) * (VIRIDIS.length - 1);
+    const i = Math.min(VIRIDIS.length - 2, Math.floor(u)), r = u - i, a = VIRIDIS[i], b = VIRIDIS[i + 1];
+    return [a[0] + (b[0] - a[0]) * r, a[1] + (b[1] - a[1]) * r, a[2] + (b[2] - a[2]) * r];
+  }
+  const mmss = (min) => { const h = Math.floor(min / 60), m = min - 60 * h; return h + " h " + String(Math.floor(m)).padStart(2, "0") + (m % 1 ? ":30" : ":00"); };
+
+  /* ================================================================ night viewer */
+  const STAGE_Y = { W: 0, REM: 1, N1: 2, N2: 3, N3: 4 };
+  let N = null, img = null, imgFloor = null, view = [0, 443.5], selEpoch = null, layout = null;
+  const TOTAL = () => N.n_epochs * 0.5;
+
+  function buildImage() {
+    const floor = +$("#nv-floor").value, top = floor + 36;
+    if (img && imgFloor === floor) return;
+    const sp = N.spectrogram, nF = sp.nFreqs, nE = N.n_epochs;
+    img = document.createElement("canvas"); img.width = nE; img.height = nF;
+    const g = img.getContext("2d"), id = g.createImageData(nE, nF);
+    for (let e = 0; e < nE; e++) for (let k = 0; k < nF; k++) {
+      const c = cmap((sp.db[e * nF + k] - floor) / (top - floor));
+      const o = ((nF - 1 - k) * nE + e) * 4;
+      id.data[o] = c[0]; id.data[o + 1] = c[1]; id.data[o + 2] = c[2]; id.data[o + 3] = 255;
+    }
+    g.putImageData(id, 0, 0); imgFloor = floor;
+  }
+
+  function drawNight() {
+    if (!N) return;
+    buildImage();
+    const cv = $("#nv-plot"), { g, w, h } = sizeCanvas(cv);
+    const L = 46, R = 10, T = 6, B = 34;
+    const W = w - L - R, H = h - T - B;
+    const hs = Math.round(H * 0.50), hg = Math.round(H * 0.20), hb = Math.round(H * 0.14), hstrip = 9, gap = 6;
+    const y0 = T, y1 = y0 + hs + gap, y2 = y1 + hg + gap, y3 = y2 + hb + gap, y4 = y3 + hstrip + 3;
+    layout = { L, W, T, top: y0, bottom: y4 + hstrip };
+    const [a, b] = view;
+    const X = (m) => L + (m - a) / (b - a) * W;
+    const fg = css("--fg-muted", "#555"), grid = css("--plot-grid", "rgba(128,128,128,.2)"), axis = css("--plot-axis", "#888");
+    const C = N.columns;
+    // spectrogram
+    g.imageSmoothingEnabled = false;
+    const e0 = a / 0.5, e1 = b / 0.5;
+    g.drawImage(img, e0, 0, e1 - e0, img.height, L, y0, W, hs);
+    g.strokeStyle = axis; g.strokeRect(L + 0.5, y0 + 0.5, W, hs);
+    g.fillStyle = fg; g.textAlign = "right"; g.textBaseline = "middle";
+    const fmax = 25, fmin = 0.5;
+    [5, 10, 15, 20, 25].forEach((f) => { const y = y0 + hs - (f - fmin) / (fmax - fmin) * hs; g.fillText(f, L - 5, y); });
+    g.save(); g.translate(11, y0 + hs / 2); g.rotate(-Math.PI / 2); g.textAlign = "center"; g.fillText("Cz (Hz)", 0, 0); g.restore();
+    // hypnogram
+    g.strokeStyle = axis; g.strokeRect(L + 0.5, y1 + 0.5, W, hg);
+    const sy = (s) => y1 + 6 + STAGE_Y[s] * (hg - 12) / 4;
+    g.textAlign = "right";
+    Object.keys(STAGE_Y).forEach((s) => { g.fillStyle = fg; g.fillText(s, L - 5, sy(s)); g.strokeStyle = grid; g.beginPath(); g.moveTo(L, sy(s)); g.lineTo(L + W, sy(s)); g.stroke(); });
+    g.save(); g.beginPath(); g.rect(L, y1, W, hg); g.clip();
+    g.lineWidth = 1.6;
+    for (let e = Math.max(0, Math.floor(e0) - 1); e < Math.min(N.n_epochs, Math.ceil(e1) + 1); e++) {
+      const s = C.stage[e], xa = X(e * 0.5), xb = X(e * 0.5 + 0.5);
+      g.strokeStyle = s === "REM" ? PL.color("c5") : s === "W" ? PL.color("c2") : PL.color("signal");
+      g.beginPath(); g.moveTo(xa, sy(s)); g.lineTo(xb, sy(s));
+      if (e + 1 < N.n_epochs) g.lineTo(xb, sy(C.stage[e + 1]));
+      g.stroke();
+    }
+    g.restore();
+    // stimulations per epoch
+    g.strokeStyle = axis; g.strokeRect(L + 0.5, y2 + 0.5, W, hb);
+    const smax = 12;
+    g.fillStyle = fg; g.fillText(smax, L - 5, y2 + 5); g.fillText("0", L - 5, y2 + hb - 4);
+    g.save(); g.beginPath(); g.rect(L, y2, W, hb); g.clip();
+    g.fillStyle = PL.color("stim");
+    for (let e = Math.max(0, Math.floor(e0)); e < Math.min(N.n_epochs, Math.ceil(e1)); e++) {
+      const v = C.stims[e]; if (!v) continue;
+      const xa = X(e * 0.5), xb = X(e * 0.5 + 0.5), hh = v / smax * (hb - 2);
+      g.fillRect(xa, y2 + hb - hh, Math.max(1, xb - xa - (xb - xa > 4 ? 1 : 0)), hh);
+    }
+    g.restore();
+    g.save(); g.translate(11, y2 + hb / 2); g.rotate(-Math.PI / 2); g.textAlign = "center"; g.fillStyle = fg; g.font = "11px " + css("--font-sans", "sans-serif"); g.fillText("stims", 0, 0); g.restore();
+    // strips: detection running, Cz at the limit
+    const strip = (y, col, colour) => {
+      g.fillStyle = css("--bg-sunk", "#eee"); g.fillRect(L, y, W, hstrip);
+      for (let e = Math.max(0, Math.floor(e0)); e < Math.min(N.n_epochs, Math.ceil(e1)); e++) {
+        const v = col[e]; if (!v) continue;
+        g.globalAlpha = Math.min(1, v); g.fillStyle = colour;
+        const xa = X(e * 0.5), xb = X(e * 0.5 + 0.5); g.fillRect(xa, y, Math.max(1, xb - xa + 0.5), hstrip);
+      }
+      g.globalAlpha = 1;
+    };
+    strip(y3, C.sound, PL.color("c3")); strip(y4, C.cz_rail, css("--danger", "#b33"));
+    g.fillStyle = fg; g.textAlign = "right"; g.font = "10.5px " + css("--font-sans", "sans-serif");
+    g.fillText("det.", L - 5, y3 + hstrip / 2); g.fillText("rail", L - 5, y4 + hstrip / 2);
+    g.font = "12px " + css("--font-sans", "sans-serif");
+    // x axis
+    const st = niceStep(b - a, Math.max(2, Math.floor(W / 80)));
+    g.textAlign = "center"; g.textBaseline = "top"; g.fillStyle = fg;
+    for (let m = Math.ceil(a / st) * st; m <= b + 1e-9; m += st) {
+      const x = X(m); g.strokeStyle = "rgba(255,255,255,0.25)"; g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y0 + hs); g.stroke();
+      g.strokeStyle = grid; g.beginPath(); g.moveTo(x, y1); g.lineTo(x, y4 + hstrip); g.stroke();
+      g.fillText(st < 1 ? m.toFixed(1) : Math.round(m), x, y4 + hstrip + 4);
+    }
+    g.textBaseline = "bottom"; g.fillText("Minutes from the start of the recording", L + W / 2, h - 1);
+    // selected epoch
+    if (selEpoch !== null) {
+      const xa = X(selEpoch * 0.5), xb = X(selEpoch * 0.5 + 0.5);
+      if (xb >= L && xa <= L + W) {
+        g.strokeStyle = css("--fg", "#000"); g.lineWidth = 1.5; g.setLineDash([4, 3]);
+        g.strokeRect(Math.max(L, xa), y0, Math.max(2, Math.min(xb, L + W) - Math.max(L, xa)), y4 + hstrip - y0);
+        g.setLineDash([]); g.lineWidth = 1;
+      }
+    }
+  }
+
+  function readEpoch(e) {
+    selEpoch = e;
+    const C = N.columns, tot = C.cz_delta[e] + C.cz_theta[e] + C.cz_alpha[e] + C.cz_beta[e];
+    $("#nv-t").textContent = "minute " + (e * 0.5).toFixed(1) + " (" + mmss(e * 0.5) + ")";
+    $("#nv-stage").textContent = C.stage[e];
+    $("#nv-stims").textContent = C.stims[e];
+    $("#nv-sound").textContent = Math.round(C.sound[e] * 100) + "% of the epoch";
+    $("#nv-rail").textContent = (C.cz_rail[e] * 100).toFixed(1) + "% of samples";
+    $("#nv-pow").textContent = C.cz_rail[e] > 0.5 ? "no EEG (at the limit)" :
+      "δ " + Math.round(C.cz_delta[e]) + ", α " + Math.round(C.cz_alpha[e]) + ", σ " + Math.round(C.cz_sigma[e]) + " µV² (α " + Math.round(100 * C.cz_alpha[e] / tot) + "%)";
+    drawNight();
+  }
+
+  function setView(a, b) {
+    const total = TOTAL(), span = Math.min(total, b - a);
+    a = Math.max(0, Math.min(total - span, a));
+    view = [a, a + span];
+    const win = $("#nv-win");
+    const opts = Array.from(win.options).map((o) => +o.value);
+    let best = opts[0]; opts.forEach((o) => { if (Math.abs(o - span) < Math.abs(best - span)) best = o; });
+    if (Math.abs(best - span) < 0.01) win.value = String(best);
+    const s = $("#nv-start"); s.max = String(Math.max(0, total - span)); s.value = String(a);
+    document.querySelector('output[for="nv-start"]').textContent = a.toFixed(1);
+    PL.ui.$$("#nv-jump .btn").forEach((bt) => bt.setAttribute("aria-pressed", Math.abs(+bt.dataset.a - a) < 0.6 && Math.abs(Math.min(total, +bt.dataset.b) - (a + span)) < 0.6 ? "true" : "false"));
+    drawNight();
+  }
+
+  PL.data.night().then(function (j) {
+    N = j;
+    $("#nv-status").textContent = "Tutorial night: " + N.n_epochs + " epochs of 30 s, " + N.stimulation_count.toLocaleString("en-US") +
+      " stimulations. Spectrogram of Cz from " + N.spectrogram.freqs_hz[0] + " to " + N.spectrogram.freqs_hz[N.spectrogram.nFreqs - 1] +
+      " Hz; colour from the floor (dark) to floor + 36 dB (yellow). Hypnogram: automatic stages (NanoSleepNet), W in orange, REM in pink. Strips: detection running (green), Cz at the amplifier limit (red).";
+    PL.ui.$$("#nv-jump .btn").forEach((bt) => bt.addEventListener("click", () => setView(+bt.dataset.a, +bt.dataset.b)));
+    $("#nv-win").addEventListener("change", function () { const span = +this.value, c = (view[0] + view[1]) / 2; setView(c - span / 2, c + span / 2); });
+    $("#nv-start").addEventListener("input", function () { const span = view[1] - view[0]; setView(+this.value, +this.value + span); });
+    PL.ui.bind("#nv-floor", () => { img = null; drawNight(); }, (v) => v);
+    // drag to pan, click to read an epoch
+    const cv = $("#nv-plot");
+    let drag = null;
+    cv.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, a: view[0], moved: false }; cv.setPointerCapture(e.pointerId); });
+    cv.addEventListener("pointermove", (e) => {
+      if (!drag || !layout) return;
+      const dx = e.clientX - drag.x; if (Math.abs(dx) > 4) drag.moved = true;
+      if (drag.moved) { cv.classList.add("dragging"); const span = view[1] - view[0]; setView(drag.a - dx / layout.W * span, drag.a - dx / layout.W * span + span); }
+    });
+    cv.addEventListener("pointerup", (e) => {
+      cv.classList.remove("dragging");
+      if (drag && !drag.moved && layout) {
+        const r = cv.getBoundingClientRect(), x = e.clientX - r.left;
+        if (x >= layout.L && x <= layout.L + layout.W) {
+          const m = view[0] + (x - layout.L) / layout.W * (view[1] - view[0]);
+          readEpoch(Math.max(0, Math.min(N.n_epochs - 1, Math.floor(m / 0.5))));
+        }
+      }
+      drag = null;
+    });
+    setView(0, TOTAL());
+    readEpoch(240);
+    PL.onRedraw(drawNight);
+  }).catch((e) => { $("#nv-status").textContent = "Could not load the night (" + e.message + "). Serve the docs folder over HTTP."; });
+
+  /* ================================================================ excerpt viewer */
+  const KIND = ["ECG", "ECG", "EOG", "EOG", "EMG", "EEG", "EEG", "EEG"];
+  const KCOL = { ECG: "c4", EOG: "c2", EMG: "c3", EEG: "signal" };
+  const INFO = {
+    wake: { label: "Wake", gain: 100, title: "Awake, eyes closed, before sleep (minute 9.0)",
+      html: "<p>Detection is not running yet (it starts at minute 25.0). Cz, Fz and Fpz show the <strong>alpha rhythm</strong>: in this window the spectrum of Cz peaks at 10.0 Hz, and the 8 to 12 Hz band holds 63% of its 0.5 to 30 Hz power. Set the window to 5 s to see about ten waves per second.</p><p>EOG1 and EOG2 move in opposite directions (correlation −0.61 below 2 Hz): eye movements. The chin EMG is the most active of the clean windows (16 to 30 Hz power 139 µV²). ECG1 shows the R waves of the heart plus large slow deflections; ECG2 is calmer.</p>" },
+    n2: { label: "N2", gain: 100, title: "N2 sleep (minute 120.0)",
+      html: "<p>Automatic stage N2; detection is running but no slow wave met the criteria in these 30 s. <strong>Sleep spindles</strong>, bursts of 11 to 16 Hz lasting about a second, recur on Cz, Fz and Fpz: in this window the Cz spectrum peaks at 13.75 Hz (between 6 and 14 Hz) and the sigma band holds 12.8% of the power, against 4.4% for alpha. Use a 5 or 10 s window to see them.</p><p>The large wave near 20 s (the highest point of the 0.3 to 4 Hz Cz signal, +48 µV at 20.2 s) looks like a K-complex; scoring it is an expert's call. The chin EMG is low (16 µV² at 16 to 30 Hz) and the heart rate is about 73 per minute.</p>" },
+    deep: { label: "Deep sleep", gain: 200, title: "Slow waves and sounds (minute 123.0)",
+      html: "<p>Three minutes later, large <strong>slow waves</strong> appear on all EEG channels: in the 0.3 to 4 Hz band, Cz has 13 negative half-waves deeper than −40 µV, the deepest at −113 µV. The Portiloop sent <strong>10 sounds</strong> (pink markers): 8 of the 10 fall where the 0.3 to 4 Hz Cz signal is above +25 µV, within half a second after a trough of −50 to −113 µV, that is on the up-state the pipeline targets (Tutorial 07 averages this over the night).</p><p>NanoSleepNet labels this epoch N2; whether it is N3 needs a scorer. EOG1 and EOG2 move together here (+0.80 below 2 Hz) and EOG1 follows Fpz (+0.94): frontal slow waves reaching the eye electrodes, not eye movements.</p>" },
+    rem: { label: "REM", gain: 200, title: "REM sleep, by the automatic staging (minute 321.0)",
+      html: "<p>Low-amplitude, mixed-frequency EEG (standard deviation of Cz 13.7 µV, against 32.2 µV in the deep sleep window), large deflections on the EOG channels (EOG1 up to 415 µV peak to peak) and the <strong>lowest chin EMG</strong> of all six windows (1.3 µV² at 16 to 30 Hz), as expected from the loss of muscle tone in REM sleep. No slow wave met the detection criteria.</p><p>The label is automatic: whether these eye movements and this EEG make a REM epoch is for a scorer to say. Note the heartbeat on both ECG channels: tall positive R waves on ECG1 (about 1.7 mV), small negative spikes on ECG2; about 75 beats per minute.</p>" },
+    artifact: { label: "Movement", gain: 1000, title: "A movement during the stimulation period (minute 283.5)",
+      html: "<p>In the first 5 s, EOG1 and Fpz swing together by more than 2 mV. From about 17 s, large fast artifacts hit Cz (beyond the ±3.3 mV that the stored excerpt can hold), both ECG channels and EOG2, and Fz swings by about 3 mV near 23 s: the participant moved. NanoSleepNet labels the epoch W.</p><p>The Portiloop sent <strong>11 sounds</strong> in these 30 s, 8 of them after 16 s, during the artifact: its criteria set a minimum amplitude but no maximum (<code>custom_detectors.py</code>, lines 242 to 247), so a movement on Cz can trigger a sound. Tutorial 07 rejects these epochs (0.1 to 20 Hz peak to peak above 350 µV).</p>" },
+    leadoff: { label: "Cz comes off", gain: 3000, title: "The end of the usable night (minute 372.8, raw signal)",
+      html: "<p>Raw signals, with only their median over the previous minute removed (no filter, so the mains is visible). The Portiloop sends 4 sounds, at 6.3, 7.5, 13.0 and 14.1 s. From about 14 s (minute 373.03) a movement shifts every channel by millivolts. At 20.0 s (minute 373.12) <strong>Cz reaches the amplifier limit</strong> and stays there for most of the rest of the night; ECG1, ECG2, EOG2 and Fz leave the ±3.3 mV display range in the following seconds, but they do not reach the limit of the amplifier and keep recording: only the Cz electrode came off.</p><p>Detection keeps running until minute 373.36, 14 s after Cz reached the limit and 4 s after the end of this window: the lead-off protection then pauses it for good (Tutorial 05). What happened at the bedside we do not know; there is no usable Cz signal after this point (whether Fz and Fpz remain usable would need a closer look).</p>" },
+  };
+  let E = null, cur = 0, shown = [true, true, true, true, true, true, true, true];
+
+  function drawEx() {
+    if (!E) return;
+    const ex = E.excerpts[cur], fs = E.fs;
+    const cv = $("#ex-plot"), { g, w, h } = sizeCanvas(cv);
+    const L = 46, R = 58, T = 8, B = 34, W = w - L - R, H = h - T - B;
+    const chans = shown.map((s, i) => s ? i : -1).filter((i) => i >= 0);
+    const win = +$("#ex-win").value, t0 = +$("#ex-start").value, t1 = t0 + win;
+    const gain = +$("#ex-gain").value, clip = $("#ex-clip").checked;
+    const fg = css("--fg-muted", "#555"), grid = css("--plot-grid", "rgba(128,128,128,.2)"), axis = css("--plot-axis", "#888");
+    const X = (t) => L + (t - t0) / win * W;
+    // grid
+    const st = niceStep(win, Math.max(2, Math.floor(W / 70)));
+    g.textAlign = "center"; g.textBaseline = "top"; g.fillStyle = fg; g.strokeStyle = grid;
+    for (let t = Math.ceil(t0 / st) * st; t <= t1 + 1e-9; t += st) { const x = X(t); g.beginPath(); g.moveTo(x, T); g.lineTo(x, T + H); g.stroke(); g.fillText(st < 1 ? t.toFixed(1) : Math.round(t), x, T + H + 4); }
+    g.textBaseline = "bottom"; g.fillText("Seconds from minute " + (ex.start_s / 60).toFixed(1), L + W / 2, h - 1);
+    g.strokeStyle = axis; g.strokeRect(L + 0.5, T + 0.5, W, H);
+    // stimulation markers
+    if ($("#ex-stim").checked) {
+      g.strokeStyle = PL.color("stim"); g.lineWidth = 1.5;
+      ex.stims.forEach((s) => { const t = s / fs; if (t < t0 || t > t1) return; const x = X(t); g.beginPath(); g.moveTo(x, T); g.lineTo(x, T + H); g.stroke(); });
+      g.lineWidth = 1;
+    }
+    if (!chans.length) { g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("No channel selected", L + W / 2, T + H / 2); return; }
+    const lane = H / chans.length;
+    const i0 = Math.max(0, Math.floor(t0 * fs)), i1 = Math.min(fs * E.seconds, Math.ceil(t1 * fs) + 1);
+    chans.forEach(function (c, k) {
+      const yc = T + lane * (k + 0.5), sig = ex.signals[c];
+      // centre the trace on its median within the window
+      const vals = []; for (let i = i0; i < i1; i += 5) if (isFinite(sig[i])) vals.push(sig[i]);
+      vals.sort((p, q) => p - q); const med = vals.length ? vals[Math.floor(vals.length / 2)] : 0;
+      const pxPerUv = lane / gain;
+      g.fillStyle = fg; g.textAlign = "right"; g.textBaseline = "middle"; g.fillText(E.channels[c], L - 5, yc);
+      g.save();
+      g.beginPath(); g.rect(L, T, W, H); g.clip();
+      // "Clip to lane": values beyond the lane are drawn at its edge (a saturated trace stays visible as a flat line)
+      const yTop = yc - lane / 2 + 1, yBot = yc + lane / 2 - 1;
+      const Y = clip ? (y) => Math.max(yTop, Math.min(yBot, y)) : (y) => y;
+      g.strokeStyle = PL.color(KCOL[KIND[c]]); g.lineWidth = 1;
+      g.beginPath();
+      const perPx = (i1 - i0) / W;
+      let started = false;
+      if (perPx > 2) {
+        for (let px = 0; px < W; px++) {
+          const a = i0 + Math.floor(px * perPx), b = Math.min(i1, i0 + Math.floor((px + 1) * perPx));
+          let lo = Infinity, hi = -Infinity;
+          for (let i = a; i < b; i++) { const v = sig[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+          if (!isFinite(lo)) { started = false; continue; }
+          const ya = Y(yc - (hi - med) * pxPerUv), yb = Y(yc - (lo - med) * pxPerUv);
+          if (!started) { g.moveTo(L + px, ya); started = true; } else g.lineTo(L + px, ya);
+          g.lineTo(L + px, yb);
+        }
+      } else {
+        for (let i = i0; i < i1; i++) {
+          const v = sig[i]; if (!isFinite(v)) { started = false; continue; }
+          const x = X(i / fs), y = Y(yc - (v - med) * pxPerUv);
+          if (!started) { g.moveTo(x, y); started = true; } else g.lineTo(x, y);
+        }
+      }
+      g.stroke(); g.restore();
+    });
+    // scale bar: one lane height
+    const xb = L + W + 14, yb = T + lane * 0.5;
+    g.strokeStyle = css("--fg", "#000"); g.lineWidth = 2; g.beginPath(); g.moveTo(xb, yb - lane / 2 + 2); g.lineTo(xb, yb + lane / 2 - 2); g.stroke(); g.lineWidth = 1;
+    g.fillStyle = fg; g.textAlign = "left"; g.textBaseline = "middle";
+    g.fillText(gain >= 1000 ? gain / 1000 + " mV" : gain + " µV", xb + 5, yb);
+  }
+
+  function setExcerpt(i) {
+    cur = i;
+    const ex = E.excerpts[i], info = INFO[ex.key] || { gain: 200, title: ex.title, html: "<p>" + esc(ex.title) + "</p>" };
+    $("#ex-gain").value = String(info.gain);
+    PL.ui.$$("#ex-jump .btn").forEach((b, j) => b.setAttribute("aria-pressed", j === i ? "true" : "false"));
+    $("#ex-text").innerHTML = "<h4>" + esc(info.title) + "</h4>" + info.html;
+    $("#ex-stage").textContent = ex.stage + " (automatic)";
+    $("#ex-n").textContent = ex.stims.length;
+    const on = ex.sound.reduce((s, v) => s + v, 0) / ex.sound.length;
+    $("#ex-on").textContent = on >= 0.999 ? "yes" : on <= 0.001 ? "no" : Math.round(on * 100) + "% of the time";
+    updateWindow();
+  }
+  function updateWindow() {
+    const win = +$("#ex-win").value, s = $("#ex-start");
+    s.max = String(E.seconds - win); if (+s.value > E.seconds - win) s.value = String(E.seconds - win);
+    document.querySelector('output[for="ex-start"]').textContent = (+s.value).toFixed(1);
+    const ex = E.excerpts[cur], m = (ex.start_s + (+s.value)) / 60;
+    $("#ex-t").textContent = "minute " + m.toFixed(2);
+    drawEx();
+  }
+
+  PL.data.excerpts().then(function (j) {
+    E = j;
+    $("#ex-jump").innerHTML = E.excerpts.map((ex, i) => '<button type="button" class="btn" aria-pressed="false">' + esc((INFO[ex.key] || {}).label || ex.key) + "</button>").join("");
+    PL.ui.$$("#ex-jump .btn").forEach((b, i) => b.addEventListener("click", () => setExcerpt(i)));
+    $("#ex-chans").innerHTML = E.channels.map((c, i) => '<label><input type="checkbox" data-c="' + i + '" checked><span class="sw" style="background:' + PL.color(KCOL[KIND[i]]) + '"></span>' + esc(c) + "</label>").join("");
+    PL.ui.$$("#ex-chans input").forEach((cb) => cb.addEventListener("change", () => { shown[+cb.dataset.c] = cb.checked; drawEx(); }));
+    ["#ex-gain", "#ex-stim", "#ex-clip"].forEach((s) => $(s).addEventListener("change", drawEx));
+    $("#ex-win").addEventListener("change", updateWindow);
+    $("#ex-start").addEventListener("input", updateWindow);
+    setExcerpt(2);
+    $("#ex-status").textContent = "Six 30 s windows chosen automatically by docs/tools/build_assets.py; 0.3 to 35 Hz zero-phase band-pass except \"Cz comes off\" (raw). Colours: EEG blue, EOG orange, EMG green, ECG purple. Each trace is centred on its median in the window.";
+    PL.onRedraw(drawEx);
+    document.addEventListener("pl-theme-change", () => { PL.ui.$$("#ex-chans .sw").forEach((sw, i) => { sw.style.background = PL.color(KCOL[KIND[i]]); }); });
+  }).catch((e) => { $("#ex-status").textContent = "Could not load the excerpts (" + e.message + "). Serve the docs folder over HTTP."; });
+})();
+</script>
+</body>
+</html>

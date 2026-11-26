@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>07 · Responses to the stimulation · Portiloop tutorials</title>
+  <meta name="description" content="Epochs around the stimulation markers of a Portiloop night: offline filtering, slow band and sigma envelope, baselines, rejection rules, averages and SEM, and what the average of one stimulation night can and cannot show.">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <style>
+    /* page-local styles for tutorial 07 */
+    .kv { font-variant-numeric: tabular-nums; }
+    .note-small { font-size: 0.9em; color: var(--fg-muted); }
+    .ctl-group { display: flex; flex-wrap: wrap; gap: 10px 20px; width: 100%; }
+    .controls input[type="range"].short { width: 110px; }
+    .controls label { flex-wrap: wrap; max-width: 100%; }
+    .controls select { max-width: 100%; min-width: 0; }
+    canvas.plot.raster { height: 280px; }
+    .legend-row { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--fg-muted); margin-top: 4px; }
+    .legend-row i { display: inline-block; width: 22px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
+    .figure-img { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 6px; }
+    .figure-img img { display: block; width: 100%; height: auto; }
+    blockquote.callout { margin-left: 0; margin-right: 0; }
+  </style>
+</head>
+<body data-page="07-responses" data-root="..">
+<main>
+<article class="content">
+
+  <div class="eyebrow">Tutorial 07 · Processing the recordings</div>
+  <h1>Responses to the stimulation</h1>
+  <p class="lead">Cut a window of EEG around every sound the Portiloop sent, clean and average these windows, and read the result: the slow wave the device detected, the up-state it aimed at, the response that follows, and the spindle-band activity. Then see why a single stimulation night cannot, on its own, tell you what the sounds did.</p>
+
+  <dl class="meta">
+    <div><dt>Time</dt><dd>45 to 60 minutes</dd></div>
+    <div><dt>Level</dt><dd>Intermediate</dd></div>
+    <div><dt>You need</dt><dd><a href="05-files.html">05</a> (the files) and <a href="06-first-look.html">06</a> (loading a night)</dd></div>
+    <div><dt>Runs in browser</dt><dd>Widgets yes; the notebook needs Python and the dataset</dd></div>
+  </dl>
+
+  <div class="objectives">
+    <h3>In this tutorial you will</h3>
+    <ul>
+      <li>Understand what an epoch is and how <code>portiloop_analysis</code> cuts, filters and checks it</li>
+      <li>Know why the filters are zero-phase, why each uninterrupted stretch is filtered on its own, and why edges are discarded</li>
+      <li>Compute the slow-band response and the sigma (spindle-band) envelope, with their baselines</li>
+      <li>Apply the rejection rules and read their counts on the tutorial night</li>
+      <li>Interpret the average and its SEM, and know which parts reflect the detection (selection) rather than a response</li>
+      <li>Run <code>slow_and_sigma_response.ipynb</code> on a night of your own</li>
+    </ul>
+  </div>
+
+  <h2 id="epochs">From markers to epochs</h2>
+  <p>During the night the Portiloop writes a 1 in the <code>stimulation</code> column of the CSV at the sample where it decided to play a sound (in Cond A, where it would have played one; see <a href="05-files.html">tutorial 05</a>). On the tutorial night there are 1,930 such markers, from minute 30.9 to minute 373.0. An <strong>epoch</strong> is a window of signal centred on one marker: by default from 5 s before to 5 s after it, so 2,501 samples at 250 Hz. Averaging many epochs aligned on their markers cancels the activity that is not time-locked to the markers and keeps what is.</p>
+
+  <div class="callout warning"><span class="callout-title">The marker is a decision, not the sound at the ear</span>The marker is the sample at which the software decided to stimulate. The sound then goes through the operating system's audio stack and the earphones; that latency has not been measured for this device, so we do not know how many milliseconds separate the marker from the sound reaching the ear. Keep this in mind when you read times like "+0.18 s" below: they are relative to the marker.</div>
+
+  <p>The analysis uses one channel, Cz, which is also the detection channel of the tutorial night (detection channel 6 in the metadata; Cz is on <code>raw_ch6</code> in the default montage). Loading it with <code>load_recording</code>:</p>
+<pre data-file="Python (portiloop_analysis, in examples/processing)"><code class="language-python">from portiloop_analysis import load_recording
+
+recording = load_recording("clas-tutorial_2026-11-15_04-01-29_CONDB/clas-tutorial_2026-11-15_04-01-29_CONDB.csv",
+                           channel="Cz", montage="default")
+print(recording.summary().to_string())</code></pre>
+<pre data-file="output on the tutorial night"><code class="language-none">clas-tutorial_2026-11-15_04-01-29_CONDB.csv: 6654051 samples (443.6 min), 1930 stimulations, no _leadoff.json
+channel                          Cz
+files                             1
+duration (h, with gaps)       7.393
+missing samples                   0
+samples with electrode off        0
+stimulation markers            1930</code></pre>
+  <p>"no _leadoff.json": the lead-off file of this night was not retrieved from the device, so the analysis does not know that the electrodes came off near minute 372.8 (<a href="06-first-look.html">tutorial 06</a>). When the file exists, <code>load_recording</code> sets the samples recorded with the electrode, the reference or the bias off to missing (NaN) and flags them in <code>recording.leadoff</code>.</p>
+
+  <h2 id="filters">Filtering offline</h2>
+  <p>The Portiloop filters the signal in real time with <em>causal</em> filters: they only use past samples, so they delay the signal (<a href="08-replay.html#detector">tutorial 08</a>). Offline, we have the whole night, so the analysis uses <strong>zero-phase</strong> filters: <code>scipy.signal.sosfiltfilt</code> runs a Butterworth filter forwards, then backwards, which cancels the delay. The module says so in its first lines:</p>
+  <blockquote class="callout note"><span class="callout-title">portiloop_analysis/preprocessing.py (docstring)</span>"All filters here are zero-phase (applied forwards and backwards with scipy.signal.sosfiltfilt): unlike the causal filters of the Portiloop itself, they do not delay the signal, which is what an offline analysis of event-locked responses needs."</blockquote>
+  <p>For every band, <code>filter_band</code> does the same steps on every uninterrupted stretch of signal:</p>
+<pre data-file="examples/processing/portiloop_analysis/preprocessing.py (filter_band, excerpt)"><code class="language-python">    notch = butter(1, [notch_hz - 0.5, notch_hz + 0.5], btype="bandstop", fs=fs, output="sos")
+    bandpass = butter(order, [low, high], btype="bandpass", fs=fs, output="sos")
+    edge = round(edge_s * fs)
+    filtered = np.full(len(eeg), np.nan)
+    for start, stop in zip(*continuous_segments(np.isfinite(eeg), breaks)):
+        if stop - start &lt;= 2 * edge:
+            continue
+        segment = eeg[start:stop] - eeg[start:stop].mean()
+        if notch is not None:
+            segment = sosfiltfilt(notch, segment)
+        segment = sosfiltfilt(bandpass, segment)
+        filtered[start + edge:stop - edge] = segment[edge:len(segment) - edge]
+    return filtered</code></pre>
+  <ul>
+    <li><strong>Mean removal, notch, band-pass.</strong> The stretch's mean is removed, a notch (a first-order Butterworth band-stop, mains frequency ± 0.5 Hz) removes the mains interference, then a Butterworth band-pass (<code>order=4</code>, applied forwards and backwards) keeps the band. The notch frequency comes from <code>notch_hz</code>: 60 Hz for the tutorial night, whose metadata says <code>"power_line": 60</code>. The lab's protocol uses 50 Hz; set <code>notch_hz</code> to the value in your recording's metadata (the notebook warns you if they differ).</li>
+    <li><strong>Each uninterrupted stretch on its own.</strong> A recording can have holes: a gap between two files of the same night, or samples set to missing because an electrode was off. A filter that runs across a hole either fails (NaN spreads through the whole output) or smears the jump at the edges of the hole into the signal on both sides. So the code finds the runs of valid samples (<code>continuous_segments</code>, which also splits at file boundaries) and filters each one separately.</li>
+    <li><strong>Edges.</strong> A filter applied to a finite stretch has no signal before the first sample or after the last one, so the first and last seconds are distorted (the filter "rings" there). The code discards <code>edge_s = 10</code> s at both ends of every stretch (set to NaN). An epoch that touches these discarded samples is rejected as <code>missing</code>.</li>
+  </ul>
+  <p>The older scripts bridged holes by linear interpolation before filtering; the README of the package explains why that was dropped: "missing data are no longer bridged by linear interpolation before filtering: each stretch of signal is filtered on its own, and epochs touching missing data are rejected".</p>
+
+  <h2 id="bands">The slow band and the sigma envelope</h2>
+  <p>Three filtered versions of Cz are computed (<code>filter_recording</code>):</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Name</th><th>Band</th><th>Used for</th></tr></thead>
+    <tbody>
+      <tr><td><code>slow</code></td><td>0.1 to 4 Hz</td><td>Slow oscillations and the slow waves evoked by sounds</td></tr>
+      <tr><td><code>sigma</code></td><td>11 to 16 Hz, then its amplitude envelope</td><td>Spindle-band activity</td></tr>
+      <tr><td><code>broadband</code></td><td>0.1 to 20 Hz</td><td>Artifact rejection (and the broadband ERP)</td></tr>
+    </tbody>
+  </table></div>
+  <p>The sigma band oscillates at 11 to 16 Hz; averaging it directly would cancel out, because spindle cycles are not phase-locked to the marker. What we want is its <em>amplitude</em>: how strong the spindle-band activity is at each moment. The <strong>Hilbert transform</strong> provides it: it turns a narrow-band signal into an "analytic signal" whose modulus is the instantaneous amplitude (the envelope that touches the peaks of the oscillation) and whose angle is the instantaneous phase. The code computes it on each kept epoch:</p>
+<pre data-file="examples/processing/portiloop_analysis/epochs.py (event_locked_responses, excerpt)"><code class="language-python">        status[int(event)] = "kept"
+        pieces["sigma"] = np.abs(hilbert(pieces["sigma"]))  # amplitude envelope of the sigma band</code></pre>
+  <p>The Hilbert transform of a finite epoch has its own edge effect: the envelope is unreliable in the first and last tens of milliseconds of the epoch. You can see it as the vertical spikes at -5 s and +5 s in the figure <a href="#notebook">below</a>. Do not measure anything at the very edges of an epoch.</p>
+
+  <h3 id="baselines">Baselines</h3>
+  <p>A baseline is a value subtracted from each epoch so that epochs start from a common level. The defaults (<code>EpochSettings</code>) differ per band:</p>
+  <ul>
+    <li><code>slow_baseline = "epoch"</code>: the mean of the whole epoch (-5 to +5 s) is subtracted. The slow band already has no DC component (the band-pass starts at 0.1 Hz), so this only removes slow drifts.</li>
+    <li><code>sigma_baseline = (-1.5, -1.0)</code>: the mean of the envelope between 1.5 and 1.0 s before the marker is subtracted, so the sigma curve shows the change relative to that window. On the tutorial night the envelope itself is about 3.8 µV (mean of the kept epochs from -3 to -2 s, our computation), so a change of 0.86 µV is a change of about 23 %.</li>
+    <li><code>broadband_baseline = None</code>.</li>
+  </ul>
+  <p>A baseline is only neutral if nothing systematic happens in its window. With markers placed on slow oscillations, the window -1.5 to -1.0 s often falls on the previous cycle of the oscillation, and spindles are grouped by slow oscillations [3]. On the tutorial night the sigma envelope has a local maximum at -0.88 s, right next to the default window. The epoch explorer below lets you move the window and see what changes.</p>
+
+  <h2 id="rejection">Rejection rules</h2>
+  <p>For every marker, <code>event_locked_responses</code> checks the epoch in this order and stops at the first reason it finds. The reason is stored in <code>responses.events["status"]</code>:</p>
+<pre data-file="examples/processing/portiloop_analysis/epochs.py (event_locked_responses, excerpt)"><code class="language-python">        if start &lt; 0 or stop &gt; recording.n_samples:
+            reason = "edge"  # the epoch reaches outside the recording
+        elif recording.leadoff[start:stop].any():
+            reason = "leadoff"  # electrode, reference or bias off
+        elif jumps[start + 1:stop].any():
+            reason = "jump"  # abrupt change of the raw signal
+        else:
+            pieces = {band: filtered[band][start:stop] for band in BANDS}
+            if not all(np.isfinite(piece).all() for piece in pieces.values()):
+                reason = "missing"  # missing data, or too close to a gap or to the start/end of a file
+            elif settings.max_ptp_uv is not None and np.ptp(pieces["broadband"]) &gt; settings.max_ptp_uv:
+                reason = "artifact"</code></pre>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Status</th><th>Rule (default value)</th><th>Tutorial night</th></tr></thead>
+    <tbody>
+      <tr><td><code>edge</code></td><td>The epoch reaches outside the recording</td><td class="kv">0</td></tr>
+      <tr><td><code>leadoff</code></td><td>Overlaps a period with the electrode, reference or bias off (from <code>_leadoff.json</code>)</td><td class="kv">0 (no lead-off file)</td></tr>
+      <tr><td><code>jump</code></td><td>Two consecutive <em>raw</em> samples differ by more than <code>jump_limit_uv</code> (1000 µV)</td><td class="kv">50</td></tr>
+      <tr><td><code>missing</code></td><td>Contains missing samples, or samples within <code>edge_s</code> (10 s) of a gap or of the start or end of a file</td><td class="kv">0</td></tr>
+      <tr><td><code>artifact</code></td><td>Broadband (0.1 to 20 Hz) peak-to-peak amplitude above <code>max_ptp_uv</code> (350 µV)</td><td class="kv">173</td></tr>
+      <tr><td><code>kept</code></td><td></td><td class="kv">1,707</td></tr>
+    </tbody>
+  </table></div>
+  <p>Where are the rejected epochs? Most are in the second half of the night: the median minute of the 173 <code>artifact</code> epochs is 306.5, and the 50 <code>jump</code> epochs fall in bursts (for example 10 between minutes 283.8 and 284.1, and 6 around minute 306.3). The last two stimulations of the night, at minute 373.0, are rejected as <code>jump</code>: they are the moment the electrodes came off. Without the lead-off file, the analysis would accept epochs recorded with a detached electrode if they passed the other checks; here none do, because the device itself stopped stimulating at minute 373.4 (<a href="04-night.html">tutorial 04</a>).</p>
+  <p>The same epochs are kept in every band ("The same epochs are kept in every band, so the slow and sigma responses describe the same events", says the docstring of <code>epochs.py</code>).</p>
+
+  <div class="callout tip"><span class="callout-title">Fix the rejection limits before looking at the result</span>The amplitude limit changes the answer, not only the number of epochs. On the tutorial night, with <code>max_ptp_uv</code> = 350 µV (default) we keep 1,707 epochs and the P900 minus N550 amplitude of the average (defined <a href="#interpret">below</a>) is 31.0 µV; with 250 µV we keep 1,186 epochs and get 26.3 µV; with 200 µV, 596 epochs and 19.8 µV (our runs). A lower limit rejects the largest slow waves, which are exactly the ones a slow-oscillation detector selects. Choose the limits in the analysis plan, not after seeing the curves.</div>
+
+  <h2 id="notebook">Running the notebook</h2>
+  <p><a href="https://github.com/Portiloop/portiloop-software/blob/main/examples/processing/slow_and_sigma_response.ipynb"><code>slow_and_sigma_response.ipynb</code></a> (in <code>examples/processing</code>) runs the whole analysis on one night. Install and start it as the README says:</p>
+<pre data-file="terminal (in examples/processing)"><code class="language-bash">pip install -r requirements.txt
+jupyter lab            # then open slow_and_sigma_response.ipynb</code></pre>
+  <ol class="steps">
+    <li><strong>Edit the configuration cell.</strong> Put the path of the night's CSV in <code>files</code> and check the montage and the notch. For the tutorial night:
+<pre data-file="slow_and_sigma_response.ipynb (cell 2, Configuration)"><code class="language-python">files = [
+    "/path/to/clas-tutorial_2026-11-15_04-01-29_CONDB/clas-tutorial_2026-11-15_04-01-29_CONDB.csv",
+]
+
+channel = "Cz"          # electrode to analyse
+montage = "default"     # "default" (ECG1, ECG2, EOG1, EOG2, EMG, Cz, Fz, Fpz) or "no_ecg" (Fpz, Cz, Pz, Fz, EOG1, EOG2, EMG1, EMG2)
+notch_hz = 60           # mains frequency to remove: 60 Hz in North America, 50 Hz in Europe
+window_s = 5            # epochs from -window_s to +window_s seconds around each stimulation
+max_ptp_uv = 350        # reject epochs whose broadband (0.1 to 20 Hz) peak-to-peak amplitude exceeds this (uV)
+jump_limit_uv = 1000    # reject epochs with a jump of the raw signal larger than this between two samples (uV); None: no check
+sigma_baseline = (-1.5, -1.0)  # window (s) whose mean is subtracted from the sigma envelope; None: absolute envelope</code></pre>
+    With an empty <code>files</code> list, the notebook writes and analyses a synthetic recording instead ("The synthetic signal is not real EEG; it only shows what the analysis does", README).</li>
+    <li><strong>Run all cells</strong> (<em>Run &gt; Run All Cells</em>). The epochs cell builds the settings and the responses:
+<pre data-file="slow_and_sigma_response.ipynb (cell 8)"><code class="language-python">settings = EpochSettings(window_s=window_s, notch_hz=notch_hz, max_ptp_uv=max_ptp_uv,
+                         jump_limit_uv=jump_limit_uv, slow_baseline="epoch", sigma_baseline=sigma_baseline)
+responses = event_locked_responses(recording, settings)
+
+print(f"Kept {responses.n_kept} of {len(responses.events)} epochs.")
+responses.rejection_summary().to_frame()</code></pre>
+<pre data-file="output on the tutorial night"><code class="language-none">Kept 1707 of 1930 epochs.
+          markers
+status
+kept         1707
+artifact      173
+jump           50</code></pre>
+    <code>rejection_summary()</code> lists only the statuses that occur.</li>
+    <li><strong>Read the figure.</strong> <code>plot_responses(responses)</code> draws the average (black) and ± 1 SEM (grey) of each band, the marker (red dashed line) and the sigma baseline window (shaded):
+      <figure>
+        <div class="figure-img"><img src="../assets/img/07-plot-responses.png" width="910" height="820" alt="Two panels. Top: baseline-corrected slow-band EEG at Cz from -5 to +5 s around the stimulation marker, with a deep negative wave of about -68 microvolts at -0.42 s, a positive peak around the marker, a negative wave near +0.6 s and a positive wave near +1.1 s. Bottom: baseline-corrected sigma envelope, rising to about +0.9 microvolts just after the marker, with spikes at both edges of the epoch."></div>
+        <figcaption>Output of <code>plot_responses</code> on the tutorial night (1,707 of 1,930 epochs kept; Cz). Computed by us with the default settings above.</figcaption>
+      </figure></li>
+    <li><strong>Find the saved results.</strong> The last cell writes, in a folder <code>&lt;first file name&gt;_slow_and_sigma</code> next to the CSV: the figure (<code>.png</code> and <code>.pdf</code>), <code>average_responses.csv</code> (time, mean and SEM of every band), <code>events.csv</code> (every marker with its status) and <code>recording_info.csv</code>.</li>
+  </ol>
+  <p>The same analysis without the notebook, as in the README:</p>
+<pre data-file="Python"><code class="language-python">from portiloop_analysis import load_recording, EpochSettings, event_locked_responses, plot_responses
+
+recording = load_recording(csv_file, channel="Cz", montage="default")
+responses = event_locked_responses(recording, EpochSettings(notch_hz=60, window_s=5))
+print(responses.rejection_summary())
+plot_responses(responses)</code></pre>
+
+  <h2 id="average">The average and its SEM</h2>
+  <p>At every time point, the curve is the mean across the kept epochs, and the grey band is the standard error of the mean, SEM = SD / √n (the standard deviation across epochs divided by the square root of their number; <code>EventLockedResponses.sem</code>). On the tutorial night the SEM of the slow band is about 0.8 µV (median over the epoch), against responses of tens of µV, so the curve looks very precise.</p>
+  <p>It is less precise than it looks. The SEM formula assumes independent epochs, and these are not:</p>
+  <ul>
+    <li><strong>Epochs overlap.</strong> The interval between two stimulations has a median of 3.10 s, a 5th percentile of 0.81 s and a minimum of 0.328 s. With 10 s epochs, 81 % of the kept epochs share samples with at least one other kept epoch (on average 1.9 other kept markers within ± 5 s, our computation). The same stretch of EEG enters several epochs, at different positions.</li>
+    <li><strong>Epochs come from one brain, one night.</strong> Even far-apart epochs share the participant, the electrode placement and the night's conditions. The SEM describes how well the average of <em>this night</em> is estimated, not how well it would replicate in another night or another person.</li>
+  </ul>
+  <p>To get an idea of the first problem, we grouped the kept epochs into 568 clusters of overlapping epochs (consecutive markers less than 10 s apart) and resampled whole clusters (a cluster bootstrap, 2,000 resamples). At five time points (-0.42, 0, +0.18, +0.62 and +1.12 s), the bootstrap standard error of the slow band was 0.99 to 1.19 times the SEM. On this night the underestimation is modest. The second problem is the important one: for any claim about the stimulation, the unit of analysis is the night or the participant, not the epoch (<a href="09-study.html">tutorial 09</a>).</p>
+
+  <div class="widget" id="ep">
+    <div class="widget-title">Epoch explorer: the 1,930 stimulations of the tutorial night</div>
+    <p class="widget-desc">Average slow-band (0.1 to 4 Hz) and sigma-envelope (11 to 16 Hz) responses at Cz, ± 1 SEM, for the epochs you select, and an image of the individual slow-band epochs (one row per epoch). The epochs are those of the Python analysis, stored at 25 Hz from -4 to +4 s (<code>epochs.json</code>), so the numbers can differ from the Python results by up to about 1 µV. <strong>What to try:</strong> show the rejected epochs; compare N2 with W (automatic stages, see <a href="06-first-look.html">06</a>); compare the first and second half of the night; move the sigma baseline to -3 to -2 s; exclude epochs that have another stimulation within ± 2 s; sort the image by amplitude at t = 0.</p>
+    <div class="controls">
+      <div class="ctl-group">
+        <label for="ep-status">Epochs <select id="ep-status"><option value="kept">kept</option><option value="rejected">rejected (artifact or jump)</option><option value="artifact">artifact</option><option value="jump">jump</option><option value="all">all</option></select></label>
+        <label for="ep-stage">Automatic stage <select id="ep-stage"><option value="all">all</option><option value="N2">N2</option><option value="W">W</option><option value="REM">REM</option><option value="N1">N1</option></select></label>
+        <label for="ep-iso">Exclude if another stimulation within ± <input type="range" class="short" id="ep-iso" min="0" max="4" step="0.25" value="0"><output for="ep-iso"></output></label>
+      </div>
+      <div class="ctl-group">
+        <label for="ep-from">From minute <input type="range" class="short" id="ep-from" min="0" max="444" step="1" value="0"><output for="ep-from"></output></label>
+        <label for="ep-to">to <input type="range" class="short" id="ep-to" min="0" max="444" step="1" value="444"><output for="ep-to"></output></label>
+        <label for="ep-slowbl">Slow baseline <select id="ep-slowbl"><option value="epoch">mean of the epoch</option><option value="none">none</option></select></label>
+      </div>
+      <div class="ctl-group">
+        <label for="ep-sb0">Sigma baseline from <input type="range" class="short" id="ep-sb0" min="-4" max="3.5" step="0.02" value="-1.5"><output for="ep-sb0"></output></label>
+        <label for="ep-sb1">to <input type="range" class="short" id="ep-sb1" min="-3.5" max="4" step="0.02" value="-1.0"><output for="ep-sb1"></output></label>
+        <label for="ep-sigbl"><input type="checkbox" id="ep-sigbl" checked> subtract it</label>
+      </div>
+    </div>
+    <canvas class="plot" id="ep-slow" aria-label="Average slow-band response with SEM"></canvas>
+    <canvas class="plot short" id="ep-sigma" aria-label="Average sigma envelope with SEM"></canvas>
+    <div class="controls">
+      <label for="ep-sort">Image rows sorted by <select id="ep-sort"><option value="time">time of night</option><option value="amp0">value at t = 0 (top: lowest)</option><option value="phase">phase at t = 0 (see below)</option></select></label>
+      <label for="ep-scale">Colour range ± <select id="ep-scale"><option value="50">50 µV</option><option value="100" selected>100 µV</option><option value="200">200 µV</option></select></label>
+    </div>
+    <canvas class="plot raster" id="ep-raster" aria-label="Image of the individual slow-band epochs"></canvas>
+    <div class="legend-row"><span><i id="ep-neg"></i>negative</span><span><i id="ep-pos"></i>positive</span><span>one row per epoch; time on the horizontal axis</span></div>
+    <div class="readout">
+      <div><div class="k">Epochs</div><div class="v" id="ep-n">…</div></div>
+      <div><div class="k">Down-state (-1 to 0 s)</div><div class="v" id="ep-min">…</div></div>
+      <div><div class="k">Slow band at t = 0</div><div class="v" id="ep-0">…</div></div>
+      <div><div class="k">P900 − N550</div><div class="v" id="ep-p9">…</div></div>
+      <div><div class="k">Sigma peak (0 to 0.5 s)</div><div class="v" id="ep-sg">…</div></div>
+    </div>
+    <div class="status" id="ep-status-line">Loading epochs…</div>
+  </div>
+
+  <h2 id="interpret">Reading the average</h2>
+  <p>The slow-band average of the 1,707 kept epochs (Python results, 250 Hz, default settings) has four parts. They do not all mean the same thing.</p>
+  <ol>
+    <li><strong>Before the marker: the detected slow wave (selection, not response).</strong> A deep negative wave reaches -68.0 µV at -0.42 s. This is the down-state that the detector found. The Portiloop's upstate pipeline only stimulates after a negative half-wave that passes fixed criteria on the device-filtered signal ("<code>th_PaP = 75</code>", "<code>th_Neg = 40</code>": more than 75 µV peak to peak and more than 40 µV below zero; <a href="08-replay.html#detector">tutorial 08</a>). Every epoch is therefore aligned on a large slow wave, by construction. This wave would appear even if the sounds did nothing at all, and even with the sound off (Cond A).</li>
+    <li><strong>At the marker: the up-state.</strong> The average is +15.8 µV at 0 s, between two peaks: +18.7 µV at -0.08 s and +23.7 µV at +0.18 s, with a small dip (+15.1 µV) at +0.03 s. We do not know the origin of this dip. In short: the marker falls on the positive half-wave that follows the detected down-state, which is what the pipeline aims for (see the phase analysis below). Since the delay between the marker and the sound at the ear is unknown, we cannot say exactly where the sound itself lands.</li>
+    <li><strong>After the marker: an evoked slow wave, N550/P900-like.</strong> The average then goes down to -27.3 µV at +0.62 s and up to +18.2 µV at +1.12 s. A sound during NREM sleep evokes a K-complex-like response, whose components are often called N550 and P900 (a negative wave about 550 ms and a positive wave about 900 ms after the sound) [4]. <code>evoked_slow_wave_amplitude</code> measures it as the mean of the 0.8 to 1.0 s window minus the mean of the 0.5 to 0.6 s window: 6.6 - (-24.4) = 31.0 µV for the average. Note that the positive peak of this night (+1.12 s) lies outside the 0.8 to 1.0 s window: fixed windows are a choice to make before the study (and to report), not to tune on the data.</li>
+    <li><strong>The sigma envelope.</strong> The baseline-corrected sigma envelope peaks at +0.86 µV at +0.13 s, with a second, smaller rise to +0.25 µV at +0.95 s. Spindle activity is known to rise during slow-oscillation up-states [3], and the stimulation literature reports more "phase-coupled spindle activity" with up-state stimulation [1]. But the rise starts before the marker (the envelope is already +0.75 µV at 0 s), and a zero-phase filter spreads activity in time, both ways, so this curve alone cannot separate spindles that came with the detected up-state from spindles caused by the sound.</li>
+  </ol>
+
+  <div class="callout neuro"><span class="callout-title">For neuroscientists: why the post-marker wave is not proof of a response</span>
+    <p>Slow oscillations often come in trains at about 1 Hz. An epoch aligned on one detected cycle will, on average, show the next cycle too, sound or no sound. On the tutorial night the cycle before the detected one is visible (-10.8 µV at -1.50 s) but much smaller than the wave after the marker (-27.3 µV at +0.62 s); that asymmetry is suggestive, not conclusive.</p>
+    <p>The stimulations also follow each other closely: 42.6 % of the kept epochs have another stimulation 0.3 to 1.5 s after their marker (our computation), and every one of those comes with its own selected down-state. Part of the "N550" is therefore the next detected slow wave. If you keep only the 502 kept epochs with no other stimulation within ± 2 s (try it in the explorer), the value at 0 s drops from +15.6 to +4.7 µV and P900 minus N550 from 31.1 to 18.0 µV (widget computation at 25 Hz). That subset is itself a selection (isolated slow waves rather than trains), so it is not "the true response" either.</p>
+    <p>The way out is a comparison in which the selection is identical and only the sound differs: the same detection with the sound off, in a sham (Cond A) night. That is the design of the closed-loop studies [1] and of the lab's protocol (<a href="09-study.html">tutorial 09</a>).</p>
+  </div>
+
+  <h3 id="phase">Did the marker fall on the up-state?</h3>
+  <p>The average answers this only on average. A more direct measure is the <strong>phase</strong> of the slow oscillation at each marker: we filtered Cz between 0.5 and 2 Hz offline (zero phase, with <code>filter_band</code>) and took the angle of the Hilbert analytic signal at every marker (data script <a href="https://github.com/Portiloop/portiloop-software/blob/main/docs/tools/build_responses_data.py"><code>docs/tools/build_responses_data.py</code></a>). With the cosine convention, 0° is the positive peak (up-state), ±180° the negative peak (down-state), -90° the rising zero crossing and +90° the falling one.</p>
+  <p>On the tutorial night, over all 1,930 markers, the circular mean phase is -16° (a little before the up-state peak, on the rising side), and the concentration is high: the mean resultant length R, which goes from 0 (phases spread uniformly) to 1 (all identical), is 0.84. 79 % of the markers are within ± 45° of the peak and 97 % within ± 90°, that is on the positive half-wave. For the kept N2 epochs: -13°, R = 0.86.</p>
+  <p>The markers fall a little before the peak partly because of a known issue of the software version that recorded the tutorial night: its estimate of the up-state delay was truncated to an integer, so the stimulations came about 16 to 20 ms early. This was fixed on 26 November 2026 (commit <a href="https://github.com/Portiloop/portiloop-software/commit/e4959f1">e4959f1</a>). A replay of the night with the fixed code moves the mean phase from -16° to -11° (<a href="08-replay.html#fix">tutorial 08</a>). Note the software version of each study night.</p>
+  <div class="callout warning"><span class="callout-title">Two limits of this phase estimate</span>
+    <p>(1) The zero-phase filter uses samples after the marker too, so the evoked response to the sound leaks into the phase estimated at the marker. (2) The device detects on its own causal filtered signal, not on this offline one. Its filter chain (the FIR filters, notch and DC removal of <code>SlowOscillationFilter</code>) delays a 1 Hz wave by about 39 ms, by our computation from the coefficients in <code>custom_processors.py</code>, so the phase the device works with is not the phase computed here. Treat the phase as a description of where the markers fell, not as the phase "seen" by the device.</p>
+  </div>
+
+  <div class="widget" id="ph">
+    <div class="widget-title">Phase of the slow oscillation at each stimulation</div>
+    <p class="widget-desc">Histogram of the 0.5 to 2 Hz phase at the markers (15° bins), with a cosine drawn on top to show what each phase means on a slow wave. The vertical line is the circular mean. <strong>What to try:</strong> compare N2 with W; keep only the larger or the smaller slow oscillations (above or below the median 0.5 to 2 Hz amplitude at the marker); look at the rejected epochs.</p>
+    <div class="controls">
+      <label for="ph-status">Epochs <select id="ph-status"><option value="all">all</option><option value="kept">kept</option><option value="rejected">rejected</option></select></label>
+      <label for="ph-stage">Automatic stage <select id="ph-stage"><option value="all">all</option><option value="N2">N2</option><option value="W">W</option><option value="REM">REM</option><option value="N1">N1</option></select></label>
+      <label for="ph-amp">Amplitude <select id="ph-amp"><option value="all">all</option><option value="big">above the median</option><option value="small">below the median</option></select></label>
+    </div>
+    <canvas class="plot tall" id="ph-plot" aria-label="Histogram of slow-oscillation phase at stimulation"></canvas>
+    <div class="readout">
+      <div><div class="k">Markers</div><div class="v" id="ph-n">…</div></div>
+      <div><div class="k">Circular mean</div><div class="v" id="ph-mean">…</div></div>
+      <div><div class="k">Same, in ms at 1 Hz</div><div class="v" id="ph-ms">…</div></div>
+      <div><div class="k">Concentration R</div><div class="v" id="ph-r">…</div></div>
+      <div><div class="k">Within ± 45° of the peak</div><div class="v" id="ph-45">…</div></div>
+    </div>
+    <div class="status" id="ph-status-line">Loading…</div>
+  </div>
+
+  <h2 id="limits">What one stimulation night can and cannot tell you</h2>
+  <p>From the tutorial night alone, you <em>can</em> conclude that:</p>
+  <ul>
+    <li>the recording and the markers are usable: 1,707 of 1,930 epochs pass the checks, and the average has the expected shape;</li>
+    <li>the device did what it was set to do: it stimulated after large negative half-waves, and the markers fell on the positive half-wave of the slow oscillation (circular mean -16°, R = 0.84);</li>
+    <li>the stimulation was not limited to deep sleep according to the automatic staging: 544 of the kept epochs fall in epochs that NanoSleepNet labels W, and 1,103 in N2 (none in N3). <a href="06-first-look.html">Tutorial 06</a> shows why that staging must be checked before you use it.</li>
+  </ul>
+  <p>You <em>cannot</em> conclude that the sounds enhanced slow oscillations or spindles. The wave before the marker is selected by the detector; the wave after it contains the ongoing oscillation and the next detected waves; the sigma rise starts before the marker. None of this can be separated from an effect of the sound without a sham night recorded with the same detection and no sound, in the same participant, analysed with the same settings, and compared across participants. That is the subject of <a href="09-study.html">tutorial 09</a>.</p>
+
+  <h2 id="exercises">Exercises</h2>
+  <details class="exercise"><summary>The sigma baseline</summary><p>In the epoch explorer (kept epochs), move the sigma baseline to -3 to -2 s. What happens to the sigma peak after the marker, and why?</p></details>
+  <details class="solution"><summary>Answer</summary><p>The peak goes from about +0.85 µV to about +1.35 µV (widget values), with the same shape. The envelope around -1.5 to -1.0 s is higher than around -3 to -2 s (it is close to the previous slow-oscillation cycle, where spindle activity is grouped), so subtracting it lowers the whole curve. The baseline choice changes the size of the effect you report; fix it in advance and report it.</p></details>
+
+  <details class="exercise"><summary>N2 against W</summary><p>Compare the kept epochs labelled N2 and W by the automatic staging. Which has the larger P900 minus N550 amplitude? Can you conclude that sounds evoke larger responses in N2?</p></details>
+  <details class="solution"><summary>Answer</summary><p>N2 (1,103 epochs): about 35.6 µV; W (544 epochs): about 23.6 µV (widget values). The down-state before the marker is almost identical (about -69 and -68 µV), so the detection picked similar waves. But you cannot conclude anything about stages from this: the W label is doubtful for many of these epochs (<a href="06-first-look.html">tutorial 06</a>), and there is no sham comparison.</p></details>
+
+  <details class="exercise"><summary>Sorting by phase</summary><p>Sort the image of the epochs by phase at t = 0. What do you see around t = 0 and around -0.4 s?</p></details>
+  <details class="solution"><summary>Answer</summary><p>The positive band (up-state) crosses t = 0 diagonally: epochs with a negative phase (top) reach their peak after the marker, epochs with a positive phase before it. The down-state before the marker follows the same diagonal. The average is a blend of slightly shifted waves, which is one reason its peaks are lower and wider than those of single epochs.</p></details>
+
+  <details class="exercise"><summary>A stricter amplitude limit (Python)</summary><p>Re-run the analysis with <code>max_ptp_uv=250</code> (tip: compute <code>filtered = filter_recording(recording, settings)</code> once and pass <code>filtered=filtered</code> to <code>event_locked_responses</code>, with <code>settings.with_changes(max_ptp_uv=250)</code>). How many epochs are kept, and what is the P900 minus N550 amplitude of the average?</p></details>
+  <details class="solution"><summary>Answer</summary><p>1,186 kept (694 artifact, 50 jump) and 26.3 µV, against 1,707 and 31.0 µV with 350 µV. See the tip box in <a href="#rejection">Rejection rules</a>.</p></details>
+
+  <h2 id="references">References</h2>
+  <ol class="refs">
+    <li>Ngo HV, Martinetz T, Born J, Mölle M (2013). Auditory closed-loop stimulation of the sleep slow oscillation enhances memory. <em>Neuron</em> 78(3): 545-553. <a href="https://doi.org/10.1016/j.neuron.2013.03.006">doi:10.1016/j.neuron.2013.03.006</a>. Quoted from the abstract: "auditory stimulation in phase with the ongoing rhythmic occurrence of slow oscillation up states profoundly enhances the slow oscillation rhythm, phase-coupled spindle activity, and, consequently, the consolidation of declarative memory."</li>
+    <li>Valenchon N, Bouteiller Y, Jourde HR, L'Heureux X, Sobral M, Coffey EBJ, Beltrame G (2022). The Portiloop: a deep learning-based open science tool for closed-loop brain stimulation. <em>PLOS ONE</em> 17(8): e0270696. <a href="https://doi.org/10.1371/journal.pone.0270696">doi:10.1371/journal.pone.0270696</a></li>
+    <li>Mölle M, Marshall L, Gais S, Born J (2002). Grouping of spindle activity during slow oscillations in human non-rapid eye movement sleep. <em>Journal of Neuroscience</em> (December 2002). <a href="https://pubmed.ncbi.nlm.nih.gov/12486189/">PubMed 12486189</a></li>
+    <li>Colrain IM (2005). The K-complex: a 7-decade history. <em>Sleep</em> 28(2). <a href="https://doi.org/10.1093/sleep/28.2.255">doi:10.1093/sleep/28.2.255</a></li>
+    <li>Analysis code: <a href="https://github.com/Portiloop/portiloop-software/tree/main/examples/processing">examples/processing</a> (<code>portiloop_analysis</code>, <code>slow_and_sigma_response.ipynb</code>) in portiloop-software.</li>
+  </ol>
+
+</article>
+</main>
+
+<script src="../assets/js/portiloop.js"></script>
+<script src="../assets/js/data.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = PL.ui.$;
+  const EPS = 1e-6;
+  let E = null, PH = null;
+
+  /* ---------- small helpers ---------- */
+  function cssVar(name, fb) { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v || fb; }
+  function font() { return "12px " + cssVar("--font-sans", "system-ui, sans-serif"); }
+  function hexRgb(h, fb) {
+    const m = /^#([0-9a-f]{6})$/i.exec((h || "").trim());
+    if (!m) return fb;
+    const n = parseInt(m[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function setup(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth || 600, h = canvas.clientHeight || 220;
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h); ctx.font = font();
+    return { ctx, w, h };
+  }
+  function fillBand(canvas, tr, xs, lo, hi, color) {
+    const ctx = canvas.getContext("2d"), b = tr.box;
+    ctx.save(); ctx.beginPath(); ctx.rect(b.l, b.t, b.w, b.h); ctx.clip();
+    ctx.beginPath();
+    for (let i = 0; i < xs.length; i++) { const p = tr.toPx(xs[i], hi[i]); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
+    for (let i = xs.length - 1; i >= 0; i--) { const p = tr.toPx(xs[i], lo[i]); ctx.lineTo(p[0], p[1]); }
+    ctx.closePath(); ctx.globalAlpha = 0.22; ctx.fillStyle = color; ctx.fill(); ctx.restore();
+  }
+  const fmt = (v, d, unit) => (isFinite(v) ? (v > 0 ? "+" : "") + v.toFixed(d) + (unit || "") : "n/a");
+
+  /* ---------- epoch explorer ---------- */
+  function selected() {
+    const status = $("#ep-status").value, stage = $("#ep-stage").value;
+    let a = +$("#ep-from").value, b = +$("#ep-to").value;
+    if (b < a) { const c = a; a = b; b = c; }
+    const iso = +$("#ep-iso").value;
+    const ev = E.events, n = E.n_events, out = [];
+    for (let i = 0; i < n; i++) {
+      const s = ev.status[i];
+      if (status === "kept" && s !== "kept") continue;
+      if (status === "rejected" && s === "kept") continue;
+      if ((status === "artifact" || status === "jump") && s !== status) continue;
+      if (stage !== "all" && ev.stage[i] !== stage) continue;
+      if (ev.minute[i] < a || ev.minute[i] > b) continue;
+      if (iso > 0) {
+        const t = ev.minute[i] * 60;
+        const near = (i > 0 && t - ev.minute[i - 1] * 60 <= iso + EPS) || (i < n - 1 && ev.minute[i + 1] * 60 - t <= iso + EPS);
+        if (near) continue;
+      }
+      out.push(i);
+    }
+    return out;
+  }
+  function epochRow(kind, i, opts) {
+    const r = E.row(kind, i), T = E.n_times, y = new Float64Array(T);
+    for (let k = 0; k < T; k++) y[k] = r[k];
+    let sub = 0;
+    if (kind === "slow" && opts.slowBase === "epoch") { let s = 0; for (let k = 0; k < T; k++) s += y[k]; sub = s / T; }
+    if (kind === "sigma" && opts.sigBase) {
+      let s = 0, c = 0;
+      for (let k = 0; k < T; k++) if (E.time[k] >= opts.sb0 - EPS && E.time[k] <= opts.sb1 + EPS) { s += y[k]; c++; }
+      sub = c ? s / c : 0;
+    }
+    for (let k = 0; k < T; k++) y[k] -= sub;
+    return y;
+  }
+  function meanSem(idx, kind, opts) {
+    const T = E.n_times, sum = new Float64Array(T), sq = new Float64Array(T);
+    let n = 0;
+    const rows = [];
+    idx.forEach((i) => {
+      const y = epochRow(kind, i, opts);
+      for (let k = 0; k < T; k++) if (!isFinite(y[k])) return;
+      for (let k = 0; k < T; k++) { sum[k] += y[k]; sq[k] += y[k] * y[k]; }
+      rows.push(y); n++;
+    });
+    const m = new Float64Array(T), se = new Float64Array(T);
+    for (let k = 0; k < T; k++) {
+      m[k] = n ? sum[k] / n : NaN;
+      const v = n > 1 ? (sq[k] - n * m[k] * m[k]) / (n - 1) : NaN;
+      se[k] = n > 1 ? Math.sqrt(Math.max(0, v) / n) : NaN;
+    }
+    return { m, se, n, rows };
+  }
+  const winMean = (y, a, b) => { let s = 0, c = 0; for (let k = 0; k < E.n_times; k++) if (E.time[k] >= a - EPS && E.time[k] <= b + EPS) { s += y[k]; c++; } return c ? s / c : NaN; };
+  function extreme(y, a, b, sign) {
+    let best = NaN, at = NaN;
+    for (let k = 0; k < E.n_times; k++) {
+      const t = E.time[k];
+      if (t < a - EPS || t > b + EPS || !isFinite(y[k])) continue;
+      if (!isFinite(best) || sign * y[k] > sign * best) { best = y[k]; at = t; }
+    }
+    return [best, at];
+  }
+
+  function drawExplorer() {
+    if (!E) return;
+    let sb0 = +$("#ep-sb0").value, sb1 = +$("#ep-sb1").value;
+    if (sb1 <= sb0 + 0.03) { sb1 = Math.min(4, sb0 + 0.04); }
+    const opts = { slowBase: $("#ep-slowbl").value, sigBase: $("#ep-sigbl").checked, sb0, sb1 };
+    const idx = selected();
+    const slow = meanSem(idx, "slow", opts), sig = meanSem(idx, "sigma", opts);
+    const t = Array.from(E.time);
+    const c1 = PL.color("signal"), c2 = PL.color("model");
+    const lo = (r) => Array.from(r.m, (v, k) => v - r.se[k]), hi = (r) => Array.from(r.m, (v, k) => v + r.se[k]);
+    const trS = PL.plot($("#ep-slow"), {
+      xRange: [-4, 4], xLabel: "", yLabel: "Slow band (µV)",
+      series: [{ x: t, y: Array.from(slow.m), color: c1, width: 1.8, label: "Mean ± SEM, slow band 0.1 to 4 Hz" }],
+      markers: [{ x: 0, color: PL.color("stim"), width: 1.2 }], margin: { b: 22 },
+    });
+    if (slow.n > 1) fillBand($("#ep-slow"), trS, t, lo(slow), hi(slow), c1);
+    const trG = PL.plot($("#ep-sigma"), {
+      xRange: [-4, 4], xLabel: "Time from the stimulation marker (s)", yLabel: "Sigma env. (µV)",
+      regions: opts.sigBase ? [{ x0: sb0, x1: sb1, label: "Sigma baseline" }] : [],
+      series: [{ x: t, y: Array.from(sig.m), color: c2, width: 1.8, label: "Mean ± SEM, sigma envelope" }],
+      markers: [{ x: 0, color: PL.color("stim"), width: 1.2 }],
+    });
+    if (sig.n > 1) fillBand($("#ep-sigma"), trG, t, lo(sig), hi(sig), c2);
+    drawRaster(idx, slow.rows, opts);
+    // readouts
+    $("#ep-n").textContent = slow.n.toLocaleString("en-US");
+    const mn = extreme(slow.m, -1, 0, -1), sg = extreme(sig.m, 0, 0.5, 1);
+    const i0 = E.time.findIndex((v) => Math.abs(v) < EPS);
+    $("#ep-min").textContent = isFinite(mn[0]) ? fmt(mn[0], 1, " µV") + " at " + mn[1].toFixed(2) + " s" : "n/a";
+    $("#ep-0").textContent = fmt(slow.m[i0], 1, " µV");
+    $("#ep-p9").textContent = fmt(winMean(slow.m, 0.8, 1.0) - winMean(slow.m, 0.5, 0.6), 1, " µV");
+    $("#ep-sg").textContent = isFinite(sg[0]) ? fmt(sg[0], 2, " µV") + " at " + sg[1].toFixed(2) + " s" : "n/a";
+    $("#ep-status-line").textContent = slow.n
+      ? slow.n + " epochs (" + (opts.sigBase ? "sigma baseline " + sb0.toFixed(2) + " to " + sb1.toFixed(2) + " s" : "absolute sigma envelope") + "). Shaded bands: ± 1 SEM."
+      : "No epoch matches this selection.";
+  }
+
+  function drawRaster(idx, rows, opts) {
+    const cv = $("#ep-raster"), g = setup(cv), ctx = g.ctx;
+    const m = { l: 52, r: 12, t: 8, b: 36 }, W = g.w - m.l - m.r, H = g.h - m.t - m.b;
+    const neg = hexRgb(cssVar("--plot-c1", "#2b5fa8"), [43, 95, 168]);
+    const pos = hexRgb(cssVar("--plot-c2", "#c4561d"), [196, 86, 29]);
+    const mid = hexRgb(cssVar("--bg-elev", "#ffffff"), [255, 255, 255]);
+    $("#ep-neg").style.background = "rgb(" + neg + ")"; $("#ep-pos").style.background = "rgb(" + pos + ")";
+    ctx.fillStyle = PL.color("text");
+    if (!rows.length) { ctx.fillText("No epoch", m.l + 8, m.t + 16); return; }
+    const sort = $("#ep-sort").value, scale = +$("#ep-scale").value, T = E.n_times;
+    const i0 = E.time.findIndex((v) => Math.abs(v) < EPS);
+    const order = rows.map((_, r) => r);
+    if (sort === "amp0") order.sort((a, b) => rows[a][i0] - rows[b][i0]);
+    if (sort === "phase" && PH) {
+      const p = (r) => { const v = PH.phase_deg[idx[r]]; return v === null ? 999 : v; };
+      order.sort((a, b) => p(a) - p(b));
+    }
+    const off = document.createElement("canvas"); off.width = T; off.height = rows.length;
+    const oc = off.getContext("2d"), img = oc.createImageData(T, rows.length);
+    order.forEach((r, row) => {
+      const y = rows[r];
+      for (let k = 0; k < T; k++) {
+        let v = Math.max(-1, Math.min(1, y[k] / scale));
+        const c = v < 0 ? neg : pos, a = Math.abs(v), o = (row * T + k) * 4;
+        img.data[o] = mid[0] + (c[0] - mid[0]) * a; img.data[o + 1] = mid[1] + (c[1] - mid[1]) * a;
+        img.data[o + 2] = mid[2] + (c[2] - mid[2]) * a; img.data[o + 3] = 255;
+      }
+    });
+    oc.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(off, m.l, m.t, W, H);
+    ctx.strokeStyle = PL.color("axis"); ctx.strokeRect(m.l + 0.5, m.t + 0.5, W, H);
+    const X = (x) => m.l + (x + 4) / 8 * W;
+    ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillStyle = PL.color("text");
+    for (let x = -4; x <= 4; x++) { ctx.fillText(String(x), X(x), m.t + H + 4); }
+    ctx.textBaseline = "bottom"; ctx.fillText("Time from the stimulation marker (s)", m.l + W / 2, g.h - 2);
+    ctx.strokeStyle = PL.color("stim"); ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(X(0), m.t); ctx.lineTo(X(0), m.t + H); ctx.stroke(); ctx.setLineDash([]);
+    ctx.save(); ctx.translate(12, m.t + H / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(rows.length + " epochs", 0, 0); ctx.restore();
+  }
+
+  ["#ep-status", "#ep-stage", "#ep-slowbl", "#ep-sort", "#ep-scale", "#ep-sigbl"].forEach((s) => PL.ui.bind(s, drawExplorer));
+  PL.ui.bind("#ep-iso", drawExplorer, (v) => (v ? v.toFixed(2) + " s" : "off"));
+  PL.ui.bind("#ep-from", drawExplorer, (v) => v.toFixed(0));
+  PL.ui.bind("#ep-to", drawExplorer, (v) => v.toFixed(0));
+  PL.ui.bind("#ep-sb0", drawExplorer, (v) => v.toFixed(2) + " s");
+  PL.ui.bind("#ep-sb1", drawExplorer, (v) => v.toFixed(2) + " s");
+
+  /* ---------- phase histogram ---------- */
+  let ampMedian = NaN;
+  function drawPhase() {
+    if (!E || !PH) return;
+    const status = $("#ph-status").value, stage = $("#ph-stage").value, amp = $("#ph-amp").value;
+    const ph = [];
+    for (let i = 0; i < E.n_events; i++) {
+      const s = E.events.status[i], p = PH.phase_deg[i], a = PH.amplitude_uv[i];
+      if (p === null) continue;
+      if (status === "kept" && s !== "kept") continue;
+      if (status === "rejected" && s === "kept") continue;
+      if (stage !== "all" && E.events.stage[i] !== stage) continue;
+      if (amp === "big" && !(a >= ampMedian)) continue;
+      if (amp === "small" && !(a < ampMedian)) continue;
+      ph.push(p);
+    }
+    const nb = 24, counts = new Array(nb).fill(0);
+    let cx = 0, sx = 0, in45 = 0;
+    ph.forEach((p) => {
+      let b = Math.floor((p + 180) / 15); if (b >= nb) b = nb - 1; if (b < 0) b = 0;
+      counts[b]++; cx += Math.cos(p * Math.PI / 180); sx += Math.sin(p * Math.PI / 180);
+      if (Math.abs(p) < 45) in45++;
+    });
+    const n = ph.length, mean = Math.atan2(sx, cx) * 180 / Math.PI, R = n ? Math.hypot(cx, sx) / n : NaN;
+    const cv = $("#ph-plot"), g = setup(cv), ctx = g.ctx;
+    const m = { l: 52, r: 14, t: 34, b: 40 }, W = g.w - m.l - m.r, H = g.h - m.t - m.b;
+    const ymax = Math.max(1, ...counts) * 1.1;
+    const X = (d) => m.l + (d + 180) / 360 * W, Y = (c) => m.t + H - c / ymax * H;
+    // grid and axes
+    ctx.strokeStyle = PL.color("grid"); ctx.fillStyle = PL.color("text"); ctx.lineWidth = 1;
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    [-180, -90, 0, 90, 180].forEach((d) => { ctx.beginPath(); ctx.moveTo(X(d), m.t); ctx.lineTo(X(d), m.t + H); ctx.stroke(); ctx.fillText(d + "°", X(d), m.t + H + 4); });
+    ctx.textBaseline = "bottom"; ctx.fillText("Phase of the 0.5 to 2 Hz oscillation at the marker", m.l + W / 2, g.h - 2);
+    const step = ymax > 400 ? 100 : ymax > 150 ? 50 : ymax > 60 ? 20 : ymax > 25 ? 10 : 5;
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (let c = 0; c <= ymax; c += step) { ctx.beginPath(); ctx.moveTo(m.l, Y(c)); ctx.lineTo(m.l + W, Y(c)); ctx.stroke(); ctx.fillText(String(c), m.l - 6, Y(c)); }
+    ctx.save(); ctx.translate(12, m.t + H / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = "center"; ctx.fillText("Markers per 15°", 0, 0); ctx.restore();
+    // bars
+    ctx.fillStyle = PL.color("signal"); ctx.globalAlpha = 0.75;
+    counts.forEach((c, b) => { const x0 = X(-180 + 15 * b) + 1, x1 = X(-165 + 15 * b) - 1; ctx.fillRect(x0, Y(c), Math.max(1, x1 - x0), m.t + H - Y(c)); });
+    ctx.globalAlpha = 1;
+    // cosine showing the meaning of the phase
+    ctx.strokeStyle = PL.color("text"); ctx.lineWidth = 1.4; ctx.setLineDash([5, 4]); ctx.beginPath();
+    for (let d = -180; d <= 180; d += 2) { const y = m.t + H * 0.5 - Math.cos(d * Math.PI / 180) * H * 0.42; if (d === -180) ctx.moveTo(X(d), y); else ctx.lineTo(X(d), y); }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.fillStyle = PL.color("text");
+    const narrow = W < 420;
+    ctx.fillText(narrow ? "up" : "up-state", X(0), m.t - 4);
+    ctx.fillText(narrow ? "down" : "down-state", X(-160), m.t - 4);
+    ctx.fillText(narrow ? "down" : "down-state", X(160), m.t - 4);
+    if (!narrow) { ctx.fillText("rising", X(-90), m.t - 4); ctx.fillText("falling", X(90), m.t - 4); }
+    // circular mean
+    if (n) {
+      ctx.strokeStyle = PL.color("stim"); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(mean), m.t); ctx.lineTo(X(mean), m.t + H); ctx.stroke();
+    }
+    ctx.strokeStyle = PL.color("axis"); ctx.lineWidth = 1; ctx.strokeRect(m.l + 0.5, m.t + 0.5, W, H);
+    $("#ph-n").textContent = n.toLocaleString("en-US");
+    $("#ph-mean").textContent = n ? fmt(mean, 0, "°") : "n/a";
+    $("#ph-ms").textContent = n ? fmt(mean / 360 * 1000, 0, " ms") : "n/a";
+    $("#ph-r").textContent = n ? R.toFixed(2) : "n/a";
+    $("#ph-45").textContent = n ? (100 * in45 / n).toFixed(0) + " %" : "n/a";
+    $("#ph-status-line").textContent = n ? "Pink line: circular mean. Dashed curve: a cosine, to show where each phase lies on a slow wave (not data). Median amplitude used for the split: " + ampMedian.toFixed(1) + " µV." : "No marker matches this selection.";
+  }
+  ["#ph-status", "#ph-stage", "#ph-amp"].forEach((s) => PL.ui.bind(s, drawPhase));
+
+  PL.onRedraw(function () { drawExplorer(); drawPhase(); });
+
+  PL.data.epochs().then((e) => {
+    E = e;
+    drawExplorer();
+    return fetch((PL.data.base || "../assets/data/") + "07-responses-phase.json").then((r) => {
+      if (!r.ok) throw new Error("Cannot load 07-responses-phase.json (" + r.status + ")");
+      return r.json();
+    });
+  }).then((p) => {
+    PH = p;
+    const a = p.amplitude_uv.filter((v, i) => v !== null && E.events.status[i] === "kept").sort((x, y) => x - y);
+    ampMedian = a.length ? (a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2) : NaN;
+    drawPhase(); drawExplorer();
+  }).catch((err) => {
+    const msg = "Could not load the data: " + err.message + " (serve the docs folder over HTTP).";
+    $("#ep-status-line").textContent = msg; $("#ph-status-line").textContent = msg;
+  });
+})();
+</script>
+</body>
+</html>

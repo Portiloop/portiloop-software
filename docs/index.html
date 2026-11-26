@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portiloop tutorials</title>
+  <meta name="description" content="Interactive tutorials for sleep researchers: run an overnight closed-loop auditory stimulation study with the open-source Portiloop, then process the recordings, with a real night as the example.">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+  <style>
+    .paths { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 1.2em 0; }
+    .path { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--bg-elev); }
+    .path h3 { margin: 0 0 6px; font-size: 1rem; }
+    .path p { margin: 0 0 8px; color: var(--fg-muted); font-size: 0.92em; }
+    .path .route { display: flex; flex-wrap: wrap; gap: 6px; }
+    .path .route a { font-size: 13px; font-weight: 600; text-decoration: none; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+    .group-title { margin: 1.6em 0 0.2em; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-muted); font-weight: 650; border: 0; padding: 0; }
+  </style>
+</head>
+<body data-page="index" data-root=".">
+<main>
+<article class="content">
+
+  <section class="hero">
+    <span class="logo-word hero-logo" role="img" aria-label="Portiloop"></span>
+    <div class="eyebrow">Tutorials</div>
+    <h1>Run a closed-loop sleep stimulation night, then analyse it</h1>
+    <p class="lead">A hands-on course for sleep researchers and the people who run their nights. The first part follows a laboratory protocol for closed-loop auditory stimulation (CLAS) step by step: equipment, electrodes, the Portiloop Control Center and the night itself. The second part processes a real night recorded with that protocol, from the raw files to the brain's response to the sounds. Every concept comes with an interactive figure built from that night.</p>
+  </section>
+
+  <div class="widget" id="hero">
+    <div class="widget-title">Thirty seconds of deep sleep from the tutorial night</div>
+    <p class="widget-desc">The EEG at Cz during deep sleep, as the Portiloop recorded it. Each red line is a sound the device played, decided in real time from the signal: it detects a slow oscillation and plays a short burst of noise on its up-state (the positive phase). Tick <em>Slow band</em> to see the slow waves alone.</p>
+    <canvas class="plot tall" id="hero-plot" aria-label="Cz EEG during deep sleep with the stimulation times"></canvas>
+    <div class="controls">
+      <label for="hero-slow"><input type="checkbox" id="hero-slow"> Slow band (0.3 to 4 Hz)</label>
+      <span class="muted small" id="hero-status">Loading the night…</span>
+    </div>
+  </div>
+
+  <h2 id="paths">Choose your path</h2>
+  <div class="paths">
+    <div class="path">
+      <h3>I run the nights</h3>
+      <p>Prepare the participant, set up the device, start and stop the recording, collect the files.</p>
+      <div class="route"><a href="tutorials/01-overview.html">01</a><a href="tutorials/02-preparation.html">02</a><a href="tutorials/03-control-center.html">03</a><a href="tutorials/04-night.html">04</a><a href="tutorials/05-files.html">05</a></div>
+    </div>
+    <div class="path">
+      <h3>I analyse the data</h3>
+      <p>Load a night, check its quality, measure the responses to the stimulation, compare conditions.</p>
+      <div class="route"><a href="tutorials/05-files.html">05</a><a href="tutorials/06-first-look.html">06</a><a href="tutorials/07-responses.html">07</a><a href="tutorials/09-study.html">09</a></div>
+    </div>
+    <div class="path">
+      <h3>I design the study</h3>
+      <p>What the device does, sham and stimulation conditions, blinding, testing settings before the first participant.</p>
+      <div class="route"><a href="tutorials/01-overview.html">01</a><a href="tutorials/03-control-center.html">03</a><a href="tutorials/08-replay.html">08</a><a href="tutorials/09-study.html">09</a></div>
+    </div>
+  </div>
+
+  <h2 id="tutorials">All tutorials</h2>
+  <div id="cards"></div>
+
+  <h2 id="data">The tutorial night</h2>
+  <p>The processing tutorials use one real night recorded by the lab with the protocol of these tutorials: 7.4 hours, 8 channels (ECG, EOG, chin EMG, Cz, Fz, Fpz) at 250 Hz, in the stimulation condition, with 1,930 sounds played by the "Sleep slow oscillations (upstate)" pipeline. The files were renamed and their metadata cleaned to remove the name of the person who was recorded. The interactive figures of the tutorials load summaries of this night from this site; to run the analyses yourself, download the night (about 200 MB) as described in <a href="tutorials/05-files.html">Tutorial 05</a>.</p>
+  <div class="callout note"><span class="callout-title">Hardware and software version</span>The tutorials, photos and screenshots are for the Portiloop V2.3 (a Google Coral Dev Board Mini and the Portiloop board) with the software of the <code>main</code> branch, which recorded the tutorial night: replaying the night with it reproduces every one of its 1,930 stimulations at the same sample (<a href="tutorials/08-replay.html">Tutorial 08</a>).</div>
+
+  <h2 id="also">See also</h2>
+  <ul>
+    <li><a href="https://github.com/Portiloop/portiloop-software">Portiloop software</a> (the code running on the device, the offline simulator and the analysis examples), <a href="https://github.com/Portiloop/portiloop-hardware">Portiloop hardware</a>.</li>
+    <li><a href="https://portiloop.github.io/portiloop-training/">Training tutorials</a>: how the Portiloop's spindle detector was trained, and how to train your own.</li>
+    <li>Valenchon N, Bouteiller Y, Jourde HR, L'Heureux X, Sobral M, Coffey EBJ, Beltrame G (2022). The Portiloop: a deep learning-based open science tool for closed-loop brain stimulation. <em>PLOS ONE</em> 17(8): e0270696. <a href="https://doi.org/10.1371/journal.pone.0270696">doi:10.1371/journal.pone.0270696</a></li>
+  </ul>
+
+</article>
+</main>
+<script src="assets/js/portiloop.js"></script>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/nav.js"></script>
+<script>
+(function () {
+  const blurbs = {
+    "01-overview": ["What the Portiloop does during a night, how it times sounds to slow oscillations, and how a stimulation study is organised.", ["Concepts", "Interactive"]],
+    "02-preparation": ["The equipment, the nine electrodes, measuring Cz, Fz and Fpz, skin preparation and placement.", ["Protocol", "Interactive"]],
+    "03-control-center": ["Turn the device on, connect a phone, check impedances and set every option of the protocol.", ["Protocol", "Interactive"]],
+    "04-night": ["Test the sound, start, the delay before stimulation, waking up, the morning, and what can go wrong.", ["Protocol", "Interactive"]],
+    "05-files": ["Where the recordings are, what every file and column contains, and a first check of a night.", ["Data", "Python", "Interactive"]],
+    "06-first-look": ["Load the tutorial night, read its spectrogram, stages, stimulations and artifacts.", ["Python", "Interactive"]],
+    "07-responses": ["Epochs around the sounds, artifact rejection, and the slow-wave and spindle responses.", ["Python", "Interactive"]],
+    "08-replay": ["Replay a recorded night through the device's own code to test settings offline.", ["Python", "Interactive"]],
+    "09-study": ["Sham and stimulation nights, blinding, statistics and the group analysis notebook.", ["Statistics", "Interactive"]],
+    "10-field-console": ["Run wake experiments (mismatch negativity, resting state) with the Portiloop and a laptop over LSL.", ["Add-on", "LSL", "Python"]],
+    "11-fast-abr-ffr": ["Record at up to 16 kSPS and measure auditory brainstem responses (ABR) and frequency-following responses (FFR).", ["Fast acquisition", "Auditory", "Interactive"]],
+  };
+  let html = "";
+  (window.PL_TOC || []).forEach(function (g) {
+    html += '<h3 class="group-title">' + g.group + '</h3><div class="cards">';
+    g.items.forEach(function (it) {
+      const b = blurbs[it[0]] || ["", []];
+      html += '<a class="card" href="tutorials/' + it[0] + '.html"><div class="num">TUTORIAL ' + it[0].slice(0, 2) + "</div><h3>" + it[1] + "</h3><p>" + b[0] + '</p><div class="tags">' +
+        b[1].map(function (t) { return '<span class="tag">' + t + "</span>"; }).join("") + "</div></a>";
+    });
+    html += "</div>";
+  });
+  document.getElementById("cards").innerHTML = html;
+
+  // hero: the "deep" excerpt of the tutorial night, Cz with the stimulations
+  const $ = PL.ui.$;
+  let ex = null, fs = 250, slow = null;
+  function lowpass(x) {
+    // zero-phase smoothing for display: two passes of a one-pole low-pass (about 4 Hz) after removing the mean
+    const a = Math.exp(-2 * Math.PI * 4 / fs);
+    const y = Float32Array.from(x, (v) => (isFinite(v) ? v : 0));
+    for (let pass = 0; pass < 2; pass++) {
+      let s = y[0];
+      for (let i = 0; i < y.length; i++) { s = a * s + (1 - a) * y[i]; y[i] = s; }
+      s = y[y.length - 1];
+      for (let i = y.length - 1; i >= 0; i--) { s = a * s + (1 - a) * y[i]; y[i] = s; }
+    }
+    return y;
+  }
+  function draw() {
+    if (!ex) return;
+    const cz = ex.signals[5];
+    const y = $("#hero-slow").checked ? slow : cz;
+    const t = Array.from({ length: cz.length }, (_, i) => i / fs);
+    PL.plot($("#hero-plot"), {
+      xRange: [0, 30], yRange: [-160, 120], xLabel: "Time (s)", yLabel: "µV",
+      series: [{ x: t, y: Array.from(y), color: PL.color("signal"), width: 1.1, label: $("#hero-slow").checked ? "Cz, slow band" : "Cz (0.3 to 35 Hz)" }],
+      markers: ex.stims.map((s) => ({ x: s / fs, color: "#d62828", label: "" })),
+    });
+  }
+  $("#hero-slow").addEventListener("change", draw);
+  PL.onRedraw(draw);
+  PL.data.excerpts().then(function (j) {
+    fs = j.fs;
+    ex = j.excerpts.find((e) => e.key === "deep");
+    slow = lowpass(ex.signals[5]);
+    $("#hero-status").textContent = ex.stims.length + " sounds in these 30 s, minute " + (ex.start_s / 60).toFixed(0) + " of the night.";
+    draw();
+  }).catch(function (e) {
+    $("#hero-status").textContent = "Could not load the night (" + e.message + "). If you opened this file from disk, serve the docs folder over HTTP (see docs/README.md).";
+  });
+})();
+</script>
+</body>
+</html>

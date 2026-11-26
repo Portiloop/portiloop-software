@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>01 · Closed-loop stimulation with the Portiloop · Portiloop tutorials</title>
+  <meta name="description" content="What the Portiloop is, the closed-loop auditory stimulation (CLAS) paradigm, how the slow-oscillation up-state pipeline decides when to play a sound, Cond A (sham) and Cond B (stimulation), blinding, and what a study night looks like, with the real tutorial night.">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <!-- Prism syntax highlighting (colors come from style.css) -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <style>
+    blockquote.quote { margin: 1.1em 0; padding: 6px 16px; border-left: 3px solid var(--accent); background: var(--bg-elev); border-radius: 0 8px 8px 0; }
+    blockquote.quote p { margin: 0.3em 0; }
+    blockquote.quote cite { display: block; font-style: normal; font-size: 0.86em; color: var(--fg-muted); margin-top: 4px; }
+    .pipeline { margin: 1.4em 0; }
+    .pipeline svg { width: 100%; height: auto; display: block; }
+    .pipeline .pv { display: none; max-width: 420px; margin: 0 auto; }
+    @media (max-width: 640px) { .pipeline .ph { display: none; } .pipeline .pv { display: block; } }
+    .pipeline .box { fill: var(--bg-elev); stroke: var(--border); stroke-width: 1.5; }
+    .pipeline .box.hl { stroke: var(--accent); }
+    .pipeline text { fill: var(--fg); font-family: var(--font-sans); }
+    .pipeline .t1 { font-weight: 650; font-size: 13.5px; }
+    .pipeline .t2 { font-size: 11.5px; fill: var(--fg-muted); }
+    .pipeline .arrow { stroke: var(--fg-muted); stroke-width: 1.6; fill: none; }
+    .pipeline .ah { fill: var(--fg-muted); }
+    canvas.plot.night { height: 390px; }
+    .jump { display: flex; flex-wrap: wrap; gap: 8px; }
+    .jump .btn { font-size: 13px; padding: 5px 10px; }
+    .readout .v.small { font-size: 1rem; }
+    .cl-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--fg-muted); margin: 4px 0 6px; }
+    .cl-legend i { display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+    .cl-legend i.box { height: 10px; opacity: 0.35; }
+    .crit td:nth-child(2), .crit td:nth-child(3) { white-space: nowrap; }
+  </style>
+</head>
+<body data-page="01-overview" data-root="..">
+<main>
+<article class="content">
+
+  <div class="eyebrow">Tutorial 01 · Running a night</div>
+  <h1>Closed-loop stimulation with the Portiloop</h1>
+  <p class="lead">The Portiloop records the EEG of a sleeping participant, recognizes slow oscillations as they happen, and plays a short sound on their up-state. This page explains the idea behind closed-loop auditory stimulation (CLAS), what the device actually computes during the night, what Cond A and Cond B mean, and what a study night looks like, using a real night recorded by the lab.</p>
+
+  <dl class="meta">
+    <div><dt>Time</dt><dd>30 minutes</dd></div>
+    <div><dt>Level</dt><dd>Beginner</dd></div>
+    <div><dt>You need</dt><dd>Nothing but this browser</dd></div>
+    <div><dt>Runs in browser</dt><dd>Yes, on the real tutorial night</dd></div>
+  </dl>
+
+  <div class="objectives">
+    <h3>In this tutorial you will</h3>
+    <ul>
+      <li>Learn what the Portiloop is made of and what it does during a night.</li>
+      <li>Review slow oscillations, their down-states and up-states, and why a sound is timed to the up-state; see what the literature shows and what it does not.</li>
+      <li>Understand, criterion by criterion, how the "Sleep slow oscillations (upstate)" pipeline decides when to play a sound, and check it on real slow waves.</li>
+      <li>Know what Cond A and Cond B do, and why blinding is your job, not the software's.</li>
+      <li>Walk through the structure of a study night and explore the whole tutorial night.</li>
+    </ul>
+  </div>
+
+  <!-- ===================================================================== -->
+  <h2 id="portiloop">What the Portiloop is</h2>
+  <p>The Portiloop is an open-source, portable device for closed-loop stimulation, developed by the MIST Lab (Polytechnique Montréal) and the CL:ASP lab (Concordia University). Its paper describes it as follows:</p>
+  <blockquote class="quote">
+    <p>"In this article, we propose the Portiloop, a deep learning-based, portable and low-cost closed-loop stimulation system able to target specific brain oscillations."</p>
+    <cite>Valenchon et al. (2022), PLOS ONE, Abstract [1]</cite>
+  </blockquote>
+  <p>In practice, for the CLAS protocol of these tutorials, a Portiloop is three things in one small box:</p>
+  <ul>
+    <li><strong>An EEG amplifier.</strong> An ADS1299 chip records 8 channels (EEG, EOG, EMG and ECG in this protocol), at 250 samples per second. Electrodes plug into a single connector (Tutorial <a href="02-preparation.html">02</a>).</li>
+    <li><strong>A small computer that analyses the signal in real time.</strong> These tutorials document the Portiloop V2.3, which the README describes as "a Google Coral Dev Board Mini and a Portiloop board" (<code>"hardware_version": 2</code> in the metadata of the tutorial night). The computer filters one EEG channel (Cz) sample by sample and runs a detector on it.</li>
+    <li><strong>A sound player.</strong> When the detector fires, the device plays a short sound in earphones.</li>
+  </ul>
+  <p>You control it from a phone, over the device's own Wi-Fi network, with a web page called the Control Center (Tutorial <a href="03-control-center.html">03</a>). Everything is written to files (on the SD card when one is inserted, otherwise in the device's internal memory): the raw signals of the 8 channels, a column marking every detection and every sound, the settings and the last impedance check (Tutorial <a href="05-files.html">05</a>).</p>
+
+  <div class="callout note"><span class="callout-title">Note: the same device can do other things</span>The Control Center offers several "pipelines": "Acquisition only" (recording, no detection), "Sleep spindles" (a neural-network spindle detector), "Sleep slow oscillations" and "Sleep slow oscillations (upstate)" (<a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_pipelines.py#L9-L34">custom_pipelines.py, lines 9 to 34</a>). The CLAS protocol uses only <strong>"Sleep slow oscillations (upstate)"</strong>, and these tutorials describe only that one.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="clas">Closed-loop auditory stimulation (CLAS)</h2>
+
+  <h3 id="slow-oscillations">Slow oscillations, down-states and up-states</h3>
+  <p>During deep non-REM sleep, the scalp EEG is dominated by large, slow waves. At the cellular level, they reflect the slow oscillation of cortical neurons, first described in intracellular recordings by Steriade and colleagues [2]. Massimini et al. summarize it in two sentences:</p>
+  <blockquote class="quote">
+    <p>"The slow oscillation comprises a hyperpolarization phase or down state, during which virtually all cortical neurons are deeply hyperpolarized and remain silent for a few hundred milliseconds. The down state is followed by a depolarization phase or up state that also lasts for several hundred milliseconds."</p>
+    <cite>Massimini et al. (2004), Journal of Neuroscience, Introduction [3]</cite>
+  </blockquote>
+  <p>On the scalp, with a reference near the ear (as in this protocol), the down-state is associated with the large <em>negative</em> half-wave of the slow oscillation and the up-state with the <em>positive</em> half-wave that follows. The same paper is careful about the exact timing:</p>
+  <blockquote class="quote">
+    <p>"Several considerations suggest that the negative peak of the slow oscillation in the ear-referenced human sleep EEG is likely to reflect the transition to the depolarizing phase or up state of the intracellularly defined slow oscillation." [...] "As shown by Steriade et al. (1994), the emergence of scalp positivity corresponds to the depolarized phase of the slow oscillation."</p>
+    <cite>Massimini et al. (2004), Journal of Neuroscience, Discussion [3]</cite>
+  </blockquote>
+
+  <h3 id="why-upstate">Why a sound at the up-state?</h3>
+  <p>A short, soft sound during deep sleep can evoke a response in the EEG without waking the sleeper. The idea of CLAS is to time such sounds to the ongoing rhythm. The study that established the paradigm in humans compared sounds in phase and out of phase with the slow oscillation:</p>
+  <blockquote class="quote">
+    <p>"Here we show in sleeping humans that auditory stimulation in phase with the ongoing rhythmic occurrence of slow oscillation up states profoundly enhances the slow oscillation rhythm, phase-coupled spindle activity, and, consequently, the consolidation of declarative memory. Stimulation out of phase with the ongoing slow oscillation rhythm remained ineffective."</p>
+    <cite>Ngo et al. (2013), Neuron, Summary [4]</cite>
+  </blockquote>
+
+  <h3 id="evidence">What is known, and what is not</h3>
+  <p>The effect on the EEG is well established; the effect on memory is less certain. A double-blind replication of the word-pair experiment starts from the first and questions the second:</p>
+  <blockquote class="quote">
+    <p>"Closed-loop acoustic stimulation has previously been shown to enhance slow oscillations and spindle activity during sleep and improve verbal associative memory." [...] "Again, we successfully enhanced slow oscillation and spindle power, but again did not strengthen associative memory performance with stimulation."</p>
+    <cite>Henin et al. (2019), eNeuro, Abstract [5]</cite>
+  </blockquote>
+  <p>Two meta-analyses reached different conclusions from overlapping sets of studies:</p>
+  <blockquote class="quote">
+    <p>"Acoustic enhancement of SWS tends to increase the overnight consolidation of episodic memory but effects remain small and-with the exception of subgroup models-at trend levels. Currently, the evidence is not sufficient to recommend the use of commercially available devices."</p>
+    <cite>Wunderlin et al. (2021), Sleep, Abstract (10 studies, 177 participants; combined Hedges' g = 0.25, p = 0.07) [6]</cite>
+  </blockquote>
+  <blockquote class="quote">
+    <p>"We found a medium significant effect of acoustic stimulation on memory task performance (g = 0.68, p = .031) in young adults &lt;35 years of age, but no statistically significant effect in adults &gt;35 years of age (g = -0.83, p = .223)." [...] "the small number of studies in this area, their small sample sizes, the short-term nature of most investigations and the high between-studies heterogeneity highlight a need for high-powered and long-term experiments"</p>
+    <cite>Stanyer et al. (2022), Journal of Sleep Research, Abstract (16 studies) [7]</cite>
+  </blockquote>
+  <p>So, in short: CLAS reliably changes the sleeping EEG; whether, for whom and how much it changes memory is still an open question. This is exactly why studies compare stimulation nights with sham nights (Cond B and Cond A below), and why blinding matters.</p>
+
+  <div class="callout neuro"><span class="callout-title">For neuroscientists: what changes from one CLAS study to the next</span>Published CLAS studies differ in how they detect slow waves (fixed or adaptive thresholds, which channel, which filters), which phase they target, the sound, its loudness, how many sounds are played in a row, and which sleep stages are targeted. The Portiloop protocol fixes these choices in code. The next section lists them, so you can compare them with the study you want to replicate. The source of the detection thresholds used by the Portiloop is not documented in the code; we do not know which publication they come from.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="pipeline">What the Portiloop computes during the night</h2>
+  <p>The CLAS protocol selects the pipeline <strong>"Sleep slow oscillations (upstate)"</strong>, the detection channel 6 (Cz) and a sampling rate of 250 Hz (Tutorial <a href="03-control-center.html">03</a>). The pipeline has three parts: a filter, a detector and a stimulator (<code>SlowOscillationFilter</code>, <code>SOUpstateDetector</code> and <code>SlowOscillationStimulator</code> in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_pipelines.py#L28-L33">custom_pipelines.py</a>). A new sample of Cz arrives every 4 ms and goes through all three.</p>
+
+  <figure class="pipeline">
+    <svg class="ph" viewBox="0 0 960 200" role="img" aria-label="Pipeline: Cz at 250 Hz, online filters, fixed slow-wave criteria, up-state timing, sound in Cond B or marker only in Cond A; the loop is closed through the brain">
+      <defs><marker id="arrh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <g transform="translate(0,10)">
+        <rect class="box" x="4" y="0" width="150" height="108" rx="10"/><text class="t1" x="79" y="30" text-anchor="middle">Cz electrode</text><text class="t2" x="79" y="52" text-anchor="middle">ADS1299</text><text class="t2" x="79" y="68" text-anchor="middle">250 samples/s</text><text class="t2" x="79" y="84" text-anchor="middle">reference: mastoid</text>
+        <rect class="box" x="196" y="0" width="170" height="108" rx="10"/><text class="t1" x="281" y="30" text-anchor="middle">Online filters</text><text class="t2" x="281" y="52" text-anchor="middle">FIR "0.5 to 30 Hz"</text><text class="t2" x="281" y="68" text-anchor="middle">mains notch</text><text class="t2" x="281" y="84" text-anchor="middle">DC removal</text><text class="t2" x="281" y="100" text-anchor="middle">FIR "0.16 to 4 Hz"</text>
+        <rect class="box" x="408" y="0" width="170" height="108" rx="10"/><text class="t1" x="493" y="30" text-anchor="middle">Slow-wave criteria</text><text class="t2" x="493" y="52" text-anchor="middle">peak-to-peak &gt; 75 µV</text><text class="t2" x="493" y="68" text-anchor="middle">negative &gt; 40 µV</text><text class="t2" x="493" y="84" text-anchor="middle">durations below and</text><text class="t2" x="493" y="100" text-anchor="middle">above zero in range</text>
+        <rect class="box" x="620" y="0" width="150" height="108" rx="10"/><text class="t1" x="695" y="30" text-anchor="middle">Up-state timing</text><text class="t2" x="695" y="52" text-anchor="middle">fire at the usual</text><text class="t2" x="695" y="68" text-anchor="middle">delay from upward</text><text class="t2" x="695" y="84" text-anchor="middle">zero crossing to peak</text>
+        <rect class="box hl" x="812" y="0" width="144" height="108" rx="10"/><text class="t1" x="884" y="30" text-anchor="middle">Stimulator</text><text class="t2" x="884" y="52" text-anchor="middle">Cond B: 15 ms sound</text><text class="t2" x="884" y="68" text-anchor="middle">Cond A: no sound</text><text class="t2" x="884" y="84" text-anchor="middle">both: marker in</text><text class="t2" x="884" y="100" text-anchor="middle">the file</text>
+        <path class="arrow" d="M154 54 H194" marker-end="url(#arrh)"/>
+        <path class="arrow" d="M366 54 H406" marker-end="url(#arrh)"/>
+        <path class="arrow" d="M578 54 H618" marker-end="url(#arrh)"/>
+        <path class="arrow" d="M770 54 H810" marker-end="url(#arrh)"/>
+        <path class="arrow" d="M884 108 V150 H79 V112" marker-end="url(#arrh)" stroke-dasharray="5 4"/>
+        <text class="t2" x="480" y="170" text-anchor="middle">the sound changes the brain activity recorded next: the loop is closed</text>
+      </g>
+    </svg>
+    <svg class="pv" viewBox="0 0 360 560" role="img" aria-label="Pipeline, vertical layout">
+      <defs><marker id="arrv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <rect class="box" x="20" y="10" width="290" height="62" rx="10"/><text class="t1" x="36" y="34">Cz electrode, ADS1299</text><text class="t2" x="36" y="54">250 samples/s, reference on the mastoid</text>
+      <rect class="box" x="20" y="100" width="290" height="80" rx="10"/><text class="t1" x="36" y="124">Online filters (causal)</text><text class="t2" x="36" y="144">FIR "0.5 to 30 Hz", mains notch,</text><text class="t2" x="36" y="160">DC removal, FIR "0.16 to 4 Hz"</text>
+      <rect class="box" x="20" y="208" width="290" height="80" rx="10"/><text class="t1" x="36" y="232">Slow-wave criteria (fixed)</text><text class="t2" x="36" y="252">peak-to-peak &gt; 75 µV, negative &gt; 40 µV,</text><text class="t2" x="36" y="268">durations below and above zero in range</text>
+      <rect class="box" x="20" y="316" width="290" height="80" rx="10"/><text class="t1" x="36" y="340">Up-state timing</text><text class="t2" x="36" y="360">fire at the usual delay from the upward</text><text class="t2" x="36" y="376">zero crossing to the positive peak</text>
+      <rect class="box hl" x="20" y="424" width="290" height="80" rx="10"/><text class="t1" x="36" y="448">Stimulator</text><text class="t2" x="36" y="468">Cond B: 15 ms sound; Cond A: no sound;</text><text class="t2" x="36" y="484">both: marker in the file</text>
+      <path class="arrow" d="M280 72 V98" marker-end="url(#arrv)"/>
+      <path class="arrow" d="M280 180 V206" marker-end="url(#arrv)"/>
+      <path class="arrow" d="M280 288 V314" marker-end="url(#arrv)"/>
+      <path class="arrow" d="M280 396 V422" marker-end="url(#arrv)"/>
+      <path class="arrow" d="M310 464 H336 V40 H314" marker-end="url(#arrv)" stroke-dasharray="5 4"/>
+      <text class="t2" x="20" y="530">The sound changes the brain activity that is</text>
+      <text class="t2" x="20" y="546">recorded next: the loop is closed.</text>
+    </svg>
+    <figcaption>The "Sleep slow oscillations (upstate)" pipeline, as written in <code>portiloop/src/custom/</code>. The quotes around the filter bands are deliberate: see "The filters" below.</figcaption>
+  </figure>
+
+  <h3 id="filters">1. The filters</h3>
+  <p>The device cannot use the zero-phase filters of offline analysis, because they need future samples. It uses <strong>causal</strong> filters, which only use the present and past samples, in this order (<a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_processors.py#L164-L201">custom_processors.py</a>, <code>SlowOscillationFilter</code>):</p>
+<pre data-file="portiloop/src/custom/custom_processors.py (excerpt of SlowOscillationFilter)"><code class="language-python">            low = 0.5
+            high = 30.0
+            fir_coef = firwin(20, [low, high], pass_zero=False, window="hamming", fs=sampling_rate)
+        ...
+        alpha = 0.005
+        ...
+        so_fir_coeffs = firwin(17, [0.16, 4], fs=sampling_rate, pass_zero="bandpass")
+        ...
+        self.filter_parts = [fir, notch, dc, so_fir]</code></pre>
+  <ol>
+    <li>a 20-coefficient FIR band-pass, nominally 0.5 to 30 Hz;</li>
+    <li>a notch at the mains frequency (the "Notch filter frequency" setting: 50 Hz in the protocol, 60 Hz in the tutorial night);</li>
+    <li>a DC removal: the signal minus its exponential running average (<code>alpha = 0.005</code>);</li>
+    <li>a 17-coefficient FIR band-pass, nominally 0.16 to 4 Hz.</li>
+  </ol>
+  <p>Two consequences matter for the experimenter. First, the two FIR filters delay the signal by half their length: 9.5 + 8 samples, that is 70 ms at 250 Hz (the DC removal and the notch add small phase shifts at low frequencies). The detector therefore always works on a slightly late copy of the EEG, and the up-state timing below is measured on that copy: it predicts the peak of the filtered signal, not of the EEG itself. Second, filters this short cannot cut sharply at 4 Hz. We computed the response of the whole chain from its coefficients (our computation, not a statement of the code): it passes 0.19 to 10.4 Hz at half power (−3 dB), and still lets through 75% of the amplitude at 10 Hz and 58% at 13 Hz. The detector therefore sees slow waves with alpha and some spindle activity on top of them; you will see this in the widget below.</p>
+
+  <h3 id="criteria">2. The slow-wave criteria</h3>
+  <p>The detector cuts the filtered signal into waves: each wave starts when the signal crosses zero going down, so it starts with its negative half-wave (the down-state) and continues with its positive half-wave (the up-state). For the current wave, it keeps the maximum, the minimum and the time spent below and above zero, and checks four fixed criteria (<a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_detectors.py#L172-L247">custom_detectors.py</a>):</p>
+<pre data-file="portiloop/src/custom/custom_detectors.py (excerpt of SlowOscillationDetector)"><code class="language-python">        self.th_PaP = 75  # total amplitude threshold
+        self.th_Neg = 40  # negative amplitude threshold
+        self.min_tNe = 125  # minimum duration spent below 0 (in ms)
+        self.max_tNe = 1500  # maximum duration spent below 0 (in ms)
+        self.max_tPo = 1000  # maximum duration spent above 0 (in ms)
+        ...
+        so_detected = (
+            tp2p &gt; self.th_PaP  # peak-to-peak &gt; amplitude threshold
+            and tneg &gt; self.th_Neg  # amplitude portion below 0 &gt; negative amplitude threshold
+            and self.min_tNe &lt; tne &lt; self.max_tNe  # the duration spent below 0 is within range
+            and tpo &lt; self.max_tPo  # duration spent above zero &lt; maximum duration above zero
+        )</code></pre>
+  <div class="scroll-x">
+  <table class="crit">
+    <thead><tr><th>Criterion</th><th>Code</th><th>Value</th><th>In plain words</th></tr></thead>
+    <tbody>
+      <tr><td>Peak-to-peak amplitude</td><td><code>th_PaP</code></td><td>&gt; 75 µV</td><td>From the lowest point of the down-state to the highest point reached so far.</td></tr>
+      <tr><td>Negative amplitude</td><td><code>th_Neg</code></td><td>&gt; 40 µV</td><td>The down-state goes below −40 µV.</td></tr>
+      <tr><td>Time below zero</td><td><code>min_tNe</code>, <code>max_tNe</code></td><td>125 to 1500 ms</td><td>The negative half-wave is neither a short spike nor a slow drift.</td></tr>
+      <tr><td>Time above zero</td><td><code>max_tPo</code></td><td>&lt; 1000 ms</td><td>Counted so far in the positive half-wave.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>These values are in microvolts of the filtered signal, they are the same for every participant (not adaptive), and they are not shown or editable in the Control Center. A participant whose slow waves are smaller on this montage will simply receive fewer sounds.</p>
+
+  <h3 id="timing">3. Timing the sound to the up-state</h3>
+  <p>With the "(upstate)" pipeline, meeting the criteria is not enough: the detector waits for the moment when the positive peak is expected. When the signal crosses zero going up, it starts counting samples. At the end of every wave that met the criteria, it measures how long it took from that upward crossing to the positive peak and updates a running average of this delay:</p>
+<pre data-file="portiloop/src/custom/custom_detectors.py at commit 917f1f3 (excerpt, lines 250 to 267)"><code class="language-python">        so_upstate_detected = (
+            so_detected
+            and self.est_t_upstate is not None
+            and self.counter_upstate is not None
+            and self.counter_upstate == self.est_t_upstate
+        )
+        ...
+                        # compute a running average
+                        self.est_t_upstate = int(self.alpha * self.t_upstate + (1 - self.alpha) * self.est_t_upstate)</code></pre>
+  <p>This is the code that recorded the tutorial night (commit 917f1f3, <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_detectors.py#L250-L267">custom_detectors.py, lines 250 to 267</a>), which recorded the tutorial night: a copy of this detector, run on the night, fires on exactly the 1,930 samples where the device played a sound (our check).</p>
+  <p>With <code>alpha = 0.1</code>, each new wave moves the estimate by 10% of the difference, so the estimate follows the participant's own slow waves, mostly the last 10 to 20 waves that met the criteria. The detection fires on the single sample where the count equals the estimate, if the wave still meets the criteria. Four details follow from the code:</p>
+  <ul>
+    <li><strong>The first good wave after each Start makes no sound.</strong> There is no estimate yet; that wave only provides the first one.</li>
+    <li><strong>At most one sound per wave.</strong> The stimulator also refuses a sound less than 0.1 s after the previous one (<code>self.wait_t = .1</code> in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_stimulators.py#L424">custom_stimulators.py</a>). With the protocol's delays all at 0 ms, nothing else spaces the sounds: consecutive slow waves can each receive one.</li>
+    <li><strong>On the tutorial night</strong>, the estimate had a median of 184 ms after the upward zero crossing (5th to 95th percentile: 88 to 292 ms) at the 1,930 detections (our computation, with a copy of this detector).</li>
+  </ul>
+  <div class="callout danger"><span class="callout-title">Known issue, fixed on 2026-11-26: the sounds of the tutorial night came slightly early</span>The version that recorded the tutorial night (commit <code>917f1f3</code>, the code quoted on this page) truncated the estimate to a whole number of samples at each update (<code>int(...)</code>), so it settled 4 to 5 samples below the true average delay and the stimulations came about 16 to 20 ms early. This was fixed on main on 2026-11-26 (commit <a href="https://github.com/Portiloop/portiloop-software/commit/e4959f1">e4959f1</a>), which keeps the estimate as a float and compares the count with <code>round(...)</code>: devices updated after that date stimulate later by that amount. All the numbers of these tutorials come from the tutorial night, with the truncation. Note the software version (commit) of each study night, so that nights recorded before and after the fix are not mixed unknowingly.</div>
+  <p>The sound itself is the file <code>15msPN_48kHz_norm_stereo.wav</code> (<code>"detection_sound"</code> in <code>portiloop/src/core/constants.py</code>): a 15 ms stereo noise burst at 48 kHz. "PN" in the name suggests pink noise, but in our check of the file the energy per octave rises by about 3 dB per octave, which is the signature of white noise (pink noise has the same energy in every octave); we do not know which was intended. The "Sound output volume" is a software percentage, not a calibrated sound level: the sound pressure in the ear is not known unless you measure it with your earphones.</p>
+
+  <h3 id="explainer">See it on real slow waves</h3>
+  <p>The widget shows 30 s of Cz from the tutorial night (minute 123.0), during deep sleep, with the 10 sounds the Portiloop played. Turn on the slow band to see where the sounds fall on the slow waves, and the detector's input to see what the device actually measured. Select a sound to read the values of the criteria for its wave.</p>
+
+  <div class="widget" id="cl-widget">
+    <div class="widget-title">The closed loop on 30 s of deep sleep</div>
+    <p class="widget-desc">What to try: (1) turn on the slow band and see where the sounds fall: each comes 0.39 to 0.58 s after a deep trough, around the following positive peak (within 0.18 s of a local peak of the slow band, some before it, some after it); (2) select a sound (tap it, or use Next) and read its criteria; the shaded areas are the negative half-wave and the wait from the upward zero crossing; (3) turn on "what the detector saw" and compare it with the slow band: it is later, and it carries faster activity; (4) find the large slow wave with its trough near 11.3 s, between the sounds at 10.7 and 12.2 s: it received no sound; zoom on it with the detector's input on and look for the reason.</p>
+    <div class="controls">
+      <label for="cl-slow"><input type="checkbox" id="cl-slow" checked> slow band (0.1 to 4 Hz, offline)</label>
+      <label for="cl-dev"><input type="checkbox" id="cl-dev"> what the detector saw (online filters)</label>
+    </div>
+    <div class="controls">
+      <button class="btn secondary" type="button" id="cl-all">All 30 s</button>
+      <button class="btn secondary" type="button" id="cl-prev">Previous sound</button>
+      <button class="btn" type="button" id="cl-next">Next sound</button>
+    </div>
+    <div class="cl-legend"><span><i style="background: var(--plot-signal)"></i>Cz as recorded (0.3 to 35 Hz)</span><span><i style="background: var(--plot-c3, #2f855a)"></i>slow band</span><span><i style="background: var(--plot-model)"></i>detector input</span><span><i style="background: var(--plot-stim)"></i>sound</span><span><i class="box" style="background: var(--warn)"></i>below zero</span><span><i class="box" style="background: var(--tip)"></i>wait from upward zero crossing</span></div>
+    <canvas class="plot tall" id="cl-plot" role="img" aria-label="Cz signal during deep sleep with the stimulation markers, the slow band and the detector input"></canvas>
+    <div class="readout">
+      <div><div class="k">Sound</div><div class="v small" id="cl-n">…</div></div>
+      <div><div class="k">Peak-to-peak (&gt; 75 µV)</div><div class="v" id="cl-p2p">…</div></div>
+      <div><div class="k">Negative amplitude (&gt; 40 µV)</div><div class="v" id="cl-neg">…</div></div>
+      <div><div class="k">Time below zero (125 to 1500 ms)</div><div class="v" id="cl-below">…</div></div>
+      <div><div class="k">Time above zero (&lt; 1000 ms)</div><div class="v" id="cl-above">…</div></div>
+      <div><div class="k">Up-state delay estimate</div><div class="v" id="cl-est">…</div></div>
+    </div>
+    <div class="status" id="cl-status">Loading the tutorial night…</div>
+  </div>
+
+  <p>How to read it. The blue trace is Cz as recorded (band-pass 0.3 to 35 Hz for display). The slow band is the 0.1 to 4 Hz band of the analysis of Tutorial <a href="07-responses.html">07</a>; it is computed offline with a zero-phase filter, so it is not delayed, but it uses the future. "What the detector saw" is the output of the online filters, recomputed from the raw signal with the same equations as the device, and the criteria values come from a copy of the detector code run on it (script <code>docs/tools/build_01-overview_data.py</code>). The copy follows the software that recorded the night (commit 917f1f3, before the fix described above), so its detections fall on exactly the same samples as the markers recorded by the device.</p>
+  <p>Over the whole night, the sounds fall near the positive peak of the slow waves. We measured the phase of the 0.5 to 2 Hz band of Cz at each of the 1,925 stimulations that have 10 s of clean signal on each side (Hilbert transform; our computation): the circular mean phase is −16°, where 0° is the positive peak and −90° the upward zero crossing, and 97% of the sounds fall while that band is positive. Treat this as approximate: a zero-phase filter also "sees" the response evoked by the sound, so it cannot give the phase of the ongoing wave alone. The average response around the sounds (Tutorial <a href="07-responses.html">07</a>) tells the same story: a deep minimum 0.42 s before the sound (the detected down-state), and the maximum of the slow band 0.18 s after it.</p>
+
+  <!-- ===================================================================== -->
+  <h2 id="conditions">Cond A and Cond B</h2>
+  <p>The Control tab of the Control Center has a two-position toggle, "Cond A" and "Cond B". The mapping is fixed in the code (<a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/simple_gui/simple_gui.py#L625-L628">simple_gui.py</a>):</p>
+<pre data-file="portiloop/src/simple_gui/simple_gui.py (excerpts)"><code class="language-python">stim_toggle = ui.toggle(['Cond A', 'Cond B'], ...).bind_value(
+    exp_state, 'stim_on',
+    forward=lambda x: x == 'Cond B', ...)
+...
+stim_str = "CONDB" if self.stim_on else "CONDA"</code></pre>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th></th><th>Cond A (sham)</th><th>Cond B (stimulation)</th></tr></thead>
+    <tbody>
+      <tr><td>Detection runs</td><td>yes</td><td>yes</td></tr>
+      <tr><td>Sound played at each detection</td><td>no</td><td>yes</td></tr>
+      <tr><td><code>stimulation</code> column in the file</td><td>1 where a sound would have been played</td><td>1 where a sound was played</td></tr>
+      <tr><td>File name ends with</td><td><code>_CONDA.csv</code></td><td><code>_CONDB.csv</code></td></tr>
+      <tr><td><code>"stimulate"</code> in <code>_metadata.json</code></td><td><code>false</code></td><td><code>true</code></td></tr>
+      <tr><td>"Test Sound" button</td><td>plays the sound</td><td>plays the sound</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The sham night is therefore a complete recording with the same detections, logged at the same moments, only silent. This is what makes stimulation and sham nights comparable: in both, you can average the EEG around the moments the device chose (Tutorial <a href="09-study.html">09</a>). In the stimulator, the only difference is whether the sound is played:</p>
+<pre data-file="portiloop/src/custom/custom_stimulators.py (excerpt of send_stimulation)"><code class="language-python">        stim_enabled = self.config_dict.get('stimulate', True) if self.config_dict is not None else True
+        if not stim_enabled and sound:
+            lsl_text = "SHAM_STIM"
+        ...
+        if sound and stim_enabled:</code></pre>
+
+  <h3 id="blinding">Blinding in practice</h3>
+  <p>The protocol only says: "In the Control panel, select Cond A or Cond B, depending on the experimenter's instructions." The software does not blind anybody:</p>
+  <ul>
+    <li>the meaning of A and B is fixed in the code and published (on this page, among others), so "A" and "B" are not a secret code;</li>
+    <li>the file name (<code>CONDA</code>/<code>CONDB</code>) and the metadata (<code>"stimulate"</code>) state the condition of every recording;</li>
+    <li>the toggle keeps its last position after a restart (it is saved with the other settings), so the next person who opens the Control Center sees the condition of the previous night.</li>
+  </ul>
+  <p>Some things do help: "Test Sound" plays the sound in both conditions, so the setup is the same for the participant; and the Portiloop's indicator LED, which the code would set to a different colour for stimulation and sham, is disabled by default according to the README ("disabled by default, can be enabled programatically"; not verified on the hardware). The participant may still hear sounds during the night in Cond B, which is in the nature of the paradigm.</p>
+  <p>Blinding is therefore organizational. Decide, before the study, who knows the condition of each night (the person who prepares the schedule), who sets the toggle, who scores and analyses the data, and how the analysis is kept blind (for example, by renaming the files before analysis). Tutorial <a href="09-study.html">09</a> discusses this for the analysis.</p>
+
+  <div class="callout warning"><span class="callout-title">Old recordings: check the software version</span>On 2026-10-13, one commit (<code>fad9e20</code>) mapped the toggle the other way round (Cond A was stimulation); a commit of the same day (<code>b041e3c</code>) set the current mapping. If you analyse recordings from that period, rely on <code>"stimulate"</code> in <code>_metadata.json</code>, not on the A/B letters.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="study-night">What a study night looks like</h2>
+  <ol class="steps">
+    <li><strong>Preparation (before bed).</strong> Charge and check the material, connect the electrodes, place them, check the impedances (Tutorials <a href="02-preparation.html">02</a> and <a href="03-control-center.html">03</a>). Set the settings of the protocol, the condition and the recording name, put the earphones in and test the sound.</li>
+    <li><strong>Start, then a delay without sound.</strong> When the participant is ready to sleep, press Start. The setting "Stimulation starts after" pauses detection and stimulation for that many minutes. The protocol says: "This duration corresponds to the period during which no sound is played at the beginning of the recording. It can be adjusted based on the expected time needed to fall asleep." (its example is 45 minutes). The recording itself starts immediately.</li>
+    <li><strong>The night.</strong> The device detects slow waves and plays sounds (Cond B) or only logs them (Cond A). If an electrode falls off, the lead-off protection may pause detection (Tutorial <a href="04-night.html">04</a>). If the participant wakes up and the sounds keep them awake, the protocol says: "press the Stop button, then immediately press the Start button. This will give you another X minutes without any sounds, where X is the duration you set in Step 18." Each Start creates a new file.</li>
+    <li><strong>The morning.</strong> The protocol: "On the phone, in the Portiloop Control Center, press the Stop button", then turn off the Portiloop ("only one short press"), unplug the earphones and remove the SD card. Note that a recording also stops by itself after 10 hours (<code>"duration": 36000</code> seconds in <code>constants.py</code>).</li>
+  </ol>
+
+  <!-- ===================================================================== -->
+  <h2 id="tutorial-night">The tutorial night</h2>
+  <p>All the widgets of these tutorials use one real night, recorded by the lab as a test of the protocol with the "Sleep slow oscillations (upstate)" pipeline in <strong>Cond B</strong> (the file name ends with <code>CONDB</code>). Its settings, read from its <code>_metadata.json</code>: 250 Hz, detection channel 6 (Cz), volume 50, "Stimulation starts after" 25 minutes, all stimulation delays at 0, and a notch at <strong>60 Hz</strong>. The protocol asks for 50 Hz, the mains frequency where the study runs; this test night used 60 Hz, so do not copy that setting.</p>
+  <ul>
+    <li>Duration: 7.39 h (443.6 minutes). Sounds were possible (<code>stimulation_on</code> = 1) from minute 25.0, when the delay ended, to minute 373.4.</li>
+    <li>1,930 sounds, from minute 30.9 to minute 373.0. The median interval between consecutive sounds is 3.10 s; the shortest is 0.328 s.</li>
+    <li>Around minute 373 a movement disturbed every channel and the Cz electrode (the detection electrode) came off: its raw signal stayed at the limit of the amplifier (±187,500 µV) for most of the remaining 70 minutes, while the other channels kept recording. Detection stopped at minute 373.4 because of the lead-off protection, and the recording went on, without sounds, until it was stopped at 7.39 h.</li>
+  </ul>
+
+  <div class="widget" id="nt-widget">
+    <div class="widget-title">The whole tutorial night</div>
+    <p class="widget-desc">What to try: (1) hover or tap anywhere to read one 30 s epoch; (2) find the alpha band (about 10 Hz) of the first 20 minutes, before sleep, and the end of the 25-minute delay; (3) follow the cycles of slow-wave power (bright at the bottom of the spectrogram) and see that the sounds cluster in them; (4) find the gap without sounds around minutes 200 to 225; (5) go to the end of the night: the Cz electrode comes off and the sounds stop.</p>
+    <div class="jump">
+      <button class="btn secondary" type="button" data-min="9">Awake (9 min)</button>
+      <button class="btn secondary" type="button" data-min="25">End of delay (25 min)</button>
+      <button class="btn secondary" type="button" data-min="123">Deep sleep (123 min)</button>
+      <button class="btn secondary" type="button" data-min="212">No sounds (212 min)</button>
+      <button class="btn secondary" type="button" data-min="373">Lead-off (373 min)</button>
+    </div>
+    <canvas class="plot night" id="nt-plot" role="img" aria-label="Tutorial night: Cz spectrogram, stimulations per 30 s, periods with sound possible, and periods with the Cz electrode off"></canvas>
+    <div class="readout">
+      <div><div class="k">Epoch (minutes from Start)</div><div class="v small" id="nt-t">…</div></div>
+      <div><div class="k">Sounds in this epoch</div><div class="v" id="nt-s">…</div></div>
+      <div><div class="k">Sound possible (stimulation_on)</div><div class="v" id="nt-on">…</div></div>
+      <div><div class="k">Cz at the amplifier limit</div><div class="v" id="nt-rail">…</div></div>
+      <div><div class="k">Cz delta power, 0.5 to 4 Hz</div><div class="v small" id="nt-d">…</div></div>
+      <div><div class="k">Cz alpha power, 8 to 12 Hz</div><div class="v small" id="nt-a">…</div></div>
+    </div>
+    <div class="status" id="nt-status">Loading the tutorial night…</div>
+  </div>
+
+  <p>How to read it. The spectrogram shows the power of Cz in each 30 s epoch (Welch estimate, colour in dB, logarithmic frequency axis from 0.5 to 25 Hz, low frequencies at the bottom). Below it, the bars count the sounds in each epoch, the green strip shows when sounds were possible (after the delay, before the lead-off), and the red strip shows when Cz was at the amplifier limit, that is, off the head. What you should see: alpha activity in the first 20 minutes or so (awake, eyes closed); a sigma band (12 to 15 Hz, spindles) through most of the night; slow-wave power that comes and goes in cycles, with the sounds clustered in those cycles; a gap without sounds around minutes 200 to 225; and, from minute 372.8, the electrodes off and no more sounds. Tutorial <a href="06-first-look.html">06</a> looks at this night in more detail, including sleep stages.</p>
+
+  <div class="callout disk"><span class="callout-title">On the hard drive</span>The widgets load <code>docs/assets/data/night.json</code> (one row per 30 s epoch) and <code>excerpts.json</code> (30 s windows), made by <code>docs/tools/build_assets.py</code>, and <code>01-overview-deep.json</code>, made by <code>docs/tools/build_01-overview_data.py</code>, all from the tutorial dataset.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="exercises">Exercises</h2>
+
+  <details class="exercise"><summary>Why did these slow waves get no sound?</summary>
+    <p>In the closed-loop widget, select sound 4 (at 12.2 s) with "what the detector saw" turned on, and look at the large slow wave just before it, with its trough near 11.3 s. Then select sound 10 (at 23.6 s) and look at the small wave just after it, near 23.9 s. Using the four criteria and the up-state timing, explain why the device stayed silent on these two waves.</p>
+  </details>
+  <details class="solution"><summary>Answer</summary>
+    <p>Look at the detector's input, not at the display trace. A wave gets a sound only if, at the sample where the count since the upward zero crossing equals the estimate (200 to 264 ms in this excerpt), the wave has a peak-to-peak amplitude above 75 µV, went below −40 µV, stayed below zero between 125 and 1500 ms, and has not stayed above zero for 1000 ms. We checked both waves with the copy of the detector in <code>docs/tools/build_01-overview_data.py</code>. The wave near 11.3 s is deep (the detector's input reaches −106 µV), but its input crosses zero going up at 11.488 s and goes back below zero 32 ms later, at 11.520 s, long before the estimated delay: the downward crossing ends the wave and resets the count, so the sample at which the sound would have been played never comes. The next wave, which starts at that crossing, meets the criteria and gets sound 4. The small wave near 23.9 s only reaches −29 µV at the detector's input, which fails the −40 µV criterion. In general, faster activity riding on a slow wave can cut it into short pieces in this way, because the online filters let activity up to about 10 Hz through.</p>
+  </details>
+
+  <details class="exercise"><summary>What does the sham night contain?</summary>
+    <p>A colleague says: "In Cond A the Portiloop does nothing, so the sham file is just an EEG recording." What is wrong with this statement, and why does it matter for the analysis?</p>
+  </details>
+  <details class="solution"><summary>Answer</summary>
+    <p>In Cond A, detection runs exactly as in Cond B and the <code>stimulation</code> column marks every moment a sound would have been played; only the sound is not played. This gives the analysis matched events in both conditions: you can average the EEG around the sham markers and compare with the average around real sounds, at the same phase of the same kind of slow waves. Without these markers, a sham night could only be compared with a stimulation night globally (for example, total slow-wave power).</p>
+  </details>
+
+  <details class="exercise"><summary>Plan the delay</summary>
+    <p>In the tutorial night, the delay was 25 minutes and the first sound came at minute 30.9. Use the night widget to estimate when the participant fell asleep. Would the protocol's example of 45 minutes have changed anything for this night? What would you set for a participant who usually needs an hour to fall asleep?</p>
+  </details>
+  <details class="solution"><summary>Answer</summary>
+    <p>The alpha band fades after about 20 minutes, and slow-wave power appears later; the first sound, at minute 30.9, is 5.9 minutes after the end of the delay (the first good slow wave after the delay sets the timing estimate without a sound). With 45 minutes, the first quarter of an hour of sounds would not have been played: whether that matters depends on whether your study targets the first sleep cycle. The delay should cover the expected sleep latency of the participant, as the protocol says; for someone who needs an hour, a delay of about an hour avoids sounds during wake and light sleep. If the participant is still awake when the delay ends, the protocol's remedy is Stop then Start, which restarts the delay (in a new file).</p>
+  </details>
+
+  <h2 id="references">References</h2>
+  <ol class="refs">
+    <li>Valenchon N, Bouteiller Y, Jourde HR, L'Heureux X, Sobral M, Coffey EBJ, Beltrame G (2022). The Portiloop: a deep learning-based open science tool for closed-loop brain stimulation. <em>PLOS ONE</em> 17(8): e0270696. <a href="https://doi.org/10.1371/journal.pone.0270696">doi:10.1371/journal.pone.0270696</a></li>
+    <li>Steriade M, Nuñez A, Amzica F (1993). A novel slow (&lt; 1 Hz) oscillation of neocortical neurons in vivo: depolarizing and hyperpolarizing components. <em>Journal of Neuroscience</em> 13(8): 3252 to 3265. <a href="https://doi.org/10.1523/JNEUROSCI.13-08-03252.1993">doi:10.1523/JNEUROSCI.13-08-03252.1993</a></li>
+    <li>Massimini M, Huber R, Ferrarelli F, Hill S, Tononi G (2004). The sleep slow oscillation as a traveling wave. <em>Journal of Neuroscience</em> 24(31): 6862 to 6870. <a href="https://doi.org/10.1523/JNEUROSCI.1318-04.2004">doi:10.1523/JNEUROSCI.1318-04.2004</a></li>
+    <li>Ngo HVV, Martinetz T, Born J, Mölle M (2013). Auditory closed-loop stimulation of the sleep slow oscillation enhances memory. <em>Neuron</em> 78(3): 545 to 553. <a href="https://doi.org/10.1016/j.neuron.2013.03.006">doi:10.1016/j.neuron.2013.03.006</a></li>
+    <li>Henin S, Borges H, Shankar A, Sarac C, Melloni L, Friedman D, Flinker A, Parra LC, Buzsaki G, Devinsky O, Liu A (2019). Closed-loop acoustic stimulation enhances sleep oscillations but not memory performance. <em>eNeuro</em> 6(6): ENEURO.0306-19.2019. <a href="https://doi.org/10.1523/ENEURO.0306-19.2019">doi:10.1523/ENEURO.0306-19.2019</a></li>
+    <li>Wunderlin M, Züst MA, Hertenstein E, Fehér KD, Schneider CL, Klöppel S, Nissen C (2021). Modulating overnight memory consolidation by acoustic stimulation during slow-wave sleep: a systematic review and meta-analysis. <em>Sleep</em> 44(7): zsaa296. <a href="https://doi.org/10.1093/sleep/zsaa296">doi:10.1093/sleep/zsaa296</a></li>
+    <li>Stanyer EC, Baniqued PDE, Awais M, Kouara L, Davies AG, Killan EC, Mushtaq F (2022). The impact of acoustic stimulation during sleep on memory and sleep architecture: a meta-analysis. <em>Journal of Sleep Research</em> 31(3): e13385. <a href="https://doi.org/10.1111/jsr.13385">doi:10.1111/jsr.13385</a></li>
+    <li>Portiloop software for the Portiloop V2.3, branch main: <a href="https://github.com/Portiloop/portiloop-software/tree/main">github.com/Portiloop/portiloop-software</a> (files cited in the text, linked at commit 917f1f3, the version that recorded the tutorial night). The lab's CLAS protocol (quoted in the text) is not public.</li>
+  </ol>
+
+</article>
+</main>
+
+<script src="../assets/js/portiloop.js"></script>
+<script src="../assets/js/data.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = PL.ui.$;
+
+  function cssVar(name, fallback) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+  function rgba(color, a) {
+    const c = color.trim();
+    if (c[0] === "#") {
+      const h = c.length === 4 ? c.slice(1).split("").map((x) => x + x).join("") : c.slice(1, 7);
+      return "rgba(" + parseInt(h.slice(0, 2), 16) + "," + parseInt(h.slice(2, 4), 16) + "," + parseInt(h.slice(4, 6), 16) + "," + a + ")";
+    }
+    return c;
+  }
+  const fmtInt = (v) => Math.round(v).toLocaleString("en-US");
+
+  /* ================================================================ night timeline */
+  const VIRIDIS = [[68, 1, 84], [65, 68, 135], [42, 120, 142], [34, 168, 132], [122, 209, 81], [253, 231, 37]];
+  function viridis(t) {
+    t = Math.min(1, Math.max(0, t)) * (VIRIDIS.length - 1);
+    const i = Math.min(VIRIDIS.length - 2, Math.floor(t)), f = t - i, a = VIRIDIS[i], b = VIRIDIS[i + 1];
+    return [a[0] + f * (b[0] - a[0]), a[1] + f * (b[1] - a[1]), a[2] + f * (b[2] - a[2])];
+  }
+  let night = null, specImg = null, cursor = 246, layout = null;
+  const ntCanvas = $("#nt-plot");
+
+  let scale = null;
+  function buildSpectrogram() {
+    const sp = night.spectrogram, ne = night.n_epochs, nf = sp.nFreqs, rail = night.columns.cz_rail;
+    // colour scale from the epochs with Cz on the head (railed epochs would dominate it)
+    const vals = [];
+    for (let e = 0; e < ne; e++) if (rail[e] === 0) for (let k = 0; k < nf; k++) vals.push(sp.db[e * nf + k]);
+    vals.sort((a, b) => a - b);
+    scale = [vals[Math.floor(0.02 * (vals.length - 1))], vals[Math.floor(0.995 * (vals.length - 1))]];
+    const c = document.createElement("canvas");
+    c.width = ne; c.height = nf;
+    const ctx = c.getContext("2d"), img = ctx.createImageData(ne, nf);
+    for (let e = 0; e < ne; e++) {
+      for (let k = 0; k < nf; k++) {
+        const v = (sp.db[e * nf + k] - scale[0]) / (scale[1] - scale[0]);
+        const rgb = viridis(v), p = 4 * ((nf - 1 - k) * ne + e);
+        img.data[p] = rgb[0]; img.data[p + 1] = rgb[1]; img.data[p + 2] = rgb[2]; img.data[p + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    specImg = c;
+  }
+
+  function drawNight() {
+    if (!night) return;
+    const cv = ntCanvas, dpr = window.devicePixelRatio || 1;
+    const W = cv.clientWidth || 600, H = cv.clientHeight || 390;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const font = "12px " + cssVar("--font-sans", "system-ui, sans-serif");
+    ctx.font = font;
+    const text = PL.color("text"), grid = PL.color("grid"), axis = PL.color("axis");
+    const m = { l: 56, r: 10, t: 8 };
+    const pw = W - m.l - m.r;
+    const stripH = 13, gap = 6, avail = H - m.t - (2 * gap + 2 * stripH + 4) - 36;
+    const specH = Math.round(avail * 0.68), barH = avail - specH;
+    const ySpec = m.t, yBar = ySpec + specH + gap, yOn = yBar + barH + gap, yRail = yOn + stripH + 4, yAxis = yRail + stripH;
+    const ne = night.n_epochs, cols = night.columns;
+    const X = (e) => m.l + (e / ne) * pw;
+    layout = { m, pw, ne, top: ySpec, bottom: yAxis };
+
+    // spectrogram, logarithmic frequency axis (row k covers the geometric midpoints to its neighbours)
+    const freqs = night.spectrogram.freqs_hz, nf = freqs.length;
+    const lf0 = Math.log(freqs[0] * freqs[0] / freqs[1]) / 2 + Math.log(freqs[0]) / 2, lf1 = Math.log(freqs[nf - 1]);
+    const yF = (lf) => ySpec + (1 - (lf - lf0) / (lf1 - lf0)) * specH;
+    ctx.imageSmoothingEnabled = true;
+    for (let k = 0; k < nf; k++) {
+      const lo = k === 0 ? lf0 : (Math.log(freqs[k - 1]) + Math.log(freqs[k])) / 2;
+      const hi = k === nf - 1 ? lf1 : (Math.log(freqs[k]) + Math.log(freqs[k + 1])) / 2;
+      const y0 = yF(hi), y1 = yF(lo);
+      ctx.drawImage(specImg, 0, nf - 1 - k, night.n_epochs, 1, m.l, y0, pw, Math.max(0.6, y1 - y0) + 0.4);
+    }
+    ctx.strokeStyle = axis; ctx.lineWidth = 1; ctx.strokeRect(m.l + 0.5, ySpec + 0.5, pw - 1, specH - 1);
+    ctx.fillStyle = text; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    [1, 2, 4, 8, 16].forEach((f) => { ctx.fillText(String(f), m.l - 5, yF(Math.log(f))); });
+    ctx.save(); ctx.translate(12, ySpec + specH / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = "center";
+    ctx.fillText("Cz (Hz, log)", 0, 0); ctx.restore();
+
+    // stimulations per epoch
+    let maxS = 0; cols.stims.forEach((v) => { if (v > maxS) maxS = v; });
+    const top = Math.max(4, Math.ceil(maxS / 4) * 4);
+    ctx.strokeStyle = grid;
+    [0, top / 2, top].forEach((v) => {
+      const y = yBar + barH - (v / top) * barH;
+      ctx.beginPath(); ctx.moveTo(m.l, y); ctx.lineTo(m.l + pw, y); ctx.stroke();
+      ctx.fillStyle = text; ctx.textAlign = "right"; ctx.fillText(String(v), m.l - 5, y);
+    });
+    ctx.fillStyle = PL.color("stim");
+    const bw = Math.max(1, pw / ne);
+    for (let e = 0; e < ne; e++) {
+      const s = cols.stims[e]; if (!s) continue;
+      const h = (s / top) * barH;
+      ctx.fillRect(X(e), yBar + barH - h, bw, h);
+    }
+    ctx.save(); ctx.translate(12, yBar + barH / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = "center"; ctx.fillStyle = text;
+    ctx.fillText("sounds", 0, 0); ctx.restore();
+
+    // strips: sound possible, Cz off
+    const tip = cssVar("--tip", "#2f7a4f"), danger = cssVar("--danger", "#b33a3a");
+    ctx.fillStyle = PL.color("grid"); ctx.fillRect(m.l, yOn, pw, stripH); ctx.fillRect(m.l, yRail, pw, stripH);
+    for (let e = 0; e < ne; e++) {
+      if (cols.sound[e] > 0) { ctx.fillStyle = rgba(tip, Math.min(1, cols.sound[e])); ctx.fillRect(X(e), yOn, bw + 0.5, stripH); }
+      if (cols.cz_rail[e] > 0) { ctx.fillStyle = rgba(danger, Math.min(1, 0.25 + cols.cz_rail[e])); ctx.fillRect(X(e), yRail, bw + 0.5, stripH); }
+    }
+    ctx.fillStyle = text; ctx.textAlign = "right"; ctx.font = "11px " + cssVar("--font-sans", "system-ui, sans-serif");
+    ctx.fillText("sound on", m.l - 5, yOn + stripH / 2); ctx.fillText("Cz off", m.l - 5, yRail + stripH / 2);
+    ctx.font = font;
+
+    // time axis (minutes)
+    const step = pw < 420 ? 120 : 60;
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let mnt = 0; mnt <= ne / 2; mnt += step) {
+      const x = X(mnt * 2);
+      ctx.strokeStyle = axis; ctx.beginPath(); ctx.moveTo(x, yAxis); ctx.lineTo(x, yAxis + 4); ctx.stroke();
+      ctx.fillStyle = text; ctx.fillText(String(mnt), x, yAxis + 6);
+    }
+    ctx.textBaseline = "bottom"; ctx.fillText("Minutes from Start", m.l + pw / 2, H - 1);
+
+    // cursor
+    if (cursor !== null) {
+      const x = X(cursor + 0.5);
+      ctx.strokeStyle = cssVar("--fg", "#222"); ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(x, ySpec); ctx.lineTo(x, yAxis); ctx.stroke(); ctx.setLineDash([]);
+    }
+    updateNightReadout();
+  }
+
+  function updateNightReadout() {
+    if (!night || cursor === null) return;
+    const c = night.columns, e = cursor;
+    $("#nt-t").textContent = (e * 0.5).toFixed(1) + " to " + (e * 0.5 + 0.5).toFixed(1);
+    $("#nt-s").textContent = String(c.stims[e]);
+    $("#nt-on").textContent = Math.round(100 * c.sound[e]) + "%";
+    $("#nt-rail").textContent = Math.round(100 * c.cz_rail[e]) + "%";
+    $("#nt-d").textContent = fmtInt(c.cz_delta[e]) + " µV²";
+    $("#nt-a").textContent = fmtInt(c.cz_alpha[e]) + " µV²";
+  }
+
+  function pickEpoch(ev) {
+    if (!layout) return;
+    const r = ntCanvas.getBoundingClientRect();
+    const x = ev.clientX - r.left;
+    const e = Math.floor(((x - layout.m.l) / layout.pw) * layout.ne);
+    if (e < 0 || e >= layout.ne) return;
+    if (e !== cursor) { cursor = e; drawNight(); }
+  }
+  ntCanvas.addEventListener("pointermove", pickEpoch);
+  ntCanvas.addEventListener("pointerdown", pickEpoch);
+  PL.ui.$$("#nt-widget .jump .btn").forEach((b) => b.addEventListener("click", () => {
+    cursor = Math.min(night ? night.n_epochs - 1 : 0, Math.floor(parseFloat(b.dataset.min) * 2)); drawNight();
+  }));
+
+  PL.data.night().then((j) => {
+    night = j; buildSpectrogram(); drawNight();
+    $("#nt-status").textContent = j.n_epochs + " epochs of 30 s, " + j.stimulation_count.toLocaleString("en-US") +
+      " sounds. Spectrogram colour scale: " + scale[0].toFixed(0) + " to " + scale[1].toFixed(0) +
+      " dB (µV²/Hz), dark to bright, set on the epochs with Cz on the head.";
+  }).catch((e) => { $("#nt-status").textContent = "Could not load the night: " + e.message; });
+
+  /* ================================================================ closed-loop explainer */
+  let cz = null, slow = null, dev = null, info = null, sel = -1;
+  const FS = 250;
+  const clCanvas = $("#cl-plot");
+  let tr = null;
+
+  function viewRange() {
+    if (sel < 0) return [0, 30];
+    const t = info.stims[sel] / FS;
+    return [Math.max(0, t - 2.6), Math.min(30, t + 1.4)];
+  }
+
+  function drawCl() {
+    if (!cz) return;
+    const t = new Float32Array(cz.length);
+    for (let i = 0; i < t.length; i++) t[i] = i / FS;
+    const showSlow = $("#cl-slow").checked, showDev = $("#cl-dev").checked;
+    const series = [{ x: t, y: cz, color: (showSlow || showDev) ? rgba(PL.color("signal"), 0.5) : PL.color("signal"), width: 1 }];
+    if (showSlow) series.push({ x: t, y: slow, color: PL.color("c3"), width: 2.2 });
+    if (showDev) series.push({ x: t, y: dev, color: PL.color("model"), width: 1.6 });
+    const markers = info.stims.map((s, k) => ({ x: s / FS, color: PL.color("stim"), width: k === sel ? 2.5 : 1.5, label: sel < 0 ? String(k + 1) : (k === sel ? "sound" : "") }));
+    const regions = [];
+    if (sel >= 0) {
+      const d = info.detections[sel];
+      regions.push({ x0: d.wave_start / FS, x1: d.up_cross / FS, color: rgba(cssVar("--warn", "#a8670f"), 0.16) });
+      regions.push({ x0: d.up_cross / FS, x1: d.sample / FS, color: rgba(cssVar("--tip", "#2f7a4f"), 0.2) });
+    }
+    const hlines = showDev ? [{ y: 0, color: PL.color("axis"), dash: [2, 3] }, { y: -40, color: PL.color("warn"), label: "−40 µV" }] : [];
+    tr = PL.plot(clCanvas, {
+      xRange: viewRange(), yRange: [-190, 170], xLabel: "Time in the excerpt (s), minute 123.0 of the night", yLabel: "µV",
+      series, markers, regions, hlines, legend: false,
+    });
+    const n = info.stims.length;
+    if (sel < 0) {
+      $("#cl-n").textContent = n + " sounds; select one";
+      ["#cl-p2p", "#cl-neg", "#cl-below", "#cl-above", "#cl-est"].forEach((s) => { $(s).textContent = "…"; });
+    } else {
+      const d = info.detections[sel];
+      $("#cl-n").textContent = (sel + 1) + " of " + n + ", at " + (info.stims[sel] / FS).toFixed(2) + " s";
+      $("#cl-p2p").textContent = d.p2p.toFixed(0) + " µV";
+      $("#cl-neg").textContent = d.neg.toFixed(0) + " µV";
+      $("#cl-below").textContent = d.below_ms + " ms";
+      $("#cl-above").textContent = d.above_ms + " ms";
+      $("#cl-est").textContent = d.est_ms + " ms";
+    }
+  }
+
+  function select(k) { sel = k; drawCl(); }
+  $("#cl-all").addEventListener("click", () => select(-1));
+  $("#cl-next").addEventListener("click", () => { if (info) select((sel + 1) % info.stims.length); });
+  $("#cl-prev").addEventListener("click", () => { if (info) select(sel <= 0 ? info.stims.length - 1 : sel - 1); });
+  $("#cl-slow").addEventListener("change", drawCl);
+  $("#cl-dev").addEventListener("change", drawCl);
+  clCanvas.addEventListener("click", (ev) => {
+    if (!tr || !info) return;
+    const r = clCanvas.getBoundingClientRect();
+    const x = ev.clientX - r.left;
+    let best = -1, bestD = 14;
+    info.stims.forEach((s, k) => { const d = Math.abs(tr.toPx(s / FS, 0)[0] - x); if (d < bestD) { bestD = d; best = k; } });
+    if (best >= 0) select(best);
+  });
+
+  Promise.all([PL.data.excerpts(), fetch("../assets/data/01-overview-deep.json").then((r) => {
+    if (!r.ok) throw new Error("Cannot load 01-overview-deep.json (" + r.status + ")"); return r.json();
+  })]).then(([ex, deep]) => {
+    const e = ex.excerpts.find((x) => x.key === "deep");
+    cz = e.signals[ex.channels.indexOf("Cz")];
+    slow = PL.data.decodeInt16(deep.slow, 10);
+    dev = PL.data.decodeInt16(deep.device, 10);
+    info = deep;
+    // match each recorded sound with the detection of the copy of the detector (same sample with branch main)
+    info.detections = info.stims.map((s) => info.detections.reduce((a, b) => (Math.abs(b.sample - s) < Math.abs(a.sample - s) ? b : a)));
+    drawCl();
+    const lags = info.stims.map((s, k) => info.detections[k].sample - s);
+    const same = lags.every((l) => l === 0);
+    $("#cl-status").textContent = "Recorded sounds in pink. Criteria values from the online filters and a copy of the detector, run offline on the raw signal; " +
+      (same ? "its detections fall on the same samples as the recorded markers." : "its detections differ from the recorded markers by " + Math.min.apply(null, lags) + " to " + Math.max.apply(null, lags) + " samples.");
+  }).catch((err) => { $("#cl-status").textContent = "Could not load the data: " + err.message; });
+
+  PL.onRedraw(() => { drawNight(); drawCl(); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>02 · Equipment and electrodes · Portiloop tutorials</title>
+  <meta name="description" content="The material of the CLAS protocol, the electrode connector and its colours, the montage of the 10 electrodes, measuring Fpz, Fz and Cz with a calculator, skin preparation, gel and tape, reference and bias, EOG, EMG and ECG, why impedance matters, and common mistakes.">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <style>
+    blockquote.quote { margin: 1.1em 0; padding: 6px 16px; border-left: 3px solid var(--accent); background: var(--bg-elev); border-radius: 0 8px 8px 0; }
+    blockquote.quote p { margin: 0.3em 0; }
+    blockquote.quote cite { display: block; font-style: normal; font-size: 0.86em; color: var(--fg-muted); margin-top: 4px; }
+    figure img { display: block; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+    .fig-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+    @media (max-width: 640px) { .fig-row { grid-template-columns: 1fr; } }
+    .sw { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 50%; border: 1px solid var(--fg-muted); vertical-align: -0.1em; margin-right: 6px; }
+    .montage td:first-child, .montage td:nth-child(2), .montage td:nth-child(3), .montage td:nth-child(4) { white-space: nowrap; }
+    .num-in { width: 6.5em; }
+    .calc-svg { width: 100%; max-width: 520px; height: auto; display: block; margin: 8px auto 0; }
+    .calc-svg .head { fill: var(--bg-sunk); stroke: var(--fg-muted); stroke-width: 1.5; }
+    .calc-svg .arc { fill: none; stroke: var(--fg-muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
+    .calc-svg text { fill: var(--fg); font-family: var(--font-sans); font-size: 13px; }
+    .calc-svg .muted { fill: var(--fg-muted); font-size: 12px; }
+    .calc-svg .lead { stroke: var(--fg-muted); stroke-width: 1; }
+    table.proto td, table.proto th { text-align: center; font-variant-numeric: tabular-nums; }
+    table.proto td.hl, table.proto th.hl { background: var(--accent-soft); color: var(--accent); font-weight: 650; }
+    .imp-chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.85em; font-weight: 600; }
+    .imp-green { background: #43a047; color: #fff; } .imp-yellow { background: #fdd835; color: #000; }
+    .imp-red { background: #e53935; color: #fff; } .imp-grey { background: #bdbdbd; color: #000; }
+    ul.checklist { list-style: none; padding-left: 0; }
+    ul.checklist li { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--border); }
+    ul.checklist input { margin-top: 0.3em; accent-color: var(--accent); flex: none; }
+    .readout .v.small { font-size: 1rem; }
+    .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin: 1em 0; }
+    .photo-grid figure { margin: 0; }
+    .photo-grid figcaption { font-size: 0.88em; color: var(--fg-muted); margin-top: 6px; }
+  </style>
+</head>
+<body data-page="02-preparation" data-root="..">
+<main>
+<article class="content">
+
+  <div class="eyebrow">Tutorial 02 · Running a night</div>
+  <h1>Equipment and electrodes</h1>
+  <p class="lead">Before the Portiloop can detect anything, ten electrodes must be on the right spots, on clean skin, with good contact, and plugged into the right pins. This page follows the lab's CLAS protocol step by step, quotes its wording, and explains the reasons behind each step.</p>
+
+  <dl class="meta">
+    <div><dt>Time</dt><dd>30 minutes to read</dd></div>
+    <div><dt>Level</dt><dd>Beginner</dd></div>
+    <div><dt>You need</dt><dd>Tutorial <a href="01-overview.html">01</a>; the material below to practise</dd></div>
+    <div><dt>Runs in browser</dt><dd>Yes: a 10-20 calculator and an impedance illustration</dd></div>
+  </dl>
+
+  <div class="objectives">
+    <h3>In this tutorial you will</h3>
+    <ul>
+      <li>Check the material and connect the electrodes to the right pins.</li>
+      <li>Learn the montage: which electrode goes where, which channel records it, and why it is there.</li>
+      <li>Find Fpz, Fz and Cz from two tape measurements, with a calculator that reproduces the protocol's table.</li>
+      <li>Prepare the skin, apply gel and tape, and place the reference, bias, EOG, EMG and ECG electrodes.</li>
+      <li>Understand what reference, bias and impedance mean in plain terms, and avoid the common mistakes.</li>
+    </ul>
+  </div>
+
+  <!-- ===================================================================== -->
+  <h2 id="material">The material</h2>
+  <p>The protocol lists 13 items ("Required materials"):</p>
+  <div class="fig-row">
+    <ol>
+      <li>Portiloop</li>
+      <li>Portiloop Electrodes</li>
+      <li>Earphones</li>
+      <li>Medical tape cut into proper pieces (squares/rectangles)</li>
+      <li>Cotton swab</li>
+      <li>Alcohol wipes</li>
+      <li>Gauze</li>
+      <li>Portiloop battery and cable</li>
+      <li>Measuring tape</li>
+      <li>Nuprep exfoliant</li>
+      <li>EEG Gel</li>
+      <li>Tape for shoulder and bedside table</li>
+      <li>Toothbrush</li>
+    </ol>
+    <figure>
+      <img src="../assets/img/protocol/equipment.jpg" alt="The material laid out on a table: electrode cable bundle, tape, cotton swabs, alcohol wipes, gauze, phone, battery and Portiloop, measuring tape, Nuprep tube and gel jar" width="486" height="653" loading="lazy">
+      <figcaption>The material, from the protocol (photo of the lab).</figcaption>
+    </figure>
+  </div>
+  <p>The protocol adds: "Make sure that the battery is properly charged. If not, please plug it in. You can check the battery by pressing the button on the top left side of the battery". The phone in the photo is the one you will use to run the Control Center (Tutorial <a href="03-control-center.html">03</a>). The protocol does not say what the toothbrush is for.</p>
+  <figure>
+    <img src="../assets/img/protocol/earphones.jpg" alt="Wired in-ear earphones with a 3.5 mm jack" width="600" height="800" loading="lazy" style="max-width: 300px">
+    <figcaption>Wired in-ear earphones with a jack plug, from the protocol. Later steps ask to "use the right size of earphones and tape the earphones to the ear" (Tutorial <a href="04-night.html">04</a>).</figcaption>
+  </figure>
+
+  <!-- ===================================================================== -->
+  <h2 id="connector">Connecting the electrodes</h2>
+  <p>All the electrodes end in one connector of 10 pins on the Portiloop. The protocol notes: "You do not need to take off the cover". The photo below was taken with the cover off, to show the pins and the colour of the wire that goes on each.</p>
+  <figure>
+    <img src="../assets/img/protocol/connector-pins.jpg" alt="Portiloop board in its case with the electrode connector on the left; from top to bottom: Reference white, Bias-out grey, E8 purple, E7 blue, E6 green, E5 yellow, E4 orange, E3 red, E2 brown, E1 black" width="1000" height="570" loading="lazy">
+    <figcaption>The electrode connector of a Portiloop V2.3 board, from top to bottom: Reference (white), Bias-out (grey), then E8 to E1. Photo from the protocol.</figcaption>
+  </figure>
+  <p>The number of the pin is the number of the channel: the Check tab of the Control Center says "chN is the electrode on pin N of the connector". So the black wire on E1 is recorded as <code>ch1</code> and appears as the column <code>raw_ch1</code> in the file, and so on. The two top pins, Reference and Bias-out, are not channels: they are not recorded as columns of their own (see <a href="#ref-bias">Reference and bias</a>).</p>
+
+  <div class="callout warning"><span class="callout-title">Warning: the detection channel is a pin, not an electrode</span>The Portiloop does not know which electrode is on which pin. It detects slow waves on channel 6 (the "Detection channel" setting), whatever is plugged into E6. If the green Cz wire ends up on another pin, the device will detect, and play sounds, on the wrong signal. Check the colours against the photo every time you plug the connector.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="montage">The montage</h2>
+  <p>The lab's illustration shows where each electrode goes, how to measure the scalp positions, and the pin colours:</p>
+  <figure>
+    <img src="../assets/img/protocol/clas-protocol-sheet.png" alt="CLAS protocol sheet: electrode positions from the left, front, top and right side and on the chest; measurements from nasion to inion with Fpz at 10%, Fz at 30%, Cz at 50%; a table of distances for head sizes 34 to 39 cm; the Portiloop pin colours; and the setup steps" width="1400" height="1812" loading="lazy">
+    <figcaption>The CLAS protocol sheet of the lab. Note the side of the EOG electrodes: EOG1 above the outer corner of the <em>left</em> eye, EOG2 below the outer corner of the <em>right</em> eye.</figcaption>
+  </figure>
+  <p>The protocol stresses one point: "the red electrode (EOG1) is on the left side of the face; the orange electrode (EOG2) is on the right side of the face." The table gathers the protocol's placement, its channel list ("ch1 corresponds to ECG1 (black electrode)", and so on) and the reason for each electrode.</p>
+  <div class="scroll-x">
+  <table class="montage">
+    <thead><tr><th>Electrode</th><th>Colour</th><th>Pin</th><th>Channel</th><th>Location (protocol)</th><th>What it records</th><th>Why it is there</th></tr></thead>
+    <tbody>
+      <tr><td>Reference</td><td><span class="sw" style="background:#ffffff"></span>white</td><td>Reference</td><td>none</td><td>"over the bone directly behind the right ear" (mastoid)</td><td>Nothing on its own: every channel is measured relative to it.</td><td>A common reference, on bone with little brain activity under it, shared by all 8 channels.</td></tr>
+      <tr><td>Bias-out</td><td><span class="sw" style="background:#8c8c8c"></span>grey</td><td>Bias-out</td><td>none</td><td>"on the right earlobe"</td><td>Nothing: it drives the body.</td><td>Holds the body at the amplifier's working voltage and reduces mains interference.</td></tr>
+      <tr><td>Fpz</td><td><span class="sw" style="background:#7b2d8e"></span>purple</td><td>E8</td><td>ch8</td><td>forehead, midline, 10% of nasion to inion</td><td>Frontal EEG, with a strong share of eye movements and blinks.</td><td>Frontal EEG for the analysis; with Cz, it gives the Fpz minus Cz derivation read by the offline automatic sleep staging of Tutorial <a href="06-first-look.html">06</a> (<code>docs/tools/stage_night.py</code>).</td></tr>
+      <tr><td>Fz</td><td><span class="sw" style="background:#1f5fbf"></span>blue</td><td>E7</td><td>ch7</td><td>midline, 30% of nasion to inion</td><td>Frontal EEG.</td><td>Slow oscillations are large over frontal areas (see below); a second EEG site for the analysis.</td></tr>
+      <tr><td>Cz</td><td><span class="sw" style="background:#2e8b3d"></span>green</td><td>E6</td><td>ch6</td><td>vertex, 50% of nasion to inion and of ear to ear</td><td>Central EEG.</td><td>The detection channel: the Portiloop detects slow waves and times the sounds on this signal.</td></tr>
+      <tr><td>EMG</td><td><span class="sw" style="background:#f2b51d"></span>yellow</td><td>E5</td><td>ch5</td><td>"in the middle of the chin"</td><td>Chin muscle activity.</td><td>Muscle tone, needed to score sleep stages (for example, low tone in REM sleep) and to spot movements.</td></tr>
+      <tr><td>EOG2</td><td><span class="sw" style="background:#f07a2a"></span>orange</td><td>E4</td><td>ch4</td><td>"at the bottom right of the right eye"</td><td>Eye movements.</td><td>Needed to score wake and REM sleep; one electrode above one eye and one below the other.</td></tr>
+      <tr><td>EOG1</td><td><span class="sw" style="background:#d62a2a"></span>red</td><td>E3</td><td>ch3</td><td>"at the top left of the left eye"</td><td>Eye movements.</td><td>As EOG2.</td></tr>
+      <tr><td>ECG2</td><td><span class="sw" style="background:#8a5a2b"></span>brown</td><td>E2</td><td>ch2</td><td>"right upper chest, below the clavicle"</td><td>Heart activity.</td><td>Heart rate; the two ECG electrodes are placed "diagonally across chest".</td></tr>
+      <tr><td>ECG1</td><td><span class="sw" style="background:#1a1a1a"></span>black</td><td>E1</td><td>ch1</td><td>"left upper abdomen, just below the rib cage"</td><td>Heart activity.</td><td>As ECG2.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>This is also the <code>"default"</code> montage of the analysis package (<code>("ECG1", "ECG2", "EOG1", "EOG2", "EMG", "Cz", "Fz", "Fpz")</code> in <a href="https://github.com/Portiloop/portiloop-software/blob/main/examples/processing/portiloop_analysis/recording.py">recording.py</a>), so the analysis tutorials read the files with the right names if you follow the protocol.</p>
+
+  <div class="callout neuro"><span class="callout-title">For neuroscientists: why Cz and Fz for slow oscillations</span>Slow oscillations are widespread, but they tend to start in front and travel backwards. Massimini et al. report: "Waves originate more frequently in prefrontal-orbitofrontal regions and propagate in an anteroposterior direction" [1]. A midline central or frontal site with a mastoid reference is a common choice in CLAS studies. All channels here are referenced to the right mastoid, so a signal "at Cz" is really Cz minus the mastoid, and so on; for ECG and EOG, a bipolar signal (ECG1 minus ECG2, EOG1 minus EOG2) can be computed offline by subtracting two channels, because the shared reference cancels out.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="measure">Measuring Fpz, Fz and Cz</h2>
+  <p>The three scalp electrodes follow the international 10-20 system [2]: positions are fractions of head measurements, so that they fall on comparable brain areas in heads of different sizes. The protocol uses two measurements:</p>
+  <ol class="steps">
+    <li><strong>Nasion to inion.</strong> "Use a measuring tape to measure the distance between the nasion (at the bridge of the nose, between the eyes) and the inion (at the back of the head)." Then "divide it by 2, and remember that value and where it falls on your head." This is Cz along the midline.</li>
+    <li><strong>Ear to ear.</strong> "Use a measuring tape to measure the distance between the middle of one ear, to the middle of the other ear." Then "divide it by 2 and that spot should correspond to the same one you identified while measuring from the nasion to the inion." The two halves cross at Cz: if they do not, measure again.</li>
+    <li><strong>Fpz.</strong> "Position the electrode at 10% of the total distance between the nasion [...] and the inion".</li>
+    <li><strong>Fz.</strong> "Position the electrode at 30% of the total distance [...]. The position of the Blue electrode should correspond to the middle of the distance between the Purple electrode and the Green electrode." This is a free check: 30% is halfway between 10% and 50%.</li>
+  </ol>
+  <p>All distances are measured from the nasion, along the midline over the top of the head. The protocol sheet gives a table for common head sizes; the calculator below reproduces it for any size.</p>
+
+  <div class="widget" id="calc-widget">
+    <div class="widget-title">10-20 calculator for Fpz, Fz and Cz</div>
+    <p class="widget-desc">What to try: (1) enter 36 cm and compare with the protocol's table (3.6, 10.8, 18.0); (2) enter your own head's measurements; (3) check that Fz is exactly halfway between Fpz and Cz, as the protocol says.</p>
+    <div class="controls">
+      <label for="calc-ni">Nasion to inion (cm) <input class="num-in" type="number" id="calc-ni" min="20" max="50" step="0.1" value="36"></label>
+      <label for="calc-ee">Ear to ear (cm) <input class="num-in" type="number" id="calc-ee" min="20" max="50" step="0.1" value="36"></label>
+    </div>
+    <svg class="calc-svg" id="calc-svg" viewBox="0 0 520 270" role="img" aria-label="Side view of a head with the nasion-inion arc and the positions of Fpz, Fz and Cz"></svg>
+    <div class="readout">
+      <div><div class="k">Fpz (10%) from the nasion</div><div class="v" id="calc-fpz">…</div></div>
+      <div><div class="k">Fz (30%) from the nasion</div><div class="v" id="calc-fz">…</div></div>
+      <div><div class="k">Cz (50%) from the nasion</div><div class="v" id="calc-cz">…</div></div>
+      <div><div class="k">Cz (50%) from the middle of either ear</div><div class="v" id="calc-ear">…</div></div>
+      <div><div class="k">70% from the nasion (Pz; not used here)</div><div class="v" id="calc-pz">…</div></div>
+    </div>
+    <div class="scroll-x">
+    <table class="proto" id="calc-table">
+      <thead><tr><th>Nasion to inion</th><th>34 cm</th><th>35 cm</th><th>36 cm</th><th>37 cm</th><th>38 cm</th><th>39 cm</th></tr></thead>
+      <tbody>
+        <tr><th>10%</th><td>3.4</td><td>3.5</td><td>3.6</td><td>3.7</td><td>3.8</td><td>3.9</td></tr>
+        <tr><th>30%</th><td>10.2</td><td>10.5</td><td>10.8</td><td>11.1</td><td>11.4</td><td>11.7</td></tr>
+        <tr><th>50%</th><td>17.0</td><td>17.5</td><td>18.0</td><td>18.5</td><td>19.0</td><td>19.5</td></tr>
+        <tr><th>70%</th><td>23.8</td><td>24.5</td><td>25.2</td><td>25.9</td><td>26.6</td><td>27.3</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="status" id="calc-status">The table is copied from the protocol sheet (values in cm from the nasion); the matching column is highlighted.</div>
+  </div>
+
+  <div class="callout tip"><span class="callout-title">Tip: mark the spots</span>Mark Cz where the two half-measurements cross before you clean the skin; the cleaning moves the hair and you will lose the spot. The 70% row of the protocol's table (Pz in the 10-20 system) has no electrode in this montage.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="skin">Skin preparation</h2>
+  <p>Good contact needs clean skin: the outer layer of the skin is dead and dry, and skin oil insulates. The protocol uses two products: alcohol wipes to degrease, and Nuprep, a mildly abrasive gel, to remove the outer layer on the sites that matter most. Its order on the sheet is "1. Alcohol pad 2. Measurements 3. NuPrep 4. Electrodes 5. Connect and start portiloop". The protocol's "Skin preparation" section says:</p>
+  <ol>
+    <li>"First use an alcohol wipe to clean the following areas: Back of the right ear; Right earlobe; One spot at the lower outer side of your right eye and one spot at the upper outer side of your left eye (see image above); The middle of the chin"</li>
+    <li>"Use Nuprep exfoliant to clean the back of the right ear"</li>
+    <li>"Tape the electrodes cables to the right shoulder"</li>
+  </ol>
+  <p>For the scalp, the protocol uses a cotton swab with Nuprep on each spot: "rubbing the area, back and forth and side to side, to try to clear the area of any surrounding hair as much as possible. It is normal for the area to turn slightly red". For Fpz: "clean it with an alcohol wipe and exfoliate it after."</p>
+
+  <div class="callout neuro"><span class="callout-title">For neuroscientists: which sites get Nuprep</span>Following the protocol, the reference (behind the right ear) and the three scalp sites (Cz, Fpz, Fz) are abraded with Nuprep; the earlobe (bias), the EOG and chin sites and the ECG sites are only cleaned with alcohol. The reference matters for every channel (see below) and Cz carries the detection, so these are the sites where contact matters most.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="placing">Gel, placement and tape</h2>
+  <p>The protocol places the electrodes in this order: bias, reference, Cz, Fpz, Fz, EMG, EOG, ECG. Each placement follows the same pattern:</p>
+  <ol class="steps">
+    <li><strong>Gel.</strong> "scoop up some EEG gel" with the electrode cup. The gel fills the gap between the metal and the skin and makes the electrical contact.</li>
+    <li><strong>Press.</strong> Press the electrode onto the prepared spot ("press down firmly using medical gauze" for Cz and Fz, "using medical tape" for Fpz and the chin). "You should see a ring of goo around the electrode".</li>
+    <li><strong>Orient the wire.</strong> "Make sure that the “tail” of the electrode is facing backwards, so that it is not in your face all night."</li>
+    <li><strong>Secure and test.</strong> Tape the electrode. "Tug on the electrode slightly and if the skin moves with it then, good job, your electrode is secure".</li>
+  </ol>
+  <p>Finally, the cables are taped to the right shoulder (skin preparation step 3) and, after the earphones are in, "Secure the electrode cables to the bedside table using tape." Taping the cable at two points means that when the sleeper turns, the pull goes to the tape, not to the electrodes.</p>
+
+
+  <h3 id="in-place">The electrodes in place</h3>
+  <p>The photos of the protocol show each electrode on a member of the lab, who agreed to their publication. The labels on the photos give the pin of each electrode on the connector (E1 to E8).</p>
+  <div class="photo-grid">
+    <figure><img src="../assets/img/protocol/place-bias.jpg" alt="Grey bias-out electrode taped on the right earlobe" width="567" height="461" loading="lazy"><figcaption><strong>Bias-out (grey), right earlobe.</strong> "position the electrode on the right earlobe, push on it, securing the electrode with medical tape."</figcaption></figure>
+    <figure><img src="../assets/img/protocol/place-reference.jpg" alt="White reference electrode taped on the bone behind the right ear" width="584" height="459" loading="lazy"><figcaption><strong>Reference (white), behind the right ear.</strong> "position it over the bone directly behind the right ear and push on it, then secure the electrode with medical tape."</figcaption></figure>
+    <figure><img src="../assets/img/protocol/place-cz.jpg" alt="Green Cz electrode on the top of the head, held by a square of gauze, wires running backwards" width="606" height="507" loading="lazy"><figcaption><strong>Cz (green, E6), top of the head.</strong> "press down firmly using medical gauze"; the wire runs backwards.</figcaption></figure>
+    <figure><img src="../assets/img/protocol/place-fpz.jpg" alt="Purple Fpz electrode on the forehead, above the nasion" width="594" height="441" loading="lazy"><figcaption><strong>Fpz (purple, E8), forehead.</strong> "at 10% of the total distance between the nasion [...] and the inion".</figcaption></figure>
+    <figure><img src="../assets/img/protocol/place-fz.jpg" alt="Blue Fz electrode on the front of the scalp, between Fpz and Cz, under gauze" width="579" height="386" loading="lazy"><figcaption><strong>Fz (blue, E7).</strong> "at 30% of the total distance", "the middle of the distance between the Purple electrode and the Green electrode".</figcaption></figure>
+    <figure><img src="../assets/img/protocol/place-emg.jpg" alt="Yellow EMG electrode taped in the middle of the chin" width="616" height="409" loading="lazy"><figcaption><strong>EMG (yellow, E5), chin.</strong> "Position the electrode in the middle of the chin."</figcaption></figure>
+    <figure><img src="../assets/img/protocol/place-eog.jpg" alt="Orange EOG2 electrode below the outer corner of the right eye and red EOG1 electrode above the outer corner of the left eye" width="714" height="416" loading="lazy"><figcaption><strong>EOG2 (orange, E4) and EOG1 (red, E3).</strong> Below the outer corner of the right eye, and above the outer corner of the left eye.</figcaption></figure>
+  </div>
+
+  <h3 id="ref-bias">Reference and bias, in plain terms</h3>
+  <p><strong>The reference</strong> (white, behind the right ear). An EEG amplifier never measures the voltage of one point; it measures the difference between two points. On the Portiloop, every channel is "its electrode minus the reference". If the reference moves, becomes noisy or falls off, <em>every</em> channel shows it. The protocol places it "over the bone directly behind the right ear" (the mastoid), a common choice because there is little brain tissue directly under it. In the code, the reference reaches the amplifier through a pin called SRB1 (<code>0x20,  # Enable SRB1</code> in <code>config_hardware.py</code>).</p>
+  <p><strong>The bias</strong> (grey, right earlobe). The body of a sleeper picks up the mains voltage of the room (a large signal at 50 or 60 Hz, the same on every electrode) and drifts in voltage. The bias electrode is the amplifier's ground connection with feedback (often called a "driven right leg" in ECG): the amplifier senses the average voltage of the electrodes and drives the body, through the bias electrode, towards its own mid-supply voltage. This keeps all inputs within the amplifier's range and reduces the part of the mains interference common to all electrodes. In the code, the bias amplifier uses an internal mid-supply reference (<code>BIASREF_INT</code>, CONFIG3 = <code>0xFC</code>), and every recorded channel feeds the bias loop (<code>BIAS_SENSP</code> and <code>BIAS_SENSN</code>).</p>
+  <p>Two consequences you will meet in the Check tab (Tutorial <a href="03-control-center.html">03</a>):</p>
+  <ul>
+    <li>The reference impedance cannot be measured, only whether it is connected: "The impedance of the reference cannot be measured, only its connection." If it is off, the tab says "The reference electrode is off: reconnect it to measure the electrodes."</li>
+    <li>If the bias is off, all electrodes look off: "All electrodes are off: check the ground (bias) electrode first."</li>
+  </ul>
+  <p>The bias loop is also why a single fallen electrode matters: the lead-off code explains that "a fallen electrode leaves its input floating. As every recorded channel is part of the bias loop (BIAS_SENSP/N), a floating input drives the bias amplifier and degrades all the other channels." The device removes such electrodes from the loop during the night (Tutorial <a href="04-night.html">04</a>).</p>
+
+  <h3 id="eog-emg-ecg">EOG, EMG and ECG</h3>
+  <ul>
+    <li><strong>EMG (yellow).</strong> "Position the electrode in the middle of the chin. If not accessible (because of hair), put it slightly to the side." Then gel, tape, tail backwards and the tug test.</li>
+    <li><strong>EOG2 (orange).</strong> "Find the spot at the bottom right of the right eye", clean it with an alcohol wipe, "Put gel on the electrode and use medical tape to secure it in its spot".</li>
+    <li><strong>EOG1 (red).</strong> "Find the spot at the top left of the left eye", same procedure. The protocol sheet shows both at the outer corners of the eyes.</li>
+    <li><strong>ECG (brown and black).</strong> "ECG electrodes: bipolar electrodes diagonally across chest". The participant may place them: "Demonstrate how to position the electrodes and let the participant place them on themselves, unless they would prefer assistance." Brown (ECG2): "Use an alcohol wipe to clean up the right upper chest, below the clavicle", then gel and tape. Black (ECG1): "Use an alcohol wipe to clean up the left upper abdomen, just below the rib cage", then gel and tape.</li>
+  </ul>
+  <div class="callout tip"><span class="callout-title">Tip: when the participant places the ECG</span>Show the two spots on the protocol sheet (brown on the right upper chest, black on the left side below the ribs), hand over the alcohol wipes, the electrodes with gel and pre-cut tape, and check the two signals afterwards in the Output tab (Tutorial <a href="03-control-center.html">03</a>): a clear heartbeat means the placement worked.</div>
+
+  <!-- ===================================================================== -->
+  <h2 id="impedance">Why impedance matters</h2>
+  <p>The <strong>impedance</strong> of an electrode is how much the skin-gel-electrode contact resists a small alternating current, in kilo-ohms (kΩ). Low impedance means good contact. The Check tab of the Control Center measures it for each channel by injecting a tiny current (6 nA at 31.25 Hz) and colours the result (<code>DEFAULT_THRESHOLDS_KOHM = (10, 25)</code> in <code>impedance_display.py</code>):</p>
+  <ul>
+    <li><span class="imp-chip imp-green">green</span> below 10 kΩ;</li>
+    <li><span class="imp-chip imp-yellow">yellow</span> 10 to 25 kΩ;</li>
+    <li><span class="imp-chip imp-red">red</span> 25 kΩ or more, or OFF;</li>
+    <li><span class="imp-chip imp-grey">grey</span> uncertain (below 1 kΩ, which is within the accuracy of the measurement, a saturated channel, or not measured).</li>
+  </ul>
+  <p>The protocol: "Good impedance levels should be displayed in green." If not, "please check the signals first (in the panel Output, select the channel of interest). If the signals are not good, redo the electrode positioning (remove the electrode, check if the amount of gel is sufficient and add more if not, replace the electrode and press on it)."</p>
+  <p>Why it matters: a poor contact does not add much noise by itself, but it makes the recording more sensitive to everything around it. Mains interference reaches the input more easily, and slow voltage changes of the skin (sweat, movement) show up as drifts. A study that recorded the same EEG with low and high impedance found that "Low-frequency noise was found to be increased at high-impedance sites relative to low-impedance sites, especially when the recording environment was warm and humid" [3]. For CLAS this is critical, because slow drifts fall in the same frequency band as the slow waves the Portiloop detects (Tutorial <a href="01-overview.html#criteria">01</a>): a filter cannot remove them without removing the slow waves too, and the detector cannot tell them apart.</p>
+
+  <h3 id="tutorial-impedances">The impedances of the tutorial night</h3>
+  <p>The last impedance check before the tutorial night is stored in its <code>_metadata.json</code>:</p>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>Channel</th><th>Electrode</th><th>Impedance</th><th>Colour in the Check tab</th></tr></thead>
+    <tbody>
+      <tr><td>ch1</td><td>ECG1</td><td>177.5 kΩ</td><td><span class="imp-chip imp-red">red</span></td></tr>
+      <tr><td>ch2</td><td>ECG2</td><td>156.0 kΩ</td><td><span class="imp-chip imp-red">red</span></td></tr>
+      <tr><td>ch3</td><td>EOG1</td><td>78.3 kΩ</td><td><span class="imp-chip imp-red">red</span></td></tr>
+      <tr><td>ch4</td><td>EOG2</td><td>11.6 kΩ</td><td><span class="imp-chip imp-yellow">yellow</span></td></tr>
+      <tr><td>ch5</td><td>EMG</td><td>4.4 kΩ</td><td><span class="imp-chip imp-green">green</span></td></tr>
+      <tr><td>ch6</td><td>Cz</td><td>20.6 kΩ</td><td><span class="imp-chip imp-yellow">yellow</span></td></tr>
+      <tr><td>ch7</td><td>Fz</td><td>2.3 kΩ</td><td><span class="imp-chip imp-green">green</span></td></tr>
+      <tr><td>ch8</td><td>Fpz</td><td>8.5 kΩ</td><td><span class="imp-chip imp-green">green</span></td></tr>
+      <tr><td>REF</td><td>Reference</td><td>connected</td><td><span class="imp-chip imp-green">connected</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Cz, the detection channel, was yellow (20.6 kΩ): usable, but a better contact would have been worth a second try. The ECG channels were high, which the protocol expects: "It is normal that the impedance levels of ch1 (ECG1) and ch2 (ECG2) are not good, because they are far away from the reference electrode."</p>
+
+  <div class="callout note"><span class="callout-title">The protocol and the code explain high ECG impedances differently</span>According to the documentation of the measurement in the code (<a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/hardware/impedance.py#L1-L27">impedance.py</a>), the test current "flows through the electrode into the scalp and back through the bias (ground) electrode. The reference electrode (SRB1) carries no current, so each channel only sees I * Z of its own electrode." In that model, the distance to the reference should not change the value much. We do not know why the ECG electrodes measured high on this night. Possible factors, not verified, are that the protocol cleans the chest with alcohol only (no Nuprep) and that the participant places these electrodes. Since the heartbeat is a much larger signal than the EEG, a high ECG impedance is usually less of a problem; check the signal in the Output tab rather than the colour.</div>
+
+  <div class="widget" id="imp-widget">
+    <div class="widget-title">Impedance and noise (illustrative)</div>
+    <p class="widget-desc">What to try: (1) raise the impedance and watch the mains hum and the slow drift grow; (2) turn on the notch filter: the hum goes, the drift stays, because it is in the slow-wave band; (3) look at the thermal noise: even at 300 kΩ it stays below 1 µV (0.42 µV), so the problem of a bad contact is not the thermal noise of the contact itself.</p>
+    <div class="controls">
+      <label for="imp-z">Impedance <input type="range" id="imp-z" min="0" max="1000" step="1" value="400"><output for="imp-z"></output></label>
+      <label for="imp-mains">Mains <select id="imp-mains"><option value="50" selected>50 Hz</option><option value="60">60 Hz</option></select></label>
+      <label for="imp-notch"><input type="checkbox" id="imp-notch"> notch filter (the Portiloop's coefficients)</label>
+    </div>
+    <canvas class="plot" id="imp-plot" role="img" aria-label="Ten seconds of real Cz signal with illustrative mains hum and drift added according to the impedance"></canvas>
+    <div class="readout">
+      <div><div class="k">Colour in the Check tab</div><div class="v small" id="imp-col">…</div></div>
+      <div><div class="k">Thermal noise, 0.3 to 35 Hz (physics)</div><div class="v small" id="imp-th">…</div></div>
+      <div><div class="k">Mains hum added (illustrative)</div><div class="v small" id="imp-hum">…</div></div>
+      <div><div class="k">Drift added (illustrative)</div><div class="v small" id="imp-dr">…</div></div>
+    </div>
+    <div class="status" id="imp-status">Loading the tutorial night…</div>
+  </div>
+  <p>What is real and what is not in this widget. The signal is 10 s of real Cz from the tutorial night (deep sleep: seconds 9 to 19 of the 30 s excerpt of Tutorial <a href="01-overview.html#explainer">01</a>, which starts at minute 123.0; its electrode measured 20.6 kΩ), shown band-passed 0.3 to 35 Hz, before any noise is added. The thermal noise is computed with the Johnson formula √(4kTRB) for a resistor equal to the impedance, at 37 °C, over 34.7 Hz of bandwidth. The <strong>amounts</strong> of mains hum and drift are <strong>illustrative</strong>: we made them grow in proportion to the impedance (0.6 µV and 0.5 µV of amplitude per kΩ) to show the effect; they are not a model of the Portiloop, of a room or of a person. Real interference depends on the room, the cables, the difference in impedance between electrodes and the bias contact. The notch is the device's own filter at 250 Hz (the coefficients of <code>custom_processors.py</code>).</p>
+
+  <!-- ===================================================================== -->
+  <h2 id="mistakes">Common mistakes</h2>
+  <p>A checklist to run through before Start. The boxes are only for you; nothing is saved.</p>
+  <ul class="checklist">
+    <li><input type="checkbox" id="m1"><label for="m1"><strong>EOG sides swapped.</strong> Red (EOG1) above the outer corner of the left eye, orange (EOG2) below the outer corner of the right eye.</label></li>
+    <li><input type="checkbox" id="m2"><label for="m2"><strong>Wires on the wrong pins.</strong> From the top: white, grey, purple, blue, green, yellow, orange, red, brown, black. Green (Cz) must be on E6, the detection channel.</label></li>
+    <li><input type="checkbox" id="m3"><label for="m3"><strong>Cz not where the two measurements cross.</strong> Measure nasion to inion and ear to ear; Fz must be halfway between Fpz and Cz.</label></li>
+    <li><input type="checkbox" id="m4"><label for="m4"><strong>Not enough gel, or no pressure.</strong> Look for the "ring of goo"; do the tug test.</label></li>
+    <li><input type="checkbox" id="m5"><label for="m5"><strong>Reference or bias with poor contact.</strong> The reference affects every channel and the bias holds the whole recording in range; prepare them as carefully as Cz.</label></li>
+    <li><input type="checkbox" id="m6"><label for="m6"><strong>Tails pointing forward, cables loose.</strong> Tails backwards, cables taped to the right shoulder and to the bedside table.</label></li>
+    <li><input type="checkbox" id="m7"><label for="m7"><strong>Electrode fixed after the impedance check, without a new check.</strong> The Check tab warns: "Electrodes OFF at the last check are disabled in the next recording (except the detection channel)." An electrode that was off at the check and fixed afterwards records nothing (0) all night. Run Check again after any change.</label></li>
+    <li><input type="checkbox" id="m8"><label for="m8"><strong>Accepting a red Cz.</strong> Cz carries the detection; redo it until it is green or at least yellow, and look at its signal in the Output tab.</label></li>
+    <li><input type="checkbox" id="m9"><label for="m9"><strong>Battery not charged.</strong> Check it with the button on the battery before you start the preparation.</label></li>
+  </ul>
+  <div class="status" id="m-status" aria-live="polite"></div>
+
+  <!-- ===================================================================== -->
+  <h2 id="exercises">Exercises</h2>
+
+  <details class="exercise"><summary>A small head</summary>
+    <p>A participant measures 33 cm from nasion to inion and 34 cm from ear to ear. Where do Fpz, Fz and Cz go? The value is outside the protocol's table: what do you do?</p>
+  </details>
+  <details class="solution"><summary>Answer</summary>
+    <p>From the nasion: Fpz at 3.3 cm, Fz at 9.9 cm, Cz at 16.5 cm; along the ear-to-ear line, Cz is 17.0 cm from the middle of either ear. The percentages do not depend on the head size, so the table can be extended with the calculator. Being outside the table is not an error in itself, but it is a reason to measure again, and to check that the midline and the ear-to-ear halves cross at the same spot.</p>
+  </details>
+
+  <details class="exercise"><summary>All channels look bad at once</summary>
+    <p>At the impedance check, every electrode shows OFF, although you placed them carefully. What do you check first, and why?</p>
+  </details>
+  <details class="solution"><summary>Answer</summary>
+    <p>The bias (grey, right earlobe). The test current of every electrode returns through the bias electrode; if the bias is off, no electrode can be measured, and the Check tab says so: "All electrodes are off: check the ground (bias) electrode first." If instead the reference were off, the tab would say "The reference electrode is off: reconnect it to measure the electrodes." Also check that the connector is fully inserted.</p>
+  </details>
+
+  <details class="exercise"><summary>Read the tutorial night's check</summary>
+    <p>Using the impedance table of the tutorial night, which channels would you have tried to improve before Start, and in which order?</p>
+  </details>
+  <details class="solution"><summary>Answer</summary>
+    <p>Cz first (20.6 kΩ, yellow): it is the detection channel, and drifts on it change which waves receive a sound. Then EOG1 (78.3 kΩ, red): eye movements matter for sleep staging. The ECG channels (177.5 and 156.0 kΩ) are expected to be high according to the protocol; check that the heartbeat is visible in the Output tab rather than redoing them. Fz (2.3 kΩ), EMG (4.4 kΩ) and Fpz (8.5 kΩ) were green; EOG2 (11.6 kΩ) was yellow and acceptable.</p>
+  </details>
+
+  <h2 id="references">References</h2>
+  <ol class="refs">
+    <li>Massimini M, Huber R, Ferrarelli F, Hill S, Tononi G (2004). The sleep slow oscillation as a traveling wave. <em>Journal of Neuroscience</em> 24(31): 6862 to 6870. <a href="https://doi.org/10.1523/JNEUROSCI.1318-04.2004">doi:10.1523/JNEUROSCI.1318-04.2004</a></li>
+    <li>Klem GH, Lüders HO, Jasper HH, Elger C (1999). The ten-twenty electrode system of the International Federation. The International Federation of Clinical Neurophysiology. <em>Electroencephalography and Clinical Neurophysiology. Supplement</em> 52: 3 to 6. <a href="https://pubmed.ncbi.nlm.nih.gov/10590970/">PubMed 10590970</a></li>
+    <li>Kappenman ES, Luck SJ (2010). The effects of electrode impedance on data quality and statistical significance in ERP recordings. <em>Psychophysiology</em> 47(5): 888 to 904. <a href="https://doi.org/10.1111/j.1469-8986.2010.01009.x">doi:10.1111/j.1469-8986.2010.01009.x</a></li>
+    <li>Portiloop software for the Portiloop V2.3, branch main: <a href="https://github.com/Portiloop/portiloop-software/tree/main">github.com/Portiloop/portiloop-software</a> (files cited in the text, linked at commit 917f1f3, the version that recorded the tutorial night). The lab's CLAS protocol and its illustration (quoted in the text) are not public.</li>
+  </ol>
+
+</article>
+</main>
+
+<script src="../assets/js/portiloop.js"></script>
+<script src="../assets/js/data.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = PL.ui.$;
+
+  /* ================================================================ 10-20 calculator */
+  // distance from the nasion, in cm with one decimal: round(L * pct / 10) / 10 avoids floating-point surprises
+  const at = (L, pct) => Math.round(L * pct / 10) / 10;
+  const cm = (v) => v.toFixed(1) + " cm";
+
+  function drawHead(L) {
+    const svg = $("#calc-svg");
+    const cx = 260, cy = 215, R = 165;
+    const pt = (p) => { const a = Math.PI * (1 - p); return [cx + R * Math.cos(a), cy - R * Math.sin(a)]; };
+    const mk = (p, label, color, val, dy) => {
+      const [x, y] = pt(p), [lx, ly] = pt(p);
+      const ox = x < cx - 5 ? -1 : x > cx + 5 ? 1 : 0;
+      const tx = x + ox * 18 + (ox === 0 ? 0 : 0), ty = y - 16 + (dy || 0);
+      return '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="8" style="fill:' + color + ';stroke:var(--fg);stroke-width:1"/>' +
+        '<text x="' + (tx).toFixed(1) + '" y="' + (ty).toFixed(1) + '" text-anchor="' + (ox < 0 ? "end" : ox > 0 ? "start" : "middle") + '"><tspan font-weight="650">' + label + '</tspan> ' + val + '</text>';
+    };
+    let s = "";
+    // head outline (schematic side view, face to the left)
+    s += '<path class="head" d="M ' + (cx - R - 10) + ' ' + (cy + 6) + ' A ' + (R + 10) + ' ' + (R + 12) + ' 0 0 1 ' + (cx + R + 10) + ' ' + (cy + 6) + ' L ' + (cx + R + 10) + ' 262 L ' + (cx - R - 10) + ' 262 Z"/>';
+    s += '<path class="head" d="M ' + (cx - R - 10) + ' ' + (cy + 4) + ' l -16 22 l 16 6 Z"/>'; // nose
+    s += '<ellipse class="head" cx="' + (cx + 30) + '" cy="' + (cy + 4) + '" rx="12" ry="20"/>'; // ear
+    s += '<path class="arc" d="M ' + (cx - R) + ' ' + cy + ' A ' + R + ' ' + R + ' 0 0 1 ' + (cx + R) + ' ' + cy + '"/>';
+    s += '<circle cx="' + (cx - R) + '" cy="' + cy + '" r="3" style="fill:var(--fg-muted)"/><text class="muted" x="' + (cx - R + 8) + '" y="' + (cy + 20) + '" text-anchor="start">Nasion</text>';
+    s += '<circle cx="' + (cx + R) + '" cy="' + cy + '" r="3" style="fill:var(--fg-muted)"/><text class="muted" x="' + (cx + R - 8) + '" y="' + (cy + 20) + '" text-anchor="end">Inion</text>';
+    s += '<text class="muted" x="' + cx + '" y="' + (cy + 40) + '" text-anchor="middle">' + L.toFixed(1) + ' cm along the dashed arc</text>';
+    s += mk(0.1, "Fpz", "#7b2d8e", cm(at(L, 10)));
+    s += mk(0.3, "Fz", "#1f5fbf", cm(at(L, 30)));
+    s += mk(0.5, "Cz", "#2e8b3d", cm(at(L, 50)));
+    svg.innerHTML = s;
+  }
+
+  function calc() {
+    const L = parseFloat($("#calc-ni").value), E = parseFloat($("#calc-ee").value);
+    const ok = isFinite(L) && L > 0, okE = isFinite(E) && E > 0;
+    $("#calc-fpz").textContent = ok ? cm(at(L, 10)) : "…";
+    $("#calc-fz").textContent = ok ? cm(at(L, 30)) : "…";
+    $("#calc-cz").textContent = ok ? cm(at(L, 50)) : "…";
+    $("#calc-pz").textContent = ok ? cm(at(L, 70)) : "…";
+    $("#calc-ear").textContent = okE ? cm(at(E, 50)) : "…";
+    if (ok) drawHead(L);
+    // highlight the matching column of the protocol's table
+    const col = ok && Math.abs(L - Math.round(L)) < 1e-9 ? Math.round(L) - 33 : -1; // 34 cm -> column 1
+    PL.ui.$$("#calc-table tr").forEach((tr) => {
+      Array.from(tr.children).forEach((c, i) => c.classList.toggle("hl", i === col && col >= 1 && col <= 6));
+    });
+    let msg = "The table is copied from the protocol sheet (values in cm from the nasion); the matching column is highlighted.";
+    if (ok && (L < 34 || L > 39)) msg = "Nasion to inion outside the protocol's table (34 to 39 cm): the percentages still apply, but measure again to be sure.";
+    if (ok && okE) {
+      const mid = (at(L, 10) + at(L, 50)) / 2;
+      msg += " Check: halfway between Fpz and Cz is " + cm(Math.round(mid * 10) / 10) + ", the same as Fz.";
+    }
+    $("#calc-status").textContent = msg;
+  }
+  $("#calc-ni").addEventListener("input", calc);
+  $("#calc-ee").addEventListener("input", calc);
+  calc();
+
+  /* ================================================================ impedance illustration */
+  const FS = 250, T0 = 9, T1 = 19; // seconds of the 30 s deep excerpt shown (10 s)
+  const NOTCH = { 60: [-0.12478308884588535, 0.98729186796473023, 0.99364593398236511, -0.12478308884588535, 0.99364593398236511],
+                  50: [-0.61410695998423581, 0.98729186796473023, 0.99364593398236511, -0.61410695998423581, 0.99364593398236511] };
+  const HUM_PER_KOHM = 0.6, DRIFT_PER_KOHM = 0.5; // illustrative amplitudes (uV per kOhm), not a model
+  let clean = null;
+  const zOf = (v) => Math.pow(10, (v / 1000) * Math.log10(300)); // slider 0..1000 -> 1..300 kOhm
+  // fixed drift shape: three slow sinusoids, peak-normalized
+  function driftShape(n) {
+    const y = new Float64Array(n); let mx = 0;
+    for (let i = 0; i < n; i++) {
+      const t = i / FS;
+      y[i] = Math.sin(2 * Math.PI * 0.13 * t + 0.4) + 0.6 * Math.sin(2 * Math.PI * 0.41 * t + 2.1) + 0.35 * Math.sin(2 * Math.PI * 0.9 * t + 4.0);
+      mx = Math.max(mx, Math.abs(y[i]));
+    }
+    for (let i = 0; i < n; i++) y[i] /= mx;
+    return y;
+  }
+  let drift = null;
+
+  function drawImp() {
+    if (!clean) return;
+    const z = zOf(parseFloat($("#imp-z").value));
+    const f = parseInt($("#imp-mains").value, 10), notch = $("#imp-notch").checked;
+    const n = clean.length, hum = HUM_PER_KOHM * z, dr = DRIFT_PER_KOHM * z;
+    let x = new Float64Array(n);
+    for (let i = 0; i < n; i++) x[i] = clean[i] + hum * Math.sin(2 * Math.PI * f * i / FS + 0.3) + dr * drift[i];
+    if (notch) {
+      const c = NOTCH[f];
+      x = PL.filters.apply(new PL.filters.Biquad({ b: [c[2], c[3], c[4]], a: [1, c[0], c[1]] }), x);
+    }
+    const t = new Float64Array(n);
+    for (let i = 0; i < n; i++) t[i] = i / FS;
+    const span = Math.max(200, 1.15 * (130 + hum + dr));
+    PL.plot($("#imp-plot"), {
+      xRange: [0, 10], yRange: [-span, span], xLabel: "Time (s)", yLabel: "µV",
+      series: [
+        { x: t, y: x, color: PL.color("model"), width: 1, label: "with added noise" },
+        { x: t, y: clean, color: PL.color("signal"), width: 1, label: "Cz as recorded" },
+      ],
+    });
+    const col = z < 10 ? ["green", "imp-green"] : z < 25 ? ["yellow", "imp-yellow"] : ["red", "imp-red"];
+    $("#imp-col").innerHTML = '<span class="imp-chip ' + col[1] + '">' + col[0] + "</span>";
+    const k = 1.380649e-23, T = 310.15, B = 35 - 0.3;
+    const vth = Math.sqrt(4 * k * T * z * 1e3 * B) * 1e6;
+    $("#imp-th").textContent = vth.toFixed(2) + " µV rms";
+    $("#imp-hum").textContent = hum.toFixed(0) + " µV amplitude" + (notch ? " (then notched)" : "");
+    $("#imp-dr").textContent = dr.toFixed(0) + " µV peak";
+  }
+  PL.ui.bind("#imp-z", drawImp, (v) => { const z = zOf(v); return (z < 10 ? z.toFixed(1) : z.toFixed(0)) + " kΩ"; });
+  $("#imp-mains").addEventListener("change", drawImp);
+  $("#imp-notch").addEventListener("change", drawImp);
+
+  PL.data.excerpts().then((ex) => {
+    const e = ex.excerpts.find((x) => x.key === "deep");
+    const cz = e.signals[ex.channels.indexOf("Cz")];
+    clean = Float64Array.from(cz.subarray(Math.round(T0 * FS), Math.round(T1 * FS)), (v) => (isFinite(v) ? v : 0));
+    drift = driftShape(clean.length);
+    drawImp();
+    $("#imp-status").textContent = "Real signal: Cz, tutorial night, seconds " + T0 + " to " + T1 + " of the deep-sleep excerpt (minute 123.0). Added hum and drift: illustrative.";
+  }).catch((err) => { $("#imp-status").textContent = "Could not load the data: " + err.message; });
+
+  /* ================================================================ checklist counter */
+  const boxes = PL.ui.$$(".checklist input");
+  const count = () => { $("#m-status").textContent = boxes.filter((b) => b.checked).length + " of " + boxes.length + " checked."; };
+  boxes.forEach((b) => b.addEventListener("change", count));
+  count();
+
+  PL.onRedraw(() => { drawImp(); });
+})();
+</script>
+</body>
+</html>
