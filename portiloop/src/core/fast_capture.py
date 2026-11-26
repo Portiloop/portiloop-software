@@ -10,7 +10,7 @@ blocks of samples, DISPLAY_RATE Hz) to this process, for the GUI display and LSL
 There is no lead-off detection during these recordings (its checks need register commands, which would interrupt the
 reads); the electrodes OFF at the last impedance check are disabled as in the other pipelines.
 
-A paradigm (core/ffr.py) can play sounds during the capture: it sends the time of each onset to the capture program
+A paradigm (core/ffr.py, core/click_abr.py) can play sounds during the capture: it sends the time of each onset to the capture program
 (adscapture -e), which writes its trigger code in the last column of the CSV, and the recording stops at its end.
 """
 
@@ -139,7 +139,7 @@ def start_fast_capture(config_dict, q_msg, q_display, pause_value=None, paradigm
                                "decimated_signal": f"means of {decimation} samples (GUI display and LSL only)",
                            })
         if run is not None:
-            config_dict['ffr'] = run.metadata()
+            config_dict[run.metadata_key] = run.metadata()
 
         if record:
             prefix = os.path.splitext(config_dict['filename'])[0]
@@ -200,7 +200,7 @@ def start_fast_capture(config_dict, q_msg, q_display, pause_value=None, paradigm
             except queue.Empty:
                 pass
             if run is not None and not stop_sent and run.ended():
-                logger.info("End of the FFR run: stopping the capture.")
+                logger.info("End of the %s run: stopping the capture.", run.label)
                 proc.send_signal(signal.SIGTERM)  # the player exits once its last frame (silence) is played
                 stop_sent = time.monotonic()
             if stop_sent and time.monotonic() - stop_sent > STOP_TIMEOUT:
