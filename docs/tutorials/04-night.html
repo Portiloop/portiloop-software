@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>04 · Running the night · Portiloop tutorials</title>
+  <meta name="description" content="From Test Sound to the morning: what Start creates, how the 'Stimulation starts after' delay works, what the Portiloop does all night (detection, sounds, lead-off protection), what Stop then Start does when the participant wakes up, the 10 h limit, and a troubleshooting table.">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <style>
+    /* page-local styles for tutorial 04 */
+    .quote { margin: 1em 0; padding: 8px 14px; border-left: 3px solid var(--border); color: var(--fg); background: var(--bg-elev); border-radius: 0 8px 8px 0; }
+    .quote cite { display: block; font-style: normal; font-size: 0.88em; color: var(--fg-muted); margin-top: 4px; }
+    .two-fig { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+    @media (max-width: 640px) { .two-fig { grid-template-columns: minmax(0, 1fr); } }
+    .two-fig img { display: block; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 10px; }
+    .two-fig figure { margin: 0; }
+    .phone-shot { max-width: 220px; }
+    canvas.plot.lanes { height: 420px; }
+    canvas.plot.strip { height: 190px; }
+    canvas.plot.tl { height: 250px; }
+    .tl-wakes { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 4px; }
+    .tl-wake { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 14px; color: var(--fg-muted); background: var(--bg-sunk); border-radius: 8px; padding: 6px 10px; }
+    .tl-wake input, .tl-wake select, .controls input[type="time"], .controls input[type="text"] { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); }
+    .tl-files { font-size: 13.5px; margin: 10px 0 0; padding-left: 1.2em; }
+    .tl-files li { overflow-wrap: anywhere; }
+    .tl-files code { font-size: 0.92em; }
+    .tl-warn { margin: 8px 0 0; padding-left: 1.2em; font-size: 13.5px; color: var(--warn); }
+    .ev-box { background: var(--bg-sunk); border-radius: 8px; padding: 10px 14px; margin-top: 10px; min-height: 5.5em; }
+    .ev-box .ev-t { font-weight: 650; }
+    .btn.small { font-size: 13px; padding: 5px 10px; }
+  </style>
+</head>
+<body data-page="04-night" data-root="..">
+<main>
+<article class="content">
+
+  <div class="eyebrow">Tutorial 04 · Running a night</div>
+  <h1>Running the night</h1>
+  <p class="lead">The electrodes are on and the Control Center is set. This tutorial follows the night from the last sound test to the morning: what Start creates, why nothing happens for the first minutes, what the Portiloop does on its own all night, what to do when the participant wakes up, and how to end the recording. Two widgets let you plan a night with wake-ups and watch, sample by sample, how the device protected the tutorial night when its detection electrode came off.</p>
+
+  <dl class="meta">
+    <div><dt>Time</dt><dd>40 minutes</dd></div>
+    <div><dt>Level</dt><dd>Beginner</dd></div>
+    <div><dt>You need</dt><dd><a href="03-control-center.html">Tutorial 03</a></dd></div>
+    <div><dt>Runs in browser</dt><dd>Yes: the lead-off widget uses the tutorial night</dd></div>
+  </dl>
+
+  <div class="objectives">
+    <h3>In this tutorial you will</h3>
+    <ul>
+      <li>Test the earphones, knowing what Test Sound does and does not prove</li>
+      <li>Know what Start creates on the SD card and in the metadata</li>
+      <li>Understand the "Stimulation starts after" delay and what it pauses</li>
+      <li>Follow what the device does all night: detection, sounds, and the lead-off protection that stops stimulation when the detection electrode falls</li>
+      <li>Handle a wake-up with Stop then Start, and know its consequences for the data</li>
+      <li>End the night correctly, and know the automatic 10 h stop</li>
+      <li>Diagnose the common problems with the troubleshooting table</li>
+    </ul>
+  </div>
+
+  <h2 id="sound">Earphones and Test Sound</h2>
+  <p>The protocol's step 24:</p>
+  <blockquote class="quote">"Put the earphones on (make sure that the Right earphone is on your right ear, and the Left earphone is on your left ear), use the right size of earphones and tape the earphones to the ear, and make sure the sound is properly delivered in both ears by pressing 'Test Sound' in the Control Panel of the Portiloop Control Center. → IF YOU DON'T HEAR ANY SOUND: 1) This is normal if the Pipeline is set to 'Acquisition only'. Change it to either 'Sleep spindles' or 'Sleep slow oscillations (upstate)'. 2) If the sound still does not work, please unplug and replug the earphones."<cite>CLAS protocol [1], step 24</cite></blockquote>
+
+  <div class="two-fig">
+    <figure><img src="../assets/img/protocol/earphones.jpg" alt="In-ear earphones with a blue flat cable and a 3.5 mm jack" width="600" height="800" loading="lazy"><figcaption>The study's in-ear earphones (from the protocol [1]). They are taped to the ear for the night.</figcaption></figure>
+    <div>
+      <p><strong>What Test Sound does in the code</strong> (<code>test_sound()</code> in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/simple_gui/simple_gui.py">simple_gui.py</a> [2]):</p>
+      <ol>
+        <li>It applies the current volume.</li>
+        <li>If the selected pipeline has a stimulator, it creates one and plays the stimulation sound once. Otherwise it does nothing: silence with "Acquisition only", the one pipeline without a stimulator.</li>
+      </ol>
+      <p>It plays the same sound that the night will use, at the same volume, <strong>whatever the condition</strong>: Cond A (sham) and Cond B both make it play (<code>test_stimulus()</code> in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_stimulators.py">custom_stimulators.py</a> [5] does not look at the condition). So the test does not reveal the condition to the participant.</p>
+    </div>
+  </div>
+  <p><strong>The sound.</strong> The upstate pipeline plays the file <code>15msPN_48kHz_norm_stereo.wav</code> (<code>"detection_sound"</code> in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/constants.py">constants.py</a> [6]). We read the file: 2 channels, 48 kHz, 16 bit, 15.0 ms long; the left and right channels are almost identical (correlation 0.99999986), so both ears receive the same sound. The "PN" in the name suggests pink noise, but the code never says so, and our Welch estimate of its spectrum is flat between 200 Hz and 16 kHz (a slope of about 0 dB per octave, where pink noise falls by about 3 dB per octave): it looks like white noise. Ask whoever made the file before describing it in a paper.</p>
+  <p><strong>The volume</strong> is the "Sound output volume" of the Advanced tab: a software volume, not a calibrated sound level (<a href="03-control-center.html#volume">tutorial 03</a>). The same percentage can sound different with other earphones or another fit in the ear.</p>
+  <div class="callout warning"><span class="callout-title">Warning: do not press Test Sound during the recording</span>The button is not locked during a recording. The test sound is played outside the stimulation pipeline (the test stimulator writes nothing in the file), so a sound pressed during the night reaches the participant, even in Cond A, without any marker in the data. We have not tested what the device does in that case beyond this reading of the code.</div>
+
+  <h2 id="start">Pressing Start</h2>
+  <p>Protocol, step 25: "Secure the electrode cables to the bedside table using tape." Step 26: "In the Control panel, press Start. A timer and the name of the file should appear." What happens when you press Start, in the order of the code (<code>start()</code> in [2] and <code>start_capture()</code> in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/capture.py">capture.py</a> [3]):</p>
+  <ol class="steps">
+    <li><strong>The impedance check stops</strong> if it was running (the chip cannot measure impedance and record at the same time). The last check's results are kept for the metadata.</li>
+    <li><strong>The settings are saved</strong> in <code>Previous run.json</code>, which the device will reload at its next start-up (<a href="03-control-center.html#memory">tutorial 03</a>).</li>
+    <li><strong>The file name is built</strong> from the recording name (or the device name if empty), the date and time of the device clock, and the condition: <code>f"{prefix}_{time_str}_{stim_str}.csv"</code> with <code>stim_str = "CONDB" if self.stim_on else "CONDA"</code>. For example <code>CLAS_12_2026-11-26_22-31-05_CONDB.csv</code>.</li>
+    <li><strong>The pause is armed</strong>: if "Stimulation starts after" is more than 0, detection is paused until that many minutes after Start (<a href="#delay">next section</a>).</li>
+    <li><strong>The folder is chosen</strong>: the SD card if it is mounted and writable (<code>/media/sd_card/workspace/recordings</code>), otherwise the internal memory (<code>~/workspace/recordings</code>). Each recording gets its own folder named like the file.</li>
+    <li><strong>The recording process starts</strong>: it resets the amplifier, powers down the channels that were OFF at the last impedance check (except the detection channel), and runs a 2 s connection test of all electrodes before the first sample. It then writes <code>&lt;name&gt;_metadata.json</code> (all the settings, the impedances of the last check) and <code>&lt;name&gt;_leadoff.json</code> (the log of lead-off events, empty at first).</li>
+  </ol>
+  <div class="two-fig">
+    <figure class="phone-shot"><img src="../assets/img/protocol/cc-recording.jpg" alt="Phone screenshot of the Control tab during a recording: Start greyed out, Stop active, Timer 0:00:08, Current experiment purple-dog_2026-10-15_08-25-02_CONDA" width="241" height="538" loading="lazy"><figcaption>During a recording (protocol [1], older version without the Check tab). No recording name was set, so the file starts with the device name.</figcaption></figure>
+    <div class="callout disk"><span class="callout-title">On the hard drive</span>
+      <p>After Start, the SD card holds:</p>
+<pre data-file="SD card"><code>workspace/recordings/
+  CLAS_12_2026-11-26_22-31-05_CONDB/
+    CLAS_12_2026-11-26_22-31-05_CONDB.csv            (signals, written all night)
+    CLAS_12_2026-11-26_22-31-05_CONDB_metadata.json  (settings, at Start)
+    CLAS_12_2026-11-26_22-31-05_CONDB_leadoff.json   (lead-off events)
+    CLAS_12_2026-11-26_22-31-05_CONDB_stats.json     (at the end)</code></pre>
+      <p>The columns and the JSON fields are explained in <a href="05-files.html">tutorial 05</a>.</p>
+    </div>
+  </div>
+  <p>During the recording the Control tab shows the timer and the file name, the Cond toggle and the whole Advanced tab are locked, the Check tab says "Unavailable during a recording.", and the Output tab shows one channel at a time. Closing the browser or letting the phone sleep does not stop the recording: it runs in its own process on the device. Opening the address again shows the running timer.</p>
+
+  <h2 id="delay">The "Stimulation starts after" delay</h2>
+  <p>The protocol (step 18) describes it as "the period during which no sound is played at the beginning of the recording. It can be adjusted based on the expected time needed to fall asleep." In the code it is called <code>sleep_timeout</code>, in minutes:</p>
+<pre data-file="portiloop/src/simple_gui/simple_gui.py, start() and check_sleep_timeout() [2]"><code class="language-python">if self.sleep_timeout > 0:
+    self.time_unpause = self.time_started.timestamp() + self.sleep_timeout * 60
+    self.pause_value.value = True
+...
+def check_sleep_timeout(self):
+    if self.pause_value.value:
+        current_time = time.time()
+        if current_time > self.time_unpause:
+            self.pause_value.value = False</code></pre>
+  <ul>
+    <li><strong>Range:</strong> the slider goes from 0 to 180 minutes; 0 means no delay.</li>
+    <li><strong>What is paused:</strong> both detection and stimulation (the recording loop only calls the detector when not paused, [3]). During the delay the <code>detection</code> and <code>stimulation</code> columns are 0 and <code>stimulation_on</code> is 0, in Cond A as in Cond B. The signals are recorded normally.</li>
+    <li><strong>When it ends:</strong> a timer checks every 10 s (<code>ui.timer(10, exp_state.check_sleep_timeout)</code>), so detection resumes up to about 10 s after the nominal time. In the tutorial night (delay 25 minutes) <code>stimulation_on</code> switched to 1 at 1502.4 s, 2.4 s after the 25 minutes.</li>
+    <li><strong>When the first sound comes:</strong> only when the detector finds a slow oscillation that meets its criteria during sleep. In the tutorial night the first sound came at minute 30.9, 5.8 minutes after detection resumed. The upstate detector needs one qualifying slow oscillation to estimate where the up-state is, and that first one triggers no sound (<a href="01-overview.html">tutorial 01</a>).</li>
+    <li><strong>Which pipelines:</strong> the pause is armed for every pipeline, but it only pauses detection and stimulation. Acquisition only has no detector, so for it nothing changes: the signals are recorded from the first second.</li>
+  </ul>
+  <div class="callout note"><span class="callout-title">Not verified: with the phone disconnected</span>The 10 s check is a timer of the Control Center's web page code, which runs on the device. We have not verified whether it keeps running when no phone is connected to the page. The tutorial night shows that the delay ended as expected, but we do not know whether a phone was connected at that moment. A cheap test before the study: start a recording with a delay of 1 minute, disconnect the phone, reconnect after 5 minutes, Stop, and check in the CSV that <code>stimulation_on</code> became 1 after about 1 minute.</div>
+  <div class="callout neuro"><span class="callout-title">For neuroscientists</span>The delay protects sleep onset: sounds played during wakefulness or light N1 sleep can delay sleep, and the detector's criteria (large, slow waves) are rarely met before N2 and N3 anyway. Choose it from the participants' expected sleep onset latency: the protocol's example is 45 minutes; the tutorial night used 25. A delay that is too short is mostly harmless for detection (few qualifying waves while awake) but may let sounds through while the participant is still falling asleep; one that is too long wastes the early N3, which is the richest in slow oscillations.</div>
+
+  <h2 id="during">What the Portiloop does all night</h2>
+  <p>Once the delay is over, the device works on its own. For every new sample (250 per second), the recording loop:</p>
+  <ol class="steps">
+    <li><strong>Filters</strong> the detection channel (ch6, Cz) to keep the slow oscillation band.</li>
+    <li><strong>Detects</strong>: when a slow wave meets the amplitude and duration criteria, the upstate detector fires at the predicted up-state (<a href="01-overview.html">tutorial 01</a>). The <code>detection</code> column gets a 1.</li>
+    <li><strong>Stimulates</strong>: in Cond B, the sound is played at once; in Cond A, nothing is played. In both, the <code>stimulation</code> column gets a 1. Two sounds are never closer than 0.1 s: <code>self.wait_t = .1  # Stimulate the first point of a detected SO only</code> (<code>SlowOscillationStimulator</code> in [5]). With the protocol's three delays at 0, this is the only spacing rule.</li>
+    <li><strong>Screens for fallen electrodes</strong> every 10 s (next section).</li>
+  </ol>
+  <div class="callout danger"><span class="callout-title">Known issue: note the software version of every night</span>The version that recorded the tutorial night (commit 917f1f3) truncated the up-state estimate to a whole number of samples, so its stimulations came about 16 to 20 ms (4 to 5 samples) early. This was fixed on main on 2026-11-26 (<a href="https://github.com/Portiloop/portiloop-software/commit/e4959f1">commit e4959f1</a>): devices updated after that date stimulate later by that amount. Note the software version (commit) used for each study night in the lab notebook, so that nights recorded before and after an update are not pooled without knowing it.</div>
+  <p>In the tutorial night (Cond B, 7.39 h): 1,930 sounds, the first at minute 30.9 and the last at minute 373.0. The intervals between consecutive sounds had a median of 3.10 s; the shortest was 0.328 s, and 15 intervals were shorter than 0.5 s. Detection was running (<code>stimulation_on</code> = 1) during 78.5% of the recording: the delay at the beginning and the end of the night (below) account for the rest.</p>
+
+  <h3 id="leadoff">The lead-off protection</h3>
+  <p>An electrode that falls off leaves its amplifier input floating. The input drifts to the limit of the amplifier and, because every recorded channel is part of the bias (ground) feedback loop, a floating input degrades the other channels too. The Portiloop software has a protection against this, in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/leadoff.py">leadoff.py</a> [4]. It is on by default (<code>"leadoff_detection": True</code>) and has no setting in the Control Center:</p>
+  <ol class="steps">
+    <li><strong>At Start</strong>, a 2 s connection test removes the electrodes that are not connected from the bias loop (event <code>not_connected_at_start</code>).</li>
+    <li><strong>Every 10 s</strong>, the last 2 s of each channel are screened. A channel is <em>suspect</em> if its mains hum is above 800 µV, or if more than 20% of its samples are at the limit of the amplifier.</li>
+    <li><strong>After 2 suspect screenings in a row</strong>, a 1.5 s connection test runs on the suspect channels. A confirmed channel is removed from the bias loop for the rest of the recording (<code>disabled</code>, reason <code>open</code>); a channel that passes the test but has extreme mains hum (above 5000 µV) is removed too (reason <code>mains</code>). A suspect that passes is not tested again for 60 s.</li>
+    <li><strong>If all channels look floating at once</strong>, the reference or the bias electrode is probably off: nothing is removed (<code>reference_or_bias_off</code>), and the device waits until 2 clean screenings (<code>reference_or_bias_recovered</code>).</li>
+  </ol>
+  <p>A removed channel is still recorded (it is only taken out of the bias loop). What matters for the experiment is the effect on stimulation (<code>leadoff_event()</code> in [3]):</p>
+  <ul>
+    <li>If the <strong>detection electrode</strong> is not connected at Start or is disabled during the night, detection and stimulation are paused <strong>for the rest of that recording</strong>.</li>
+    <li>While the <strong>reference or bias</strong> seems off, they are paused until the channels recover.</li>
+    <li>During a pause, <code>stimulation_on</code> is 0. The Control Center does not show these events: they are only in <code>_leadoff.json</code> and in the device's log.</li>
+  </ul>
+  <p>This is what happened in the tutorial night, at minute 373. The night's <code>_leadoff.json</code> was not retrieved from the device, so the event names below are inferred from the signals and from the code.</p>
+
+  <div class="widget" id="lo">
+    <div class="widget-title">The moment the detection electrode came off</div>
+    <p class="widget-desc">What to try: step through the events with "Next". The top plot is the raw signal of the 8 channels in the tutorial night's 30 s lead-off excerpt; the bottom strip is two minutes around it, with the device's screenings. Switch the scale to ±200 µV to see the sleep EEG before the movement.</p>
+    <div class="controls">
+      <button type="button" class="btn secondary small" id="lo-prev">◀ Previous</button>
+      <button type="button" class="btn small" id="lo-next">Next ▶</button>
+      <label for="lo-scale">Scale <select id="lo-scale"><option value="3300">±3.3 mV (whole event)</option><option value="200">±200 µV (sleep EEG)</option></select></label>
+    </div>
+    <div class="ev-box" aria-live="polite"><div class="ev-t" id="lo-evt"></div><div id="lo-evd"></div></div>
+    <canvas class="plot lanes" id="lo-sig" aria-label="Raw signals of the 8 channels during 30 s around the lead-off, with the stimulations"></canvas>
+    <p class="small muted" style="margin:4px 0">Top: pink lines are the sounds; Cz (the detection channel) is drawn in amber. Bottom: amber, the fraction of Cz samples at the amplifier limit; green, <code>stimulation_on</code>; pink, the sounds; dots, the device's screenings every 10 s (red: suspect); grey band, the 30 s of the top plot.</p>
+    <canvas class="plot strip" id="lo-ctx" aria-label="Two minutes around the lead-off: Cz at the amplifier limit, stimulation_on, sounds and the device's screenings"></canvas>
+    <div class="readout">
+      <div><div class="k">Last sound</div><div class="v">min 373.02</div></div>
+      <div><div class="k">Cz at the limit</div><div class="v">min 373.12</div></div>
+      <div><div class="k">Detection paused</div><div class="v">min 373.36</div></div>
+      <div><div class="k">Limit to pause</div><div class="v">14.3 s</div></div>
+    </div>
+    <div class="status" id="lo-status">Loading the excerpt…</div>
+  </div>
+  <p>Notes on the excerpt: it is the raw signal minus its median over the previous minute, clipped at ±3276 µV (that is how <code>excerpts.json</code> stores it), so a channel at the amplifier limit (Cz went to about ±187,500 µV) appears as a flat line at the clip value. The ECG channels show the heartbeats clearly before the movement, despite their red impedance tiles (<a href="03-control-center.html#ecg">tutorial 03</a>). The pause itself (minute 373.36) falls 4.3 s after the end of the 30 s excerpt; the bottom strip shows it.</p>
+  <p>What the protection changed: after minute 373.4, Cz was at the limit for about three quarters of the samples (our count: 0.753 of the samples until the end, 70.2 minutes later) and no sound was played. The offline replay of the night (<a href="08-replay.html">tutorial 08</a>), which does not simulate the lead-off protection, keeps stimulating on that signal after minute 401, where the device had stopped.</p>
+  <div class="callout tip"><span class="callout-title">Tip</span>When Cz is disabled, the device stops stimulating for the rest of the recording, even if the electrode is put back. If you or the participant notice at a wake-up that the Cz electrode is off: put it back (gel, press, tape), then Stop and Start. The new recording begins with a new connection test, and stimulation resumes after the delay.</div>
+
+  <h2 id="wake">If the participant wakes up</h2>
+  <p>The protocol speaks to the participant, who runs the device alone at night:</p>
+  <blockquote class="quote">"If you wake up during the night and the sounds prevent you from falling back asleep, press the Stop button, then immediately press the Start button. This will give you another X minutes without any sounds, where X is the duration you set in Step 18."<cite>CLAS protocol [1], end of section III</cite></blockquote>
+  <p>This works as described, and the code adds consequences that the participant does not see:</p>
+  <ul>
+    <li><strong>A new file and a new folder.</strong> Start builds a new name with the new time, so the night is split into two (or more) recordings, each with its own metadata, lead-off log and stats. The analysis must put them together (<a href="05-files.html">tutorial 05</a>, <a href="06-first-look.html">tutorial 06</a>).</li>
+    <li><strong>The full delay restarts</strong> from the new Start, as the protocol says.</li>
+    <li><strong>A gap in the data.</strong> Nothing is recorded between Stop and the first sample of the new file. The new recording starts with a 2 s connection test before its first sample, plus the time between the two presses and the time to start the process; we have not measured the total. A participant who presses Stop and goes to the bathroom before pressing Start makes a longer gap; one who forgets Start ends the recording.</li>
+    <li><strong>The condition can change.</strong> Between Stop and Start the Cond toggle is unlocked. A sleepy tap on it switches the rest of the night to the other condition, and the new file name will say so. Check the file names in the morning.</li>
+    <li><strong>The last impedance check is reused</strong>: its values go into the new metadata, and electrodes that were OFF then are powered down again.</li>
+    <li><strong>The lead-off protection starts over</strong>: a detection electrode disabled in the previous file is tested again at the new Start.</li>
+    <li><strong>The 10 h limit counts from the new Start.</strong></li>
+  </ul>
+
+  <div class="widget" id="tl">
+    <div class="widget-title">Night planner: delays, wake-ups and files</div>
+    <p class="widget-desc">What to try: add a wake-up at 02:30 and see the second file, the new delay and the gap; set its condition to the other one; move the morning stop past the 10 h limit; tick "Cz comes off". Green: detection running (<code>stimulation_on</code> = 1), so the device can play sounds when it detects a slow oscillation (in Cond B). "The tutorial night" loads the real night's timing.</p>
+    <div class="controls">
+      <label for="tl-start">Start (lights off) <input type="time" id="tl-start" value="22:30"></label>
+      <label for="tl-stop">Morning Stop <input type="time" id="tl-stop" value="06:30"></label>
+      <label for="tl-delay">Stimulation starts after <input type="range" id="tl-delay" min="0" max="180" step="1" value="45"><output for="tl-delay"></output></label>
+      <label for="tl-cond">Condition <select id="tl-cond"><option value="B">Cond B</option><option value="A">Cond A</option></select></label>
+      <label for="tl-name">Recording name <input type="text" id="tl-name" value="CLAS_12" size="9"></label>
+      <label><input type="checkbox" id="tl-off"> Cz comes off at <input type="time" id="tl-offt" value="04:10"></label>
+      <label><input type="checkbox" id="tl-fix" checked> put back at the next wake-up</label>
+    </div>
+    <div class="controls">
+      <button type="button" class="btn small" id="tl-add">Add a wake-up</button>
+      <button type="button" class="btn secondary small" id="tl-tut">The tutorial night</button>
+      <button type="button" class="btn secondary small" id="tl-reset">Reset</button>
+    </div>
+    <div class="tl-wakes" id="tl-wakes"></div>
+    <canvas class="plot tl" id="tl-canvas" aria-label="Timeline of the night: recording files, delays, detection running, lead-off pause and gaps"></canvas>
+    <div class="readout">
+      <div><div class="k">Files</div><div class="v" id="tl-nf">…</div></div>
+      <div><div class="k">Recorded</div><div class="v" id="tl-rec">…</div></div>
+      <div><div class="k">Detection running</div><div class="v" id="tl-on">…</div></div>
+      <div><div class="k">In delays</div><div class="v" id="tl-del">…</div></div>
+    </div>
+    <ol class="tl-files" id="tl-files"></ol>
+    <ul class="tl-warn" id="tl-warn"></ul>
+    <div class="status" id="tl-status">The timing follows the code: the delay restarts at every Start (checked every 10 s, so up to 10 s late, too small to see here); a recording stops by itself 10 h after its Start; a disabled detection electrode pauses detection until the end of that recording.</div>
+  </div>
+
+  <h2 id="morning">In the morning</h2>
+  <p>The protocol's section IV, "End of overnight recording and cleaning":</p>
+  <ol class="steps">
+    <li><strong>Stop.</strong> "On the phone, in the Portiloop Control Center, press the Stop button." The recording process finishes writing the CSV and writes <code>_stats.json</code> (number of samples, lost samples). Stop before anything else, so that the files are complete.</li>
+    <li><strong>Power off.</strong> "Turn off the Portiloop: by pressing the Power button (only one short press)." The software README says instead "press the Power button for 3 seconds again and wait for a couple more seconds for the light close to USB-C Power to turn off" [7]. We have not verified which press the lab's devices need. In both cases, wait until the light is off before unplugging the battery; the README adds that the light may refuse to turn off, and then to wait a couple of seconds before unplugging.</li>
+    <li><strong>Earphones.</strong> "Unplug the earphones."</li>
+    <li><strong>SD card.</strong> "Remove the SD card." The README: "Remove the SD card only when no recording is running." Copy the files as described in <a href="05-files.html">tutorial 05</a>.</li>
+  </ol>
+  <h3 id="limit">The 10 h limit</h3>
+  <p>Every recording stops by itself 10 h after its Start: <code>"duration": 36000</code> seconds in <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/constants.py">constants.py</a> [6], used as <code>t_max = t_start + duration</code> in the recording loop [3], and the Control Center never changes it. The Control Center notices within 2 s that the recording has ended and resets itself (Start becomes active again). Nothing is recorded after that, and nothing on the phone tells you that it happened, except that the timer is gone. If lights off is at 22:00 and the participant sleeps past 08:00 without a wake-up, the end of the night is lost. A wake-up with Stop and Start restarts the 10 h. The tutorial night lasted 7.39 h; its metadata carries <code>"duration": 36000</code>.</p>
+
+  <h2 id="troubleshooting">Troubleshooting</h2>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Symptom</th><th>Likely cause</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr><td>Nothing happens when you press the power button</td><td>The battery is off (it turns itself off quickly)</td><td>Press the battery's side button, then the Portiloop's power button within a few seconds (protocol step 5).</td></tr>
+      <tr><td>The light stays orange and never turns green</td><td>The board did not finish starting; the README says it then needs to be reflashed</td><td>Turn off, wait, try once more; if it stays orange, use another device and report it to the technical team.</td></tr>
+      <tr><td>The Wi-Fi network is not in the list</td><td>The device is still starting, or the network has another name than expected</td><td>Wait for green. The name was typed at installation; check the device's label or the lab notebook.</td></tr>
+      <tr><td>The page <code>http://192.168.4.1:8081/</code> does not load</td><td>The phone left the Portiloop network (no internet), the address was typed with https, or the Control Center is still starting</td><td>Stay on the Portiloop network, turn mobile data off, type <code>http://</code>. The service restarts 60 s after a failure: wait a minute and reload.</td></tr>
+      <tr><td>The SD Card box is not ticked</td><td>The card is not inserted, not mounted, or not writable</td><td>Turn the device off, reseat the card (printed side down, it sticks out a little), turn on again (protocol step 10). Never record without it.</td></tr>
+      <tr><td>Test Sound is silent</td><td>Pipeline without stimulator (Acquisition only), earphones not fully plugged, volume at 0</td><td>Select "Sleep slow oscillations (upstate)"; unplug and replug the earphones (protocol); check the volume.</td></tr>
+      <tr><td>All impedance tiles OFF, REF "?"; hint "check the ground (bias) electrode first"</td><td>The bias electrode (grey, right earlobe) is off</td><td>Fix the bias electrode, then Check again.</td></tr>
+      <tr><td>REF OFF, the other tiles grey "?"</td><td>The reference electrode (white, behind the right ear) is off</td><td>Fix the reference, then Check again.</td></tr>
+      <tr><td>Check is greyed out, "Unavailable during a recording."</td><td>A recording is running</td><td>Stop first (this ends the current file).</td></tr>
+      <tr><td>Cond toggle or Advanced settings greyed out</td><td>A recording is running</td><td>Stop, change, Start (a new file).</td></tr>
+      <tr><td>The Output tab shows no plot</td><td>The plot exists only during a recording, one channel at a time</td><td>Start, then choose the channel in Display Channel.</td></tr>
+      <tr><td>Settings are back to Acquisition only, 60 Hz, 0 minutes, empty name</td><td>The software was updated (saved settings are ignored when the version changes)</td><td>Set everything again from the protocol (<a href="03-control-center.html#advanced">tutorial 03</a>); save a preset.</td></tr>
+      <tr><td>The file carries the previous participant's number, or the device name</td><td>The recording name is remembered from the last Start, or was empty</td><td>Set the name before Start. For a file already recorded, note the correction in the lab notebook; do not rename silently.</td></tr>
+      <tr><td>The date or time in the file name is wrong</td><td>The device clock was not synchronized (it is never changed during a recording)</td><td>Press Sync Clock with Browser before Start; check the phone's own clock.</td></tr>
+      <tr><td>The timer disappeared and Start is active again in the morning</td><td>The 10 h limit was reached, or the recording process crashed</td><td>Look at the files: a CSV of 10 h means the limit. Otherwise report it with the device's log (<code>~/workspace/logs/portiloop.log</code>).</td></tr>
+      <tr><td>No sound at all in a Cond B night (no stimulation in the CSV)</td><td>Still in the delay; no slow oscillations yet (awake or light sleep); the detection electrode was not connected at Start or came off (lead-off pause); wrong pipeline; Cond A</td><td>Check <code>stimulation_on</code>, <code>_leadoff.json</code> and the metadata (<a href="05-files.html">tutorial 05</a>).</td></tr>
+      <tr><td>The participant cannot fall asleep again because of the sounds</td><td>Stimulation during light sleep or wakefulness</td><td>Stop, then Start at once (protocol); see the consequences <a href="#wake">above</a>.</td></tr>
+      <tr><td>A channel is all zeros in the CSV</td><td>Its electrode was OFF at the last impedance check before Start, so it was powered down</td><td>Next time, run Check again after the last fix, just before Start.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 id="discrepancies">Protocol and software: points about the night</h2>
+  <div class="callout danger"><span class="callout-title">Protocol versus software</span>
+    <ul>
+      <li><strong>Test Sound</strong> (step 24): the protocol's explanation for silence is right (Acquisition only is the one pipeline without a stimulator). It plays in both conditions, and it is not locked during a recording.</li>
+      <li><strong>"Another X minutes without any sounds"</strong> after Stop and Start: right; also no detection, a new file, a gap, and a condition that can be changed by mistake.</li>
+      <li><strong>Power off</strong>: "only one short press" (protocol) versus "press the Power button for 3 seconds again" (README). Not verified on the device.</li>
+      <li><strong>The 10 h limit</strong> is not in the protocol.</li>
+      <li><strong>The lead-off protection</strong> is not in the protocol: a detection electrode that falls off stops stimulation for the rest of the recording, silently.</li>
+      <li><strong>The software README</strong> says that <code>stimulation_on</code> "is <code>1</code> when the UI stimulation switch is active and <code>0</code> otherwise" [7]. The code sets it from whether detection is running (not paused by the delay or the lead-off protection), whatever the condition. It is 1 in Cond A too.</li>
+    </ul>
+    <p>Discrepancies about the settings are in <a href="03-control-center.html#discrepancies">tutorial 03</a>.</p>
+  </div>
+
+  <h2 id="exercises">Exercises</h2>
+  <details class="exercise"><summary>A wake-up during the delay</summary>
+    <p>Lights off at 23:00 with a 45 minute delay. The participant wakes at 23:30, presses Stop then Start, and sleeps again. When can the first sound be played? How many files will there be in the morning if there is no other wake-up?</p>
+  </details>
+  <details class="solution"><summary>Answer</summary>
+    <p>No earlier than 00:15 (45 minutes after the new Start at about 23:30), and up to about 10 s later because the delay is checked every 10 s; in practice later still, at the first qualifying slow oscillation. Two files: a 30 minute one with <code>stimulation_on</code> = 0 throughout, and the night's main file. Use the night planner to check.</p>
+  </details>
+  <details class="exercise"><summary>A long sleeper</summary>
+    <p>Lights off at 21:45, no wake-up, the participant gets up at 08:15. What does the morning file contain, and what would have prevented the loss?</p>
+  </details>
+  <details class="solution"><summary>Answer</summary>
+    <p>The recording stopped by itself at 07:45, 10 h after Start; the last 30 minutes are not recorded. Pressing Stop then Start during a wake-up would have restarted the 10 h. For long sleepers, plan a later Start or tell the participant to do Stop and Start if they wake in the second half of the night.</p>
+  </details>
+  <details class="exercise"><summary>Reading the tutorial night's end</summary>
+    <p>In the lead-off widget, how long did the device take from the moment Cz reached the amplifier limit to the pause? Which two rules of <code>leadoff.py</code> explain that duration?</p>
+  </details>
+  <details class="solution"><summary>Answer</summary>
+    <p>14.3 s (from 22387.36 s to 22401.68 s after the start of the recording). Screening runs every 10 s on the last 2 s of signal; a confirmation test (1.5 s) is run only after 2 suspect screenings in a row. Cz reached the limit at 22387.36 s; the screenings at 22390 s and 22400 s were both suspect (100% of the 2 s at the limit); the 1.5 s test followed, and detection paused at 22401.68 s. By our reading of the code, the delay can range from about 11.5 s to about 22 s, depending on where the fall lands between screenings: the fall must fill more than 20% (0.4 s) of a screened 2 s window, a second suspect screening follows 10 s later, then the 1.5 s test.</p>
+  </details>
+
+  <h2 id="references">References</h2>
+  <ol class="refs">
+    <li>CLAS-Zambia protocol, sections III and IV (lab document, not public).</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/simple_gui/simple_gui.py">portiloop/src/simple_gui/simple_gui.py</a>, the Control Center (portiloop-software, branch main).</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/capture.py">portiloop/src/core/capture.py</a>, the recording loop.</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/leadoff.py">portiloop/src/core/leadoff.py</a>, the lead-off protection.</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_stimulators.py">portiloop/src/custom/custom_stimulators.py</a>, the stimulators and Test Sound.</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/core/constants.py">portiloop/src/core/constants.py</a>, default settings, the sound file and the 10 h duration.</li>
+    <li><a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/README.md">README.md</a> of portiloop-software (power, SD card, output files).</li>
+  </ol>
+
+</article>
+</main>
+
+<script src="../assets/js/portiloop.js"></script>
+<script src="../assets/js/data.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = PL.ui.$;
+  function css(name, fb) { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v || fb; }
+  function setup(canvas) {
+    const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth || 600, h = canvas.clientHeight || 200;
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+    ctx.font = "12px " + css("--font-sans", "system-ui, sans-serif");
+    return { ctx, w, h };
+  }
+
+  /* ================= widget 1: the lead-off moment ================= */
+  /* Context data computed from the tutorial night's CSV by the writers' script leadoff_context.py:
+     bins of 0.1 s from 22340 s; rail = fraction of Cz samples with |x| >= 178,125 uV (0.95 x full scale, the
+     saturation criterion of leadoff.py), on = fraction with stimulation_on = 1 (run-length encoded [value, count]);
+     stims = stimulation times (s); screenings = [time (s), fraction of the last 2 s of Cz saturated]. */
+  const CTX = {"t0":22340.0,"bin":0.1,"rail":[[0.0,473],[0.4,1],[1.0,128],[0.96,1],[0.28,1],[1.0,596]],"on":[[1.0,616],[0.84,1],[0.0,583]],"stims":[22352.572,22358.092,22359.204,22360.276,22373.688,22374.868,22380.356,22381.424],"screenings":[[22350.0,0.0],[22360.0,0.0],[22370.0,0.0],[22380.0,0.0],[22390.0,1.0],[22400.0,1.0],[22410.0,1.0],[22420.0,1.0],[22430.0,1.0],[22440.0,1.0],[22450.0,1.0],[22460.0,1.0]],"firstRail":22387.36,"pause":22401.684};
+  const unrle = (r) => { const o = []; r.forEach(([v, n]) => { for (let i = 0; i < n; i++) o.push(v); }); return o; };
+  const RAIL = unrle(CTX.rail), ON = unrle(CTX.on);
+  const EVENTS = [
+    { t: 22373.688, title: "Sounds during sleep (minute 372.89)", text: "Two sounds 1.2 s apart, during sleep, in Cond B. Each one is a 1 in the stimulation column of the CSV (pink lines)." },
+    { t: 22381.424, title: "The last sound of the night (minute 373.02)", text: "Nothing distinguishes it from the others in the signals." },
+    { t: 22381.96, title: "A movement begins (minute 373.03)", text: "About half a second after the last sound, large slow deflections start on Cz, then on the other channels within about 3 s: the participant moves. A single event cannot tell whether the sound caused it." },
+    { t: 22387.36, title: "Cz reaches the limit of the amplifier (minute 373.12)", text: "The Cz electrode has lost contact: its input floats to the limit of the amplifier and stays there. The other channels move with the participant but keep recording EEG." },
+    { t: 22390.0, title: "Screening: Cz is suspect (1 of 2)", text: "Every 10 s the device screens the last 2 s of each channel. 100% of Cz's samples are at the limit, above the 20% threshold. One suspect screening is not enough to act." },
+    { t: 22400.0, title: "Screening: Cz is suspect again (2 of 2)", text: "Second suspect screening in a row: the device runs a 1.5 s connection test (24 nA DC lead-off) on Cz only." },
+    { t: 22401.684, title: "Detection paused (minute 373.36)", text: "stimulation_on drops to 0, 14.3 s after Cz reached the limit. The test must have confirmed that Cz was off (a \"disabled\" event; this night's _leadoff.json was not retrieved, so this is inferred). Cz is the detection channel, so detection and stimulation stay paused for the rest of the recording." },
+    { t: 22450.0, title: "The rest of the night", text: "For the remaining 70 minutes Cz is at the limit most of the time, stimulation_on stays 0 and no sound is played. Without the protection, the detector would have kept running on a signal that is no longer EEG." },
+  ];
+  let ex = null, ev = 0;
+  function drawSig() {
+    if (!ex) return;
+    const c = $("#lo-sig"), { ctx, w, h } = setup(c);
+    const L = 44, R = 8, T = 6, B = 26, W = w - L - R, H = h - T - B, n = ex.signals[0].length, fs = 250, dur = n / fs;
+    const t0 = Number(ex.start_s), scale = parseFloat($("#lo-scale").value);
+    const lane = H / 8, X = (t) => L + (t / dur) * W;
+    const fg = css("--fg", "#222"), muted = css("--fg-muted", "#666"), grid = css("--plot-grid", "rgba(128,128,128,.2)"), sig = css("--plot-signal", "#2b5fa8"), stim = css("--plot-stim", "#c2307a"), warn = css("--warn", "#a8670f");
+    // event highlight
+    const et = EVENTS[ev].t - t0;
+    if (et >= 0 && et <= dur) { ctx.fillStyle = css("--accent-soft", "rgba(43,95,168,.15)"); ctx.fillRect(X(et) - 3, T, 6, H); }
+    // stims
+    ex.stims.forEach((s) => { const x = X(s / fs); ctx.strokeStyle = stim; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, T + H); ctx.stroke(); });
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (let ch = 0; ch < 8; ch++) {
+      const y0 = T + lane * ch + lane / 2, y = ex.signals[ch];
+      ctx.strokeStyle = grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(L, y0); ctx.lineTo(L + W, y0); ctx.stroke();
+      ctx.fillStyle = ch === 5 ? warn : fg; ctx.fillText(ex.channels[ch], L - 6, y0);
+      ctx.save(); ctx.beginPath(); ctx.rect(L, T + lane * ch, W, lane); ctx.clip();
+      ctx.strokeStyle = ch === 5 ? warn : sig; ctx.lineWidth = 1; ctx.beginPath();
+      const step = Math.max(1, Math.floor(n / (W * 2)));
+      let started = false;
+      for (let i = 0; i < n; i += step) {
+        let lo = Infinity, hi = -Infinity;
+        for (let k = i; k < Math.min(n, i + step); k++) { const v = y[k]; if (isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; } }
+        if (!isFinite(lo)) { started = false; continue; }
+        const x = X(i / fs), ya = y0 - (hi / scale) * (lane / 2) * 0.9, yb = y0 - (lo / scale) * (lane / 2) * 0.9;
+        if (!started) { ctx.moveTo(x, ya); started = true; } else ctx.lineTo(x, ya);
+        ctx.lineTo(x, yb);
+      }
+      ctx.stroke(); ctx.restore();
+    }
+    ctx.strokeStyle = css("--plot-axis", "#888"); ctx.strokeRect(L + 0.5, T + 0.5, W, H);
+    ctx.fillStyle = muted; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let s = 0; s <= dur; s += (W < 400 ? 10 : 5)) ctx.fillText(s, X(s), T + H + 3);
+    const lab = "Time (s) from minute " + (t0 / 60).toFixed(2) + "; lane height ±" + (scale >= 1000 ? (scale / 1000).toFixed(1) + " mV" : scale + " µV");
+    ctx.textBaseline = "bottom"; ctx.fillText(W < 420 ? "Time (s) from minute " + (t0 / 60).toFixed(2) : lab + "; pink: sounds", L + W / 2, h - 1);
+  }
+  function drawCtx() {
+    const c = $("#lo-ctx"), { ctx, w, h } = setup(c);
+    const L = 92, R = 8, T = 6, B = 26, W = w - L - R, H = h - T - B, t0 = CTX.t0, dur = RAIL.length * CTX.bin;
+    const X = (t) => L + ((t - t0) / dur) * W;
+    const rows = ["Cz at limit", "stimulation_on", "Sounds", "Screenings"], rh = H / rows.length;
+    const fg = css("--fg", "#222"), muted = css("--fg-muted", "#666"), stim = css("--plot-stim", "#c2307a"), warn = css("--warn", "#a8670f"), tip = css("--tip", "#2f7a4f"), danger = css("--danger", "#b33a3a");
+    if (ex) { ctx.fillStyle = css("--bg-sunk", "rgba(128,128,128,.1)"); ctx.fillRect(X(Number(ex.start_s)), T, X(Number(ex.start_s) + 30) - X(Number(ex.start_s)), H); }
+    const et = EVENTS[ev].t; ctx.fillStyle = css("--accent-soft", "rgba(43,95,168,.15)"); ctx.fillRect(X(et) - 3, T, 6, H);
+    ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillStyle = fg;
+    rows.forEach((r, i) => ctx.fillText(r, L - 6, T + rh * i + rh / 2));
+    const bar = (arr, row, col) => {
+      ctx.fillStyle = col;
+      for (let i = 0; i < arr.length; i++) if (arr[i] > 0) { const x = X(t0 + i * CTX.bin), x2 = X(t0 + (i + 1) * CTX.bin); const hh = (rh - 8) * arr[i]; ctx.fillRect(x, T + rh * row + rh - 4 - hh, Math.max(1, x2 - x + 0.5), hh); }
+    };
+    bar(RAIL, 0, warn); bar(ON, 1, tip);
+    ctx.strokeStyle = stim; ctx.lineWidth = 1.5;
+    CTX.stims.forEach((s) => { const x = X(s); ctx.beginPath(); ctx.moveTo(x, T + rh * 2 + 4); ctx.lineTo(x, T + rh * 3 - 4); ctx.stroke(); });
+    CTX.screenings.forEach(([s, f]) => { const x = X(s); if (x > L + W + 1) return; ctx.fillStyle = f > 0.2 ? danger : muted; ctx.beginPath(); ctx.arc(Math.min(x, L + W - 4), T + rh * 3 + rh / 2, 4, 0, 2 * Math.PI); ctx.fill(); });
+    ctx.strokeStyle = css("--plot-axis", "#888"); ctx.lineWidth = 1; ctx.strokeRect(L + 0.5, T + 0.5, W, H);
+    ctx.fillStyle = muted; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    const m0 = Math.ceil(t0 / 30) * 30;
+    for (let s = m0; s <= t0 + dur; s += (W < 400 ? 60 : 30)) ctx.fillText((s / 60).toFixed(1), X(s), T + H + 3);
+    ctx.textBaseline = "bottom"; ctx.fillText(W < 420 ? "Minute of the recording" : "Minute of the recording (shaded: the 30 s excerpt above; red dots: suspect screenings)", L + W / 2, h - 1);
+  }
+  function showEvent() {
+    $("#lo-evt").textContent = (ev + 1) + "/" + EVENTS.length + " · " + EVENTS[ev].title;
+    $("#lo-evd").textContent = EVENTS[ev].text;
+    $("#lo-prev").disabled = ev === 0; $("#lo-next").disabled = ev === EVENTS.length - 1;
+    drawSig(); drawCtx();
+  }
+  $("#lo-prev").addEventListener("click", () => { if (ev > 0) { ev--; showEvent(); } });
+  $("#lo-next").addEventListener("click", () => { if (ev < EVENTS.length - 1) { ev++; showEvent(); } });
+  $("#lo-scale").addEventListener("change", drawSig);
+  showEvent();
+  PL.data.excerpts().then((j) => {
+    ex = j.excerpts.find((e) => e.key === "leadoff");
+    ex.channels = j.channels;
+    $("#lo-status").textContent = "Excerpt \"leadoff\" of excerpts.json: " + j.seconds + " s from " + Number(ex.start_s).toFixed(1) + " s (raw signal minus its median over the previous minute, clipped at ±3276 µV). Strip: computed from the CSV.";
+    showEvent();
+  }).catch((e) => { $("#lo-status").textContent = "Could not load the excerpt: " + e.message + " (serve the docs folder over HTTP)."; });
+
+  /* ================= widget 2: night planner ================= */
+  const LIMIT = 600; // min, "duration": 36000 s
+  let wakes = [];
+  const toMin = (s) => { const [a, b] = (s || "00:00").split(":").map(Number); return a * 60 + b + (s && s.split(":")[2] ? Number(s.split(":")[2]) / 60 : 0); };
+  const pad = (n) => String(n).padStart(2, "0");
+  function clock(m) { const t = Math.round(((m % 1440) + 1440) % 1440 * 60); return pad(Math.floor(t / 3600)) + ":" + pad(Math.floor(t / 60) % 60); }
+  function hm(m) { m = Math.max(0, m); const r = Math.round(m); return Math.floor(r / 60) + " h " + pad(r % 60); }
+  let baseDate = new Date();
+  function stampAt(rel) {
+    const S = toMin($("#tl-start").value);
+    const d = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 0, 0, 0);
+    d.setSeconds(Math.round((S + rel) * 60));
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "_" + pad(d.getHours()) + "-" + pad(d.getMinutes()) + "-" + pad(d.getSeconds());
+  }
+  function renderWakes() {
+    const box = $("#tl-wakes"); box.innerHTML = "";
+    wakes.forEach((wk, i) => {
+      const d = document.createElement("div"); d.className = "tl-wake";
+      d.innerHTML = '<span>Wake-up ' + (i + 1) + ':</span>' +
+        '<label>Stop at <input type="time" value="' + wk.at + '" data-k="at"></label>' +
+        '<label>Start again after <input type="number" min="0" max="240" step="1" value="' + wk.back + '" data-k="back" style="width:4.5em"> min</label>' +
+        '<label>Cond <select data-k="cond"><option value="same">unchanged</option><option value="A">Cond A</option><option value="B">Cond B</option></select></label>' +
+        '<button type="button" class="btn secondary small" data-k="del" aria-label="Remove wake-up ' + (i + 1) + '">Remove</button>';
+      d.querySelector("select").value = wk.cond;
+      d.querySelectorAll("[data-k]").forEach((el) => {
+        if (el.dataset.k === "del") el.addEventListener("click", () => { wakes.splice(i, 1); renderWakes(); drawTL(); });
+        else el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => { wk[el.dataset.k] = el.dataset.k === "back" ? Math.max(0, parseFloat(el.value) || 0) : el.value; drawTL(); });
+      });
+      box.appendChild(d);
+    });
+  }
+  function plan() {
+    const S = toMin($("#tl-start").value);
+    const rel = (t) => ((toMin(t) - S) % 1440 + 1440) % 1440;
+    const E = rel($("#tl-stop").value) || 1440, D = parseFloat($("#tl-delay").value), cond0 = $("#tl-cond").value;
+    const warn = [];
+    const ws = wakes.map((w) => ({ at: rel(w.at), back: w.back, cond: w.cond })).filter((w) => {
+      if (w.at <= 0 || w.at >= E) { warn.push("A wake-up at " + clock(S + w.at) + " is outside the night (after the morning Stop) and is ignored."); return false; }
+      return true;
+    }).sort((a, b) => a.at - b.at);
+    const offOn = $("#tl-off").checked, offAt = rel($("#tl-offt").value), fix = $("#tl-fix").checked;
+    const files = [];
+    let start = 0, cond = cond0, czOff = false;
+    for (let i = 0; i <= ws.length; i++) {
+      const stopReq = i < ws.length ? ws[i].at : E;
+      const end = Math.min(stopReq, start + LIMIT);
+      const f = { start, end, cond, auto: stopReq > start + LIMIT, delayEnd: Math.min(start + D, end), pauseFrom: null, czAtStart: false };
+      if (czOff) { f.pauseFrom = f.start; f.czAtStart = true; }
+      else if (offOn && offAt >= start && offAt < end) { f.pauseFrom = offAt; czOff = true; }
+      files.push(f);
+      if (i < ws.length) {
+        if (czOff && fix) czOff = false;
+        start = ws[i].at + Math.max(ws[i].back, 0.05);
+        if (ws[i].cond !== "same") cond = ws[i].cond;
+        if (start >= E) { warn.push("Wake-up " + (i + 1) + ": the new Start would come after the morning Stop."); break; }
+      }
+    }
+    files.forEach((f, i) => {
+      if (f.auto) warn.push("File " + (i + 1) + " stopped by itself at " + clock(S + f.end) + " (10 h after its Start): nothing is recorded until the next Start.");
+      if (f.cond !== cond0) warn.push("File " + (i + 1) + " is in Cond " + f.cond + ", not Cond " + cond0 + ": the condition was changed between Stop and Start.");
+      if (f.delayEnd >= f.end) warn.push("File " + (i + 1) + " ended before its delay was over: detection never ran in it.");
+      if (f.czAtStart) warn.push("File " + (i + 1) + ": Cz was still off at Start (not connected at start), so detection is paused for the whole file.");
+      else if (f.pauseFrom !== null) warn.push("File " + (i + 1) + ": Cz came off at " + clock(S + f.pauseFrom) + "; detection is paused (lead-off protection) until the end of this file.");
+    });
+    return { S, E, files, warn };
+  }
+  function drawTL() {
+    const P = plan(), c = $("#tl-canvas"), { ctx, w, h } = setup(c);
+    const L = 12 + Math.max.apply(null, ["Files", "Delay", "Detection", "Lead-off pause"].map((s) => ctx.measureText(s).width)), R = 20, T = 8, B = 28, W = w - L - R, H = h - T - B;
+    const last = P.files.length ? P.files[P.files.length - 1].end : P.E;
+    const span = Math.max(P.E, last, 60), X = (m) => L + (m / span) * W;
+    const fg = css("--fg", "#222"), muted = css("--fg-muted", "#666"), tip = css("--tip", "#2f7a4f"), danger = css("--danger", "#b33a3a"), sunk = css("--bg-sunk", "#eee"), border = css("--border", "#ccc"), c1 = css("--plot-c1", "#2b5fa8"), c2 = css("--plot-c2", "#c4561d");
+    const rows = ["Files", "Delay", "Detection", "Lead-off pause"], rh = H / rows.length;
+    ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillStyle = fg;
+    rows.forEach((r, i) => ctx.fillText(r, L - 6, T + rh * i + rh / 2));
+    // hour grid
+    ctx.strokeStyle = css("--plot-grid", "rgba(128,128,128,.2)"); ctx.lineWidth = 1;
+    const firstHour = 60 - (P.S % 60 === 0 ? 60 : P.S % 60);
+    const every = W < 420 ? 120 : 60;
+    ctx.fillStyle = muted; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let m = firstHour % 60; m <= span; m += 60) {
+      ctx.beginPath(); ctx.moveTo(X(m), T); ctx.lineTo(X(m), T + H); ctx.stroke();
+      if (Math.round((P.S + m) / 60) % (every / 60) === 0) ctx.fillText(clock(P.S + m), X(m), T + H + 4);
+    }
+    const box = (row, a, b, col, pat) => {
+      const x = X(a), x2 = X(b), y = T + rh * row + 5, hh = rh - 10;
+      if (x2 <= x) return;
+      ctx.fillStyle = col; ctx.fillRect(x, y, Math.max(1.5, x2 - x), hh);
+      if (pat) { ctx.save(); ctx.beginPath(); ctx.rect(x, y, x2 - x, hh); ctx.clip(); ctx.strokeStyle = border; ctx.lineWidth = 1; for (let k = x - hh; k < x2; k += 7) { ctx.beginPath(); ctx.moveTo(k, y + hh); ctx.lineTo(k + hh, y); ctx.stroke(); } ctx.restore(); }
+    };
+    P.files.forEach((f, i) => {
+      box(0, f.start, f.end, f.cond === "B" ? c1 : c2);
+      const x = X(f.start), x2 = X(f.end);
+      if (x2 - x > 26) { ctx.fillStyle = "#fff"; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText((i + 1) + (x2 - x > 70 ? " · COND" + f.cond : ""), x + 4, T + rh / 2); }
+      box(1, f.start, f.delayEnd, sunk, true);
+      const onEnd = f.pauseFrom !== null ? Math.max(f.delayEnd, f.pauseFrom) : f.end;
+      if (!f.czAtStart) box(2, f.delayEnd, onEnd, tip);
+      if (f.pauseFrom !== null) box(3, Math.max(f.pauseFrom, f.czAtStart ? f.start : f.pauseFrom), f.end, danger);
+      if (f.auto) { ctx.strokeStyle = danger; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(X(f.end), T); ctx.lineTo(X(f.end), T + H); ctx.stroke(); ctx.setLineDash([]); }
+    });
+    // gaps
+    for (let i = 1; i < P.files.length; i++) { const a = P.files[i - 1].end, b = P.files[i].start; ctx.strokeStyle = danger; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(a), T + 2); ctx.lineTo(X(a), T + rh - 2); ctx.stroke(); if (X(b) - X(a) > 2) { ctx.beginPath(); ctx.moveTo(X(b), T + 2); ctx.lineTo(X(b), T + rh - 2); ctx.stroke(); } }
+    // morning stop
+    ctx.strokeStyle = fg; ctx.lineWidth = 1; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(X(P.E), T); ctx.lineTo(X(P.E), T + H); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = css("--plot-axis", "#888"); ctx.strokeRect(L + 0.5, T + 0.5, W, H);
+    // readouts
+    let rec = 0, on = 0, del = 0;
+    P.files.forEach((f) => { rec += f.end - f.start; del += f.delayEnd - f.start; if (!f.czAtStart) on += Math.max(0, (f.pauseFrom !== null ? Math.max(f.delayEnd, f.pauseFrom) : f.end) - f.delayEnd); });
+    $("#tl-nf").textContent = P.files.length; $("#tl-rec").textContent = hm(rec); $("#tl-on").textContent = hm(on) + (rec > 0 ? " (" + Math.round(100 * on / rec) + "%)" : ""); $("#tl-del").textContent = hm(del);
+    const name = ($("#tl-name").value.trim() || "<device name>");
+    $("#tl-files").innerHTML = P.files.map((f, i) => {
+      const stem = name + "_" + stampAt(f.start) + "_COND" + f.cond;
+      const gap = i > 0 ? " · gap before it: " + (f.start - P.files[i - 1].end < 0.1 ? "a few seconds (not measured)" : f.start - P.files[i - 1].end < 60 ? Math.round(f.start - P.files[i - 1].end) + " min" : hm(f.start - P.files[i - 1].end)) : "";
+      return "<li><code>" + stem.replace(/</g, "&lt;") + "/" + stem.replace(/</g, "&lt;") + ".csv</code> · " + clock(P.S + f.start) + " to " + clock(P.S + f.end) + (f.auto ? " (10 h limit)" : "") + gap + "</li>";
+    }).join("");
+    $("#tl-warn").innerHTML = P.warn.map((s) => "<li>" + s + "</li>").join("");
+  }
+  PL.ui.bind("#tl-delay", drawTL, (v) => v + " min");
+  ["#tl-start", "#tl-stop", "#tl-name", "#tl-offt"].forEach((s) => $(s).addEventListener("input", drawTL));
+  ["#tl-cond", "#tl-off", "#tl-fix"].forEach((s) => $(s).addEventListener("change", drawTL));
+  $("#tl-add").addEventListener("click", () => {
+    const S = toMin($("#tl-start").value), at = clock(S + 240 + 30 * wakes.length);
+    wakes.push({ at, back: 0, cond: "same" }); renderWakes(); drawTL();
+  });
+  function setAll(v) {
+    $("#tl-start").value = v.start; $("#tl-stop").value = v.stop; $("#tl-delay").value = v.delay; $("#tl-delay").dispatchEvent(new Event("input"));
+    $("#tl-cond").value = v.cond; $("#tl-name").value = v.name; $("#tl-off").checked = v.off; $("#tl-offt").value = v.offt; baseDate = v.date;
+    wakes = []; renderWakes(); drawTL();
+  }
+  // The tutorial night: file name 2026-11-15_04-01-29 (device clock), 443.6 min long, delay 25 min, Cz at the limit at 373.12 min
+  $("#tl-tut").addEventListener("click", () => {
+    setAll({ start: "04:01:29", stop: "11:25:05", delay: 25, cond: "B", name: "clas-tutorial", off: true, offt: "10:14:36", date: new Date(2026, 10, 15) });
+    $("#tl-status").textContent = "The tutorial night: Start 04:01:29 and Stop 11:25:05 by the device clock (the file name; the clock's time zone is not known), delay 25 min, Cz at the amplifier limit from 373.12 min. The real night: detection from 25.04 min to 373.36 min.";
+  });
+  $("#tl-reset").addEventListener("click", () => { setAll({ start: "22:30", stop: "06:30", delay: 45, cond: "B", name: "CLAS_12", off: false, offt: "04:10", date: new Date() }); $("#tl-status").textContent = "Reset."; });
+  PL.onRedraw(() => { drawTL(); drawSig(); drawCtx(); });
+  drawTL();
+})();
+</script>
+</body>
+</html>

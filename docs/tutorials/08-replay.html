@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>08 · Replaying a night offline · Portiloop tutorials</title>
+  <meta name="description" content="The Portiloop simulator replays a recorded night through the same filter, detector and stimulator code, faster than real time: how to run it, how it reproduces the device's stimulations on the tutorial night, what it does not simulate, and what it is useful for.">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <style>
+    /* page-local styles for tutorial 08 */
+    .kv { font-variant-numeric: tabular-nums; }
+    .controls label { flex-wrap: wrap; max-width: 100%; }
+    .controls select { max-width: 100%; min-width: 0; }
+    .controls input[type="range"].short { width: 120px; }
+    canvas.plot.timeline { height: 190px; cursor: zoom-in; }
+    .legend-row { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--fg-muted); margin-top: 4px; }
+    .legend-row i { display: inline-block; width: 14px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
+    .chain { list-style: none; padding: 0; margin: 1.2em 0; display: flex; flex-wrap: wrap; gap: 10px 22px; }
+    .chain li { position: relative; margin: 0; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 14px; line-height: 1.3; border-left: 4px solid var(--plot-c1); }
+    .chain li .d { display: block; font-size: 12px; color: var(--fg-muted); }
+    .chain li.io { border-left-color: var(--plot-c4); }
+    .chain li:not(:last-child)::after { content: "→"; position: absolute; right: -18px; top: 50%; transform: translateY(-50%); color: var(--fg-muted); }
+    blockquote.callout { margin-left: 0; margin-right: 0; }
+  </style>
+</head>
+<body data-page="08-replay" data-root="..">
+<main>
+<article class="content">
+
+  <div class="eyebrow">Tutorial 08 · Processing the recordings</div>
+  <h1>Replaying a night offline</h1>
+  <p class="lead">The Portiloop software includes a simulator that feeds a recorded night, sample by sample, through the same filter, detector and stimulator code that ran on the device, in a few minutes. Use it to check what the device did, to see exactly what its detector looks at, and to try other settings on real data before a study.</p>
+
+  <dl class="meta">
+    <div><dt>Time</dt><dd>40 minutes</dd></div>
+    <div><dt>Level</dt><dd>Intermediate (command line)</dd></div>
+    <div><dt>You need</dt><dd><a href="05-files.html">05</a> (the files); <a href="07-responses.html">07</a> helps</dd></div>
+    <div><dt>Runs in browser</dt><dd>Widgets yes; the simulator needs Python and the repository</dd></div>
+  </dl>
+
+  <div class="objectives">
+    <h3>In this tutorial you will</h3>
+    <ul>
+      <li>Learn what <code>portiloop/src/simulator.py</code> does and what it writes</li>
+      <li>Run it on a recording, outside the device</li>
+      <li>Check that the replay reproduces the recorded stimulations of the tutorial night</li>
+      <li>See the slow-oscillation detection criteria at work on the device-filtered signal</li>
+      <li>Know what the simulator does not reproduce (the lead-off pause, the device clock), what it is good for, and one known issue of the v2.3 detector</li>
+    </ul>
+  </div>
+
+  <h2 id="what">What the simulator does</h2>
+  <p>The simulator is a single script, <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/simulator.py#L1-L8"><code>portiloop/src/simulator.py</code></a>. Its docstring says what it is for:</p>
+  <blockquote class="callout note"><span class="callout-title">portiloop/src/simulator.py (docstring)</span>"Replays recorded Portiloop CSV data through Portiloop processors, detectors, and stimulators faster than real time (as fast as possible), generating a new CSV with updated detection and stimulation markers, and optionally streaming via LSL."</blockquote>
+  <p>For each row of the recorded CSV it does what the device does for each new sample, using the same Python classes. For the pipeline of the tutorial night, "Sleep slow oscillations (upstate)" (<a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_pipelines.py#L28-L33"><code>custom_pipelines.py</code>, lines 28 to 33</a>), these are:</p>
+  <ol class="chain" aria-label="Simulator processing chain">
+    <li class="io">Raw row of the CSV<span class="d">raw_ch1 ... raw_ch8, µV</span></li>
+    <li><code>SlowOscillationFilter</code><span class="d">FIR 0.5 to 30 Hz, notch, DC removal, FIR 0.16 to 4 Hz</span></li>
+    <li><code>SOUpstateDetector</code><span class="d">criteria on the detection channel, up-state timing</span></li>
+    <li><code>SlowOscillationStimulator</code><span class="d">at most one sound per 0.1 s; sound disabled</span></li>
+    <li class="io">New CSV row<span class="d">raw, filtered, detection, stimulation, stimulation_on, timestamp</span></li>
+  </ol>
+  <p>To run this code on an ordinary computer, the script replaces what only exists on the device:</p>
+  <ul>
+    <li><strong>Hardware.</strong> The libraries <code>periphery</code>, <code>spidev</code> and <code>alsaaudio</code> are replaced by dummy modules when they are not installed, and the ADS1299 backend by a mock that reports 8 channels.</li>
+    <li><strong>Sound</strong> is switched off: "Disable sound card playback to run at maximum computational speed" (<code>simulator.py</code> lines 500 to 502: the stimulator's <code>play_sound</code> is replaced by a function that does nothing).</li>
+    <li><strong>Time.</strong> The code of the stimulator reads <code>time.time()</code> (for example to keep 0.1 s between sounds). The simulator replaces it by a simulated clock that follows the recording: the time of row <em>i</em> is <em>i</em> / 250 s, because device CSVs have no timestamp column (line 553).</li>
+    <li><strong>The "Stimulation starts after" delay</strong> (<code>sleep_timeout</code>, from the metadata) is counted in samples: detection and stimulation start at exactly 25 min for the tutorial night (lines 559 to 570).</li>
+  </ul>
+  <p>It writes two files. The CSV has the header (lines 207 to 209) <code>raw_ch1..8, filtered_ch1..8, detection, stimulation, stimulation_on, timestamp</code>: the raw values copied from the input, the device-filtered signal of every channel (which the device itself does not save, since <code>"record_filtered": false</code>), the new markers and the time in seconds. Next to it, <code>&lt;output name&gt;_metadata.json</code> holds the configuration used (the input's metadata, the command-line overrides, and the pipeline name).</p>
+
+  <div class="callout disk"><span class="callout-title">On the hard drive</span>Input: <code>&lt;name&gt;.csv</code>, plus <code>&lt;name&gt;_metadata.json</code> found automatically next to it. Output, by default next to the input: <code>&lt;name&gt;_simulated.csv</code> and <code>&lt;name&gt;_simulated_metadata.json</code>. The output CSV is large: 1.7 GB for the 7.4 h tutorial night (the recording itself is 585 MB), because it adds eight filtered columns at full precision. Nothing is written to the device and no sound is played.</div>
+
+  <h2 id="run">Running it</h2>
+  <ol class="steps">
+    <li><strong>Get the code.</strong> Clone <a href="https://github.com/Portiloop/portiloop-software">portiloop-software</a> (branch <code>main</code>, the Portiloop v2.3 software). To reproduce the tutorial night exactly, check out the version that recorded it with <code>git checkout 917f1f3</code>; the current main includes the fix described <a href="#fix">below</a>. Run the commands below from the repository folder, with a Python that has numpy and scipy installed. Nothing else is needed for a slow-oscillation replay: we ran the simulator of branch main on a computer without the device's packages, and the hardware libraries it lacks are replaced automatically (see above).</li>
+    <li><strong>Run it.</strong> For the tutorial night, with the settings of its metadata:
+<pre data-file="terminal"><code class="language-bash">python portiloop/src/simulator.py -i clas-tutorial_2026-11-15_04-01-29_CONDB/clas-tutorial_2026-11-15_04-01-29_CONDB.csv -o simulated.csv -q</code></pre>
+    The whole 7.4 h night took 3 min 8 s on a desktop computer, about 140 times faster than real time. Importing the package first tries to play a start-up sound (<code>portiloop/src/__init__.py</code> line 17 runs <code>aplay</code> on <code>sample1.wav</code> at a path of the device); on a computer it prints an error such as <code>sample1.wav: No such file or directory</code>, which you can ignore. Without <code>-q</code> the script prints a progress line and a summary. Here is the summary of a one-minute excerpt of the night (minute 123 to 124) replayed with <code>--sleep-timeout 0</code>:
+<pre data-file="output (excerpt; timestamps and paths shortened)"><code class="language-none">[INFO] portiloop-simulator: Loaded configuration from metadata: .../short_metadata.json
+[INFO] portiloop-simulator: Pipeline:            Sleep slow oscillations (upstate)
+[INFO] portiloop-simulator: Detection Channel:   6
+[INFO] portiloop-simulator: Condition:           Condition B (STIM)
+[INFO] portiloop-simulator: Sleep Timeout:       None (immediate detection)
+...
+[INFO] portiloop-simulator: Simulation Complete!
+[INFO] portiloop-simulator: Total samples processed: 15000
+[INFO] portiloop-simulator: Simulated recording time: 60.00 seconds (1.00 minutes)
+[INFO] portiloop-simulator: Real computation time:    0.59 seconds
+[INFO] portiloop-simulator: Overall replay speedup:   101.0x real-time
+[INFO] portiloop-simulator: Total detections:         9</code></pre></li>
+  </ol>
+
+  <h3 id="options">Options</h3>
+  <p>Every setting defaults to the recording's <code>_metadata.json</code> (or to the software defaults if there is none); options override it.</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Option</th><th>What it sets</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>-i</code>, <code>-o</code></td><td>Input CSV, output CSV</td><td>Default output: <code>&lt;input&gt;_simulated.csv</code></td></tr>
+      <tr><td><code>-p</code></td><td>Pipeline: <code>upstate</code>, <code>so</code>, <code>spindles</code>, <code>none</code> (aliases) or the full name</td><td>Default: the pipeline in the metadata. See the warning below.</td></tr>
+      <tr><td><code>-c</code></td><td>Detection channel (1 to 8)</td><td>Cz is 6 in the default montage, Fz is 7</td></tr>
+      <tr><td><code>--power-line</code></td><td>Notch frequency, 50 or 60 Hz</td><td></td></tr>
+      <tr><td><code>-C A</code> or <code>-C B</code></td><td>Condition</td><td>Default B ("Condition B (STIM)") whatever the metadata says; it changes no column, since no sound is played anyway</td></tr>
+      <tr><td><code>--delay-mode</code>, <code>--min-delay</code>, <code>--max-delay</code>, <code>--inter-stim-delay</code></td><td>Stimulation delays</td><td>Values above 1 are read as ms, values of 1 or less as seconds (<code>simulator.py</code> lines 348 to 352): <code>--min-delay 1</code> means 1 s, not 1 ms</td></tr>
+      <tr><td><code>--sleep-timeout</code></td><td>"Stimulation starts after", in minutes</td><td>Default: the metadata (25 min for the tutorial night)</td></tr>
+      <tr><td><code>-f</code>, <code>-m</code>, <code>--threshold</code>, <code>--lsl</code>, <code>-q</code></td><td>Sampling rate, metadata file, spindle threshold, LSL streaming, quiet</td><td><code>--lsl</code> imports <code>portiloop/src/core/output.py</code>, which needs the <code>portilooplot</code> package (<code>output.py</code> line 6) and an LSL library</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout danger"><span class="callout-title">Known issue: <code>-p "Sleep spindles"</code> is ignored</span>The default of <code>-p</code> is <code>"Sleep spindles"</code>, and the script uses the metadata's pipeline whenever <code>-p</code> equals that default (<code>if pipeline_name == "Sleep spindles" and pipeline_from_meta:</code>, line 290). So asking explicitly for <code>-p "Sleep spindles"</code> on a slow-oscillation recording silently replays the slow-oscillation pipeline (we checked: the log says <code>Pipeline: Sleep slow oscillations (upstate)</code>). Use the alias <code>-p spindles</code> instead, and always read the <code>Pipeline:</code> line of the log. Note also that the spindle pipeline needs a neural-network runtime on your computer (<code>tflite_runtime</code> or TensorFlow); without one it stops with "TensorFlow or tflite_runtime is required to run SleepSpindleRealTimeDetector." We did not test a spindle replay.</div>
+
+  <h2 id="compare">The replay of the tutorial night</h2>
+  <p>We replayed the tutorial night with the software version that recorded it (branch main at commit <a href="https://github.com/Portiloop/portiloop-software/tree/917f1f3">917f1f3</a>) and the command above, and compared the <code>stimulation</code> columns of the two files (our script; the data of the widget are made by <a href="https://github.com/Portiloop/portiloop-software/blob/main/docs/tools/build_replay_data.py"><code>docs/tools/build_replay_data.py</code></a>). The raw Cz column (<code>raw_ch6</code>) is identical in the two files, and in both files <code>detection</code> and <code>stimulation</code> mark the same samples.</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th></th><th>Device (recorded)</th><th>Replay (917f1f3)</th></tr></thead>
+    <tbody>
+      <tr><td>Stimulations</td><td class="kv">1,930</td><td class="kv">1,960</td></tr>
+      <tr><td>Recorded stimulations found at the identical sample in the replay</td><td class="kv" colspan="2">1,930 of 1,930</td></tr>
+      <tr><td>Replay stimulations the device did not make</td><td class="kv" colspan="2">30, all between minutes 401.7 and 428.3</td></tr>
+      <tr><td>First, last stimulation (minute)</td><td class="kv">30.9, 373.0</td><td class="kv">30.9, 428.3</td></tr>
+      <tr><td><code>stimulation_on</code> = 1</td><td class="kv">minute 25.04 to 373.36 (78.5 % of the night)</td><td class="kv">minute 25.00 to the end, 443.6 (94.4 %)</td></tr>
+    </tbody>
+  </table></div>
+  <p>Every stimulation of the night is reproduced at exactly the same sample. The only difference is the 30 extra stimulations after the electrodes came off, where the device had paused detection and the simulator did not (<a href="#limits">below</a>). An exact reproduction is what you should expect when you replay with the same software version, the same settings and the same raw signal: the processing is deterministic.</p>
+
+  <div class="widget" id="tl">
+    <div class="widget-title">Recorded and replayed stimulations over the night</div>
+    <p class="widget-desc">Top rows: one tick per stimulation of the device and of the replay; blue ticks are paired, pink ticks are not. Thin bars below: when <code>stimulation_on</code> is 1 in each file. Bottom: the lag of each pair (replay minus device). <strong>What to try:</strong> tap or click the timeline to zoom on 30 minutes (for example after minute 400); switch to the replay made after the fix of <a href="#fix">the next section</a> and change the pairing tolerance from 25 to 5 samples, then to 2.</p>
+    <div class="controls">
+      <label for="tl-ver">Replay made with <select id="tl-ver"><option value="recorded_version">917f1f3 (recorded the night)</option><option value="fixed">e4959f1 (after the fix)</option></select></label>
+      <label for="tl-tol">Pairing tolerance <input type="range" class="short" id="tl-tol" min="0" max="100" step="1" value="25"><output for="tl-tol"></output></label>
+      <button class="btn secondary" id="tl-all" type="button">Whole night</button>
+    </div>
+    <canvas class="plot timeline" id="tl-plot" aria-label="Timeline of recorded and replayed stimulations"></canvas>
+    <div class="legend-row"><span><i style="background:var(--plot-c1)"></i>paired</span><span><i style="background:var(--plot-stim)"></i>not paired</span><span><i style="background:var(--plot-c3)"></i>stimulation_on = 1</span></div>
+    <canvas class="plot short" id="tl-hist" aria-label="Histogram of the lag between replayed and recorded stimulations"></canvas>
+    <div class="readout">
+      <div><div class="k">Pairs</div><div class="v" id="tl-pairs">…</div></div>
+      <div><div class="k">Device only</div><div class="v" id="tl-donly">…</div></div>
+      <div><div class="k">Replay only</div><div class="v" id="tl-ronly">…</div></div>
+      <div><div class="k">Median lag</div><div class="v" id="tl-lag">…</div></div>
+    </div>
+    <div class="status" id="tl-status">Loading…</div>
+  </div>
+
+  <h3 id="fix">Evaluating a code change on a recorded night</h3>
+  <p>Because the replay is exact, it can measure what a change of the code does to a real night. The version that recorded the tutorial night truncated the detector's estimate of the up-state delay to an integer at every update (<a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_detectors.py#L267"><code>custom_detectors.py</code> line 267</a>):</p>
+<pre data-file="portiloop/src/custom/custom_detectors.py at 917f1f3 (lines 266 to 267)"><code class="language-python">                        # compute a running average
+                        self.est_t_upstate = int(self.alpha * self.t_upstate + (1 - self.alpha) * self.est_t_upstate)</code></pre>
+  <p>This was fixed on main on 26 November 2026 by commit <a href="https://github.com/Portiloop/portiloop-software/commit/e4959f1">e4959f1</a>, whose message explains the effect: "The running average of the time from the upward zero crossing to the up-state peak was truncated to an integer at each update, so it settled 4 to 5 samples (16 to 20 ms) below the average and the stimulations came early. It is now kept as a float." The fixed code keeps the estimate as a float and compares the counter with <code>round(self.est_t_upstate)</code>.</p>
+  <p>Replaying the tutorial night with the fixed version (e4959f1) gives 1,918 stimulations (1,888 before the device stopped, plus the same kind of extra stimulations after minute 401). 1,874 of the 1,930 recorded stimulations have a replayed one within 25 samples, and almost all of these come 3 to 6 samples (12 to 24 ms) <em>later</em>: 3 samples for 182 pairs, 4 for 882, 5 for 692 and 6 for 109; 9 pairs have 1, 2 or 7 samples. The estimate itself moves from a median of 46.0 samples (917f1f3) to 50.8 samples (e4959f1), and the mean phase of the 0.5 to 2 Hz oscillation at the stimulation (as computed in <a href="07-responses.html#phase">tutorial 07</a>) from -16° to -11°: closer to the up-state peak (our computations).</p>
+  <div class="callout warning"><span class="callout-title">Note the software version of every study night</span>The tutorial night was recorded before the fix: its stimulations came about 16 to 20 ms early. Devices updated after 26 November 2026 stimulate later by about that amount. If a study has nights recorded before and after an update, the timing of the stimulation differs between them. Write down the software version (the commit) of each device for each night; the <code>software_version</code> field of <code>_metadata.json</code> ("0.2.0" for the tutorial night) does not identify the commit. A replay with both versions, as here, tells you how large the difference is on your own data.</div>
+  <p>One caution: the fixed replay places its markers on an EEG that was recorded with the original stimulations, so it tells you <em>where</em> the new code would have stimulated, not how the brain would have responded (<a href="#limits">below</a>).</p>
+
+  <h2 id="detector">What the detector sees</h2>
+  <p>The replay gives something the device does not save: the filtered signal on which the detection runs (<code>filtered_ch6</code> for Cz). The upstate detector uses fixed criteria on that signal, in µV and ms; they are not adaptive and not shown in the Control Center:</p>
+<pre data-file="portiloop/src/custom/custom_detectors.py at 917f1f3 (SlowOscillationDetector.__init__, lines 172 to 176)"><code class="language-python">        self.th_PaP = 75  # total amplitude threshold
+        self.th_Neg = 40  # negative amplitude threshold
+        self.min_tNe = 125  # minimum duration spent below 0 (in ms)
+        self.max_tNe = 1500  # maximum duration spent below 0 (in ms)
+        self.max_tPo = 1000  # maximum duration spent above 0 (in ms)</code></pre>
+  <p>How they are used (<a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_detectors.py#L214-L288"><code>run_detection</code>, lines 214 to 288</a>):</p>
+  <ol>
+    <li>A wave starts at a <strong>downward zero crossing</strong>. From there the detector tracks the highest and lowest values and the time spent below and above zero.</li>
+    <li>The criteria hold when the peak-to-peak amplitude exceeds 75 µV, the lowest value is more than 40 µV below zero, the time below zero is between 125 and 1500 ms, and the time above zero is under 1000 ms.</li>
+    <li>At the <strong>upward zero crossing</strong> a counter starts. Each time a wave that met the criteria ends (next downward crossing), the detector updates its estimate of how many samples separate the upward crossing from the positive peak: <code>est_t_upstate = int(0.1 * t_upstate + 0.9 * est_t_upstate)</code> in the version that recorded the night (without <code>int</code> after the fix).</li>
+    <li>It detects on the single sample where the counter equals the estimate, if the criteria still hold. That is the predicted up-state. The first qualifying wave after each Start only sets the first estimate and triggers no sound.</li>
+  </ol>
+  <p>On the tutorial night (replay with 917f1f3) the estimate had a median of 46 samples (184 ms) over the 1,960 replayed stimulations, and a 5th to 95th percentile range of 22 to 73 samples (88 to 292 ms). Note what is <em>not</em> in the criteria: there is no upper limit on amplitude. A movement artifact or a detached electrode that produces a large negative-then-positive swing passes them.</p>
+
+  <div class="widget" id="dv">
+    <div class="widget-title">The upstate detector on the device-filtered Cz</div>
+    <p class="widget-desc">30 s of <code>filtered_ch6</code> from the replay, with the detector running in your browser from the state it had at the start of the excerpt. Shaded: samples where the criteria hold. Pink lines: detections (with the device values these are the replay's stimulations). Green triangles: the stimulations the device recorded. Dashed line: minus the negative threshold. <strong>What to try:</strong> in the artifact excerpt, lower the peak-to-peak threshold to 60 µV, then raise the time below zero to 250 ms; look at the excerpt recorded after the electrodes came off; switch to the fixed detector, zoom to 1 s and move to a stimulation (for example from 1.0 s in the deep-sleep excerpt) to see the pink line a few samples after the green triangle.</p>
+    <div class="controls">
+      <label for="dv-ex">Excerpt <select id="dv-ex"></select></label>
+      <label for="dv-ver">Detector <select id="dv-ver"><option value="recorded_version">917f1f3 (recorded the night)</option><option value="fixed">e4959f1 (after the fix)</option></select></label>
+      <label for="dv-zoom">Show <select id="dv-zoom"><option value="30">30 s</option><option value="10">10 s</option><option value="5">5 s</option><option value="1">1 s</option></select></label>
+      <label for="dv-pos">from <input type="range" class="short" id="dv-pos" min="0" max="25" step="0.1" value="0"><output for="dv-pos"></output></label>
+    </div>
+    <div class="controls">
+      <label for="dv-pap">Peak to peak above <input type="range" class="short" id="dv-pap" min="30" max="200" step="5" value="75"><output for="dv-pap"></output></label>
+      <label for="dv-neg">Negative peak below minus <input type="range" class="short" id="dv-neg" min="10" max="150" step="5" value="40"><output for="dv-neg"></output></label>
+      <label for="dv-tne">Time below zero at least <input type="range" class="short" id="dv-tne" min="50" max="500" step="25" value="125"><output for="dv-tne"></output></label>
+      <button class="btn secondary" id="dv-reset" type="button">Device values</button>
+    </div>
+    <canvas class="plot tall" id="dv-plot" aria-label="Device-filtered Cz with detection criteria and detections"></canvas>
+    <div class="legend-row"><span><i style="background:var(--plot-signal)"></i>device-filtered Cz (replay)</span><span><i style="background:var(--plot-label)"></i>criteria met</span><span><i style="background:var(--plot-stim)"></i>detection</span><span><i style="background:var(--plot-c3)"></i>device stimulation (triangle)</span><span><i style="background:var(--warn)"></i>negative threshold</span></div>
+    <div class="readout">
+      <div><div class="k">Detections (in page)</div><div class="v" id="dv-n">…</div></div>
+      <div><div class="k">Replay stimulations</div><div class="v" id="dv-sim">…</div></div>
+      <div><div class="k">Device stimulations</div><div class="v" id="dv-rec">…</div></div>
+      <div><div class="k">Up-state estimate at start</div><div class="v" id="dv-est">…</div></div>
+    </div>
+    <div class="status" id="dv-status">Loading…</div>
+  </div>
+  <p>The detector in this widget is a line-by-line JavaScript copy of <code>run_detection</code>, in both versions. We checked it: with the device values, the 917f1f3 version reproduces the device's and the replay's detections at the same samples in all three excerpts (17 detections, 13 of them recorded by the device), and the e4959f1 version reproduces the fixed replay. The Python copies in the data script reproduce all the detections and stimulations of both whole-night replays, sample for sample.</p>
+
+  <div class="callout neuro"><span class="callout-title">For neuroscientists</span>The criteria are amplitude thresholds on one channel, after causal filters that keep roughly 0.5 to 4 Hz and delay a 1 Hz wave by about 39 ms (our computation from the filter coefficients). They do not look at sleep stage, at the EOG or EMG, or at an upper amplitude limit. That is why, on the tutorial night, stimulations also occur in periods the automatic staging calls W (<a href="06-first-look.html">tutorial 06</a>), and why every analysis must reject artifacts afterwards (<a href="07-responses.html#rejection">tutorial 07</a>). The thresholds are absolute values in µV: an electrode with a different impedance, a different position, or an older participant with smaller slow waves will change how many waves pass them.</div>
+
+  <h2 id="limits">What the simulator does not simulate</h2>
+  <ul>
+    <li><strong>The lead-off pause.</strong> On the device, when the detection electrode comes off, detection and stimulation are paused for the rest of the recording (<a href="04-night.html">tutorial 04</a>); on the tutorial night <code>stimulation_on</code> drops to 0 at minute 373.36 and never comes back. The simulator has no lead-off detection: its <code>stimulation_on</code> only reflects the sleep timeout. It keeps "stimulating" until the end: 30 stimulations between minutes 401.7 and 428.3, on swings of thousands of µV from detached electrodes (the "after" excerpt in the widget above). If you analyse a replay, cut it where the device stopped, or apply the <code>_leadoff.json</code> of the original recording.</li>
+    <li><strong>The device clock.</strong> On the device, time comes from the system clock and the acquisition loop; in the replay, sample <em>i</em> is at <em>i</em> / 250 s exactly. One visible consequence: the device started detecting at minute 25.04, the replay at 25.00, because the Control Center checks the "Stimulation starts after" delay every 10 s (<code>ui.timer(10, exp_state.check_sleep_timeout)</code>, <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/simple_gui/simple_gui.py#L730"><code>simple_gui.py</code> line 730</a>), whereas the simulator counts samples. On this night no slow wave was detected in those 2.4 s, so the stimulations are unaffected. The replay also assumes that every row comes exactly 4 ms after the previous one; the device's timing irregularities (such as the lost samples counted in <code>_stats.json</code>) are invisible to it.</li>
+    <li><strong>The sound.</strong> Nothing is played, and the audio latency of the device is not modelled.</li>
+    <li><strong>The brain.</strong> The replayed EEG is the one recorded with the original stimulations. It contains the responses to the sounds the device actually played, at the device's times. If you replay with other settings or other code, the new markers fall on a signal that was shaped by the old ones.</li>
+  </ul>
+
+  <h2 id="uses">What it is useful for</h2>
+  <ul>
+    <li><strong>Checking a recording.</strong> Replay the night with the same software version and compare the markers, as above. An exact match tells you that the recorded markers are those of the configured pipeline on this signal. A partial match tells you that something differs: the settings, or the version of the code.</li>
+    <li><strong>Evaluating a code change,</strong> as in <a href="#fix">the example above</a>: replay the same nights with the old and the new version and compare when they stimulate.</li>
+    <li><strong>Seeing the detection signal.</strong> <code>filtered_ch*</code> lets you look at what the detector saw around any stimulation, or around a slow wave it missed.</li>
+    <li><strong>Testing settings before a study.</strong> Replay a pilot night with another detection channel (<code>-c 7</code> for Fz), the notch your site needs (<code>--power-line 50</code>), stimulation delays (<code>--min-delay</code>, <code>--max-delay</code>, <code>--inter-stim-delay</code>), another "Stimulation starts after" value, or another pipeline (<code>-p so</code>, <code>-p spindles</code>), and count how many stimulations you would get and when. The fixed thresholds of the detector are not command-line options: changing them means changing the code.</li>
+    <li><strong>Checking that a pipeline behaves on your data,</strong> for example on recordings from a new population or a new electrode montage, before running the device with participants.</li>
+  </ul>
+  <div class="callout tip"><span class="callout-title">Use sham nights for offline tests</span>Because of the last point of the previous section, the cleanest data for testing settings offline are nights without sound: Cond A (sham) nights or nights recorded with "Acquisition only". Their EEG was not shaped by any stimulation. (Cond A files contain the sham markers, but the replay writes its own.)</div>
+
+  <h2 id="exercises">Exercises</h2>
+  <details class="exercise"><summary>Tolerance</summary><p>In the timeline widget, choose the replay made after the fix and set the pairing tolerance to 5 samples, then 2. How many pairs remain? What does it say about the effect of the fix? Then choose the replay made with 917f1f3 and set the tolerance to 0.</p></details>
+  <details class="solution"><summary>Answer</summary><p>After the fix: 1,874 pairs at 25 samples, 1,762 at 5 samples, only 6 at 2 samples. Almost every pair is 3 to 6 samples apart: the fix moves the stimulations later by a nearly constant amount. With 917f1f3, all 1,930 recorded stimulations are paired even with a tolerance of 0 samples.</p></details>
+
+  <details class="exercise"><summary>Thresholds</summary><p>In the detector widget, artifact excerpt (minute 297.2), lower the peak-to-peak threshold to 60 µV. Then go back to the device values and raise the minimum time below zero to 250 ms. How do the detections change?</p></details>
+  <details class="solution"><summary>Answer</summary><p>With the device values the detector stimulates 3 times here, as the device did. With a 60 µV peak-to-peak threshold, a smaller wave passes and it finds 4. With 250 ms below zero, only the longer down-states pass and it finds 2. These are 30 s estimates: the in-page detector starts from the state the real detector had at the start of the excerpt, and over a whole night the estimate of the up-state delay would also evolve differently. The device cannot be set this way from the Control Center: the thresholds are constants in the code.</p></details>
+
+  <details class="exercise"><summary>A replay for a site with 50 Hz mains, on Fz</summary><p>Write the command that replays a night with the notch at 50 Hz, detection on Fz (default montage), Cond A, writing <code>night_fz.csv</code>.</p></details>
+  <details class="solution"><summary>Answer</summary><p><code>python portiloop/src/simulator.py -i night.csv -o night_fz.csv -c 7 --power-line 50 -C A</code>. The condition only changes the log and the metadata, not the columns. Check the <code>Pipeline:</code>, <code>Detection Channel:</code> and <code>Sleep Timeout:</code> lines of the log.</p></details>
+
+  <details class="exercise"><summary>After minute 401</summary><p>Why does the replay stimulate between minutes 401.7 and 428.3 when the device did not, and how would you remove these stimulations from an analysis of the replay?</p></details>
+  <details class="solution"><summary>Answer</summary><p>The electrodes had come off near minute 372.8, and the device's lead-off protection paused detection for the rest of the recording; the simulator does not model it, and the large swings of the detached electrodes pass the detection criteria, which have no upper amplitude limit. Keep only the replay's markers where the device's <code>stimulation_on</code> was 1, or use the <code>_leadoff.json</code> of the recording (with <code>load_recording</code>, epochs that overlap a lead-off period are rejected).</p></details>
+
+  <h2 id="references">References</h2>
+  <ol class="refs">
+    <li>Simulator: <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/simulator.py">portiloop/src/simulator.py</a>; pipeline classes: <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_processors.py">custom_processors.py</a>, <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_detectors.py">custom_detectors.py</a>, <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_stimulators.py">custom_stimulators.py</a> (portiloop-software at commit 917f1f3, the version that recorded the tutorial night). The fix of the up-state estimate: commit <a href="https://github.com/Portiloop/portiloop-software/commit/e4959f1">e4959f1</a>.</li>
+    <li>Data of the widgets: <a href="https://github.com/Portiloop/portiloop-software/blob/main/docs/tools/build_replay_data.py">docs/tools/build_replay_data.py</a>.</li>
+    <li>Valenchon N, Bouteiller Y, Jourde HR, L'Heureux X, Sobral M, Coffey EBJ, Beltrame G (2022). The Portiloop: a deep learning-based open science tool for closed-loop brain stimulation. <em>PLOS ONE</em> 17(8): e0270696. <a href="https://doi.org/10.1371/journal.pone.0270696">doi:10.1371/journal.pone.0270696</a></li>
+  </ol>
+
+</article>
+</main>
+
+<script src="../assets/js/portiloop.js"></script>
+<script src="../assets/js/data.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script id="replay-core">
+/* Detector used by the widgets of tutorial 08 (also loaded by a Node test of the docs). */
+(function (root) {
+  "use strict";
+  const R = {};
+  /** Python's round() of a non-negative float: halves go to the even neighbour. */
+  R.pyRound = function (x) {
+    const f = Math.floor(x), d = x - f;
+    if (d > 0.5) return f + 1;
+    if (d < 0.5) return f;
+    return f % 2 === 0 ? f : f + 1;
+  };
+  /**
+   * Line-by-line copy of SlowOscillationDetector.run_detection (SECOND_UPSTATE mode, i.e. SOUpstateDetector),
+   * portiloop/src/custom/custom_detectors.py lines 214 to 288 at commit 917f1f3. With th.fixed, the two lines changed
+   * by commit e4959f1: the estimate is kept as a float and compared with round(). `s` is the state ({max_peak,
+   * min_peak, down, up, prev, counter, t_up, est}, null for Python None); `th` the criteria. Returns {upstate, so}.
+   */
+  R.step = function (s, x, th, fs) {
+    if (s.counter !== null) s.counter += 1;
+    if (x > s.max_peak) { s.max_peak = x; if (s.counter !== null) s.t_up = s.counter; }
+    if (x < s.min_peak) s.min_peak = x;
+    if (x >= 0) s.up += 1; else s.down += 1;
+    const tp2p = Math.abs(s.max_peak - s.min_peak), tneg = Math.abs(s.min_peak);
+    const tne = s.down / fs * 1000, tpo = s.up / fs * 1000;
+    const so = tp2p > th.pap && tneg > th.neg && th.minTne < tne && tne < th.maxTne && tpo < th.maxTpo;
+    const target = th.fixed && s.est !== null ? R.pyRound(s.est) : s.est;
+    const upstate = so && s.est !== null && s.counter !== null && s.counter === target;
+    s.prev = s.prev !== null ? s.prev : x;
+    if (s.prev * x <= 0) {
+      if (0 < s.prev) {
+        if (s.counter !== null && so) {
+          if (s.est === null) s.est = s.t_up;
+          else {
+            s.est = th.alpha * s.t_up + (1 - th.alpha) * s.est;
+            if (!th.fixed) s.est = Math.trunc(s.est); // 917f1f3: int() at every update
+          }
+        }
+        s.max_peak = -1000; s.min_peak = 1000; s.down = 0; s.up = 0; s.prev = null; s.counter = null;
+      } else {
+        s.counter = 0; s.t_up = 0;
+      }
+    }
+    s.prev = x;
+    return { upstate, so };
+  };
+  R.DEVICE = { pap: 75, neg: 40, minTne: 125, maxTne: 1500, maxTpo: 1000, alpha: 0.1, fixed: false };
+  /** Run the detector over x from a copy of `state`; returns {det: [sample offsets], so: Uint8Array}. */
+  R.run = function (x, state, th, fs) {
+    const s = Object.assign({}, state), det = [], so = new Uint8Array(x.length);
+    for (let i = 0; i < x.length; i++) { const r = R.step(s, x[i], th, fs); if (r.upstate) det.push(i); so[i] = r.so ? 1 : 0; }
+    return { det, so };
+  };
+  /** One-to-one pairing of sorted sample lists a (device) and b (replay), closest first, within tol samples. */
+  R.pair = function (a, b, tol) {
+    const cand = [];
+    let j = 0;
+    for (let i = 0; i < a.length; i++) {
+      while (j < b.length && b[j] < a[i]) j++;
+      for (const k of [j - 1, j]) if (k >= 0 && k < b.length && Math.abs(b[k] - a[i]) <= tol) cand.push([Math.abs(b[k] - a[i]), i, k]);
+    }
+    cand.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+    const lagA = new Array(a.length).fill(null), usedB = new Uint8Array(b.length);
+    cand.forEach(([, i, k]) => { if (lagA[i] === null && !usedB[k]) { lagA[i] = b[k] - a[i]; usedB[k] = 1; } });
+    return { lagA, usedB };
+  };
+  root.PLReplay = R;
+})(typeof window !== "undefined" ? window : globalThis);
+</script>
+<script>
+(function () {
+  "use strict";
+  const $ = PL.ui.$, R = window.PLReplay;
+  let J = null, pairing = null, view = null;
+
+  function cssVar(name, fb) { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v || fb; }
+  function setup(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth || 600, h = canvas.clientHeight || 200;
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+    ctx.font = "12px " + cssVar("--font-sans", "system-ui, sans-serif");
+    return { ctx, w, h };
+  }
+
+  /* ---------- timeline ---------- */
+  const TL = { m: { l: 64, r: 12, t: 8, b: 34 } };
+  function drawTimeline() {
+    if (!J) return;
+    const tol = +$("#tl-tol").value, rp = J.replays[$("#tl-ver").value] || J.replays.recorded_version;
+    const SIM = rp.stimulations;
+    pairing = R.pair(J.recorded, SIM, tol);
+    const total = J.n_samples / J.fs / 60;
+    const v = view || [0, total];
+    const g = setup($("#tl-plot")), ctx = g.ctx, m = TL.m;
+    const W = g.w - m.l - m.r, H = g.h - m.t - m.b;
+    TL.W = W; TL.v = v;
+    const X = (min) => m.l + (min - v[0]) / (v[1] - v[0]) * W;
+    const rows = [["Device", m.t + 6, 34], ["Replay", m.t + 50, 34]];
+    const cPair = PL.color("c1"), cNo = PL.color("stim"), cOn = PL.color("c3");
+    // grid and axis
+    const span = v[1] - v[0], step = span > 200 ? 60 : span > 60 ? 15 : span > 20 ? 5 : 1;
+    ctx.strokeStyle = PL.color("grid"); ctx.fillStyle = PL.color("text"); ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let t = Math.ceil(v[0] / step) * step; t <= v[1]; t += step) {
+      ctx.beginPath(); ctx.moveTo(X(t), m.t); ctx.lineTo(X(t), m.t + H); ctx.stroke(); ctx.fillText(String(t), X(t), m.t + H + 4);
+    }
+    ctx.textBaseline = "bottom"; ctx.fillText("Minute of the night", m.l + W / 2, g.h - 2);
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    rows.forEach(([name, y, h]) => ctx.fillText(name, m.l - 6, y + h / 2));
+    ctx.fillText("on", m.l - 6, m.t + 98);
+    ctx.save(); ctx.beginPath(); ctx.rect(m.l, m.t, W, H); ctx.clip();
+    const tick = (list, paired, y, h) => {
+      for (let i = 0; i < list.length; i++) {
+        const min = list[i] / J.fs / 60; if (min < v[0] || min > v[1]) continue;
+        ctx.fillStyle = paired(i) ? cPair : cNo;
+        ctx.fillRect(Math.round(X(min)) - (paired(i) ? 0.5 : 1), y, paired(i) ? 1 : 2, h);
+      }
+    };
+    tick(J.recorded, (i) => pairing.lagA[i] !== null, rows[0][1], rows[0][2]);
+    tick(SIM, (k) => pairing.usedB[k] === 1, rows[1][1], rows[1][2]);
+    ctx.fillStyle = cOn;
+    J.on_recorded.forEach(([a, b]) => ctx.fillRect(X(a / J.fs / 60), m.t + 92, X(b / J.fs / 60) - X(a / J.fs / 60), 5));
+    rp.on.forEach(([a, b]) => ctx.fillRect(X(a / J.fs / 60), m.t + 101, X(b / J.fs / 60) - X(a / J.fs / 60), 5));
+    ctx.restore();
+    ctx.fillStyle = PL.color("text"); ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillText("device", m.l + 4, m.t + 108); ctx.fillText("replay", m.l + 54, m.t + 108);
+    ctx.strokeStyle = PL.color("axis"); ctx.strokeRect(m.l + 0.5, m.t + 0.5, W, H);
+    // histogram of lags
+    const lags = pairing.lagA.filter((x) => x !== null);
+    const lo = -Math.max(2, Math.min(tol, 12)), hi = Math.max(2, Math.min(tol, 12)), xs = [], ys = [];
+    for (let l = lo; l <= hi; l++) { xs.push(l); ys.push(0); }
+    let outside = 0;
+    lags.forEach((l) => { if (l >= lo && l <= hi) ys[l - lo]++; else outside++; });
+    const hp = $("#tl-hist"), hg = setup(hp), hc = hg.ctx, hm = { l: 52, r: 12, t: 10, b: 36 };
+    const HW = hg.w - hm.l - hm.r, HH = hg.h - hm.t - hm.b, ymax = Math.max(1, ...ys) * 1.12;
+    const HX = (l) => hm.l + (l - lo + 0.5) / (hi - lo + 1) * HW, HY = (c) => hm.t + HH - c / ymax * HH;
+    hc.strokeStyle = PL.color("grid"); hc.fillStyle = PL.color("text"); hc.textAlign = "right"; hc.textBaseline = "middle";
+    const ystep = ymax > 600 ? 300 : ymax > 200 ? 100 : ymax > 50 ? 25 : 5;
+    for (let c = 0; c <= ymax; c += ystep) { hc.beginPath(); hc.moveTo(hm.l, HY(c)); hc.lineTo(hm.l + HW, HY(c)); hc.stroke(); hc.fillText(String(c), hm.l - 6, HY(c)); }
+    const bw = HW / (hi - lo + 1);
+    hc.textAlign = "center"; hc.textBaseline = "top";
+    xs.forEach((l, i) => {
+      hc.fillStyle = PL.color("c1"); hc.fillRect(HX(l) - bw * 0.4, HY(ys[i]), bw * 0.8, hm.t + HH - HY(ys[i]));
+      if (bw > 14 || l % 2 === 0) { hc.fillStyle = PL.color("text"); hc.fillText(String(l), HX(l), hm.t + HH + 4); }
+    });
+    hc.textBaseline = "bottom"; hc.fillText("Replay minus device, samples (1 sample = 4 ms)", hm.l + HW / 2, hg.h - 2);
+    hc.strokeStyle = PL.color("axis"); hc.strokeRect(hm.l + 0.5, hm.t + 0.5, HW, HH);
+    const sorted = lags.slice().sort((a, b) => a - b);
+    const med = sorted.length ? sorted[Math.floor((sorted.length - 1) / 2)] : NaN;
+    $("#tl-pairs").textContent = lags.length.toLocaleString("en-US");
+    $("#tl-donly").textContent = (J.recorded.length - lags.length).toLocaleString("en-US");
+    $("#tl-ronly").textContent = (SIM.length - lags.length).toLocaleString("en-US");
+    $("#tl-lag").textContent = isFinite(med) ? med + " samples" : "n/a";
+    $("#tl-status").textContent = "Device: " + J.recorded.length.toLocaleString("en-US") + " stimulations; replay: " + SIM.length.toLocaleString("en-US") +
+      ". Showing minutes " + v[0].toFixed(0) + " to " + v[1].toFixed(0) + "." + (outside ? " " + outside + " pairs with a lag beyond ±12 samples are not drawn." : "");
+  }
+  $("#tl-plot").addEventListener("click", (e) => {
+    if (!J || !TL.W) return;
+    const r = e.currentTarget.getBoundingClientRect(), px = e.clientX - r.left;
+    const min = TL.v[0] + (px - TL.m.l) / TL.W * (TL.v[1] - TL.v[0]);
+    const total = J.n_samples / J.fs / 60;
+    const a = Math.max(0, Math.min(total - 30, min - 15));
+    view = [a, a + 30]; drawTimeline();
+  });
+  $("#tl-all").addEventListener("click", () => { view = null; drawTimeline(); });
+  PL.ui.bind("#tl-tol", drawTimeline, (v) => v + " samples (" + 4 * v + " ms)");
+  PL.ui.bind("#tl-ver", drawTimeline);
+
+  /* ---------- detector view ---------- */
+  function decodeF64(b64) {
+    const s = atob(b64), u8 = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+    return new Float64Array(u8.buffer);
+  }
+  function current() { return J.excerpts.find((e) => e.key === $("#dv-ex").value) || J.excerpts[0]; }
+  function thresholds() {
+    return Object.assign({}, R.DEVICE, { pap: +$("#dv-pap").value, neg: +$("#dv-neg").value, minTne: +$("#dv-tne").value,
+      fixed: $("#dv-ver").value === "fixed" });
+  }
+  function drawDetector() {
+    if (!J) return;
+    const ex = current(), th = thresholds(), fs = J.fs, rv = ex[$("#dv-ver").value] || ex.recorded_version;
+    const out = R.run(ex.x, rv.state, th, fs);
+    const zoom = +$("#dv-zoom").value;
+    const pos = $("#dv-pos");
+    pos.max = String(30 - zoom); pos.disabled = zoom === 30;
+    const t0 = Math.min(+pos.value, 30 - zoom), t1 = t0 + zoom;
+    $('output[for="dv-pos"]').textContent = t0.toFixed(1) + " s";
+    const t = Array.from({ length: ex.n }, (_, i) => i / fs);
+    const regions = [];
+    for (let i = 0; i < ex.n; i++) {
+      if (out.so[i] && (i === 0 || !out.so[i - 1])) regions.push({ x0: i / fs, x1: i / fs, label: "Criteria met" });
+      if (out.so[i]) regions[regions.length - 1].x1 = (i + 1) / fs;
+    }
+    let lo = Infinity, hi = -Infinity;
+    for (let i = Math.floor(t0 * fs); i < Math.min(ex.n, Math.ceil(t1 * fs)); i++) { lo = Math.min(lo, ex.x[i]); hi = Math.max(hi, ex.x[i]); }
+    lo = Math.min(lo, -th.neg - 10); hi = Math.max(hi, 20);
+    const pad = 0.08 * (hi - lo);
+    PL.plot($("#dv-plot"), {
+      xRange: [t0, t1], yRange: [lo - pad, hi + pad], xLabel: "Time in the excerpt (s)", yLabel: "filtered_ch6 (µV)", legend: false,
+      regions,
+      series: [{ x: t, y: Array.from(ex.x), color: PL.color("signal"), width: 1.2, label: "Device-filtered Cz (replay)" }],
+      hlines: [{ y: 0, color: PL.color("axis"), dash: [2, 3], width: 1 }, { y: -th.neg, label: "-" + th.neg + " µV" }],
+      markers: out.det.map((i) => ({ x: i / fs, color: PL.color("stim"), width: 1.6 }))
+        .concat(ex.recorded.map((i) => ({ x: i / fs, color: PL.color("c3"), shape: "triangle" }))),
+    });
+    const same = out.det.length === rv.simulated.length && out.det.every((v, i) => v === rv.simulated[i]);
+    $("#dv-n").textContent = out.det.length;
+    $("#dv-sim").textContent = rv.simulated.length;
+    $("#dv-rec").textContent = ex.recorded.length;
+    const est = rv.state.est;
+    $("#dv-est").textContent = est === null ? "none yet" : (Number.isInteger(est) ? est : est.toFixed(1)) + " samples (" + Math.round(est * 4) + " ms)";
+    const isDevice = th.pap === 75 && th.neg === 40 && th.minTne === 125;
+    $("#dv-status").textContent = ex.title + ". Minute " + (ex.start / fs / 60).toFixed(1) + " of the night. " +
+      (isDevice ? (same ? "Device values: the in-page detections are identical to the replay's, sample for sample." : "Device values, but the in-page detections differ from the replay's (please report this).")
+        : "Modified criteria: the in-page detector starts from the real detector's state at the start of the excerpt.");
+  }
+  ["#dv-pap", "#dv-neg", "#dv-tne"].forEach((s) => PL.ui.bind(s, drawDetector, (v) => v + (s === "#dv-tne" ? " ms" : " µV")));
+  PL.ui.bind("#dv-zoom", drawDetector);
+  PL.ui.bind("#dv-ver", drawDetector);
+  PL.ui.bind("#dv-pos", drawDetector, (v) => v.toFixed(1) + " s");
+  PL.ui.bind("#dv-ex", () => { $("#dv-pos").value = "0"; drawDetector(); });
+  $("#dv-reset").addEventListener("click", () => {
+    [["#dv-pap", 75, " µV"], ["#dv-neg", 40, " µV"], ["#dv-tne", 125, " ms"]].forEach(([s, v, u]) => { $(s).value = String(v); $('output[for="' + s.slice(1) + '"]').textContent = v + u; });
+    drawDetector();
+  });
+
+  PL.onRedraw(function () { drawTimeline(); drawDetector(); });
+
+  fetch((PL.data.base || "../assets/data/") + "08-replay.json").then((r) => {
+    if (!r.ok) throw new Error("Cannot load 08-replay.json (" + r.status + ")");
+    return r.json();
+  }).then((j) => {
+    J = j;
+    const sel = $("#dv-ex");
+    const names = { deep: "Deep sleep (minute 123.0)", artifact: "Movement artifact (minute 297.2)", after: "After the electrodes came off (minute 407.2)" };
+    j.excerpts.forEach((e) => { e.x = decodeF64(e.filtered); const o = document.createElement("option"); o.value = e.key; o.textContent = names[e.key] || e.key; sel.appendChild(o); });
+    drawTimeline(); drawDetector();
+  }).catch((e) => {
+    const msg = "Could not load the data: " + e.message + " (serve the docs folder over HTTP).";
+    $("#tl-status").textContent = msg; $("#dv-status").textContent = msg;
+  });
+})();
+</script>
+</body>
+</html>

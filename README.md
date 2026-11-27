@@ -4,6 +4,10 @@ This software works with the [Coral implementation](https://github.com/Portiloop
 
 It enables controlling the `Portiloop` from a Graphical User Interface (GUI).
 
+## Tutorials
+
+Step-by-step, interactive tutorials on running a closed-loop auditory stimulation night with the Portiloop V2.3 (equipment, electrodes, the Control Center, the night, the recording files) and on processing the recordings (with a real night as the example dataset) are in [`docs/`](docs/README.md) and published at <https://portiloop.github.io/portiloop-software/>. The analysis code they use is in [`examples/processing`](examples/processing/README.md).
+
 ## Quick links
 - [Installation on the Portiloop](#installation-portiloop-v3)
 - [GUI usage](#usage)
@@ -109,7 +113,7 @@ In case you inadvertently fill up your `Portiloop` internal memory, it will refu
 
 When recording signal, the structure of the output CSV file depends on the number of channels of your Portiloop, on whether detection / stimulation is enabled, and on your specific Detector / Stimulator.
 
-:information_source: _the `stimulation_on` column is `1` when the UI stimulation switch is active and `0` otherwise, while the `stimulation` column contains the stimulus that has been sent if the stimulation switch was active or that would have been sent if the switch were active._
+:information_source: _the `stimulation_on` column is `1` while detection is running and `0` while it is paused (during the "Stimulation starts after" delay, and while the detection electrode, the reference or the bias is off), in both conditions; the `stimulation` column contains the stimulus that has been sent (Cond B) or that would have been sent (Cond A, sham)._
 
 The CSV file comes with JSON files of the same name:
 - `_metadata.json`: the settings of the recording. With the Simple GUI, `impedances_kohm` and `impedance_check_time` contain the last impedance check of the `Check` tab (`"?"` if no check was performed, `"<1"` for an electrode below 1 kΩ, which is within the accuracy of the measurement). The electrodes that were `"OFF"` at that check (except the detection channel) are `"disabled"` in `channel_states`: their channel is powered down and records `0`.

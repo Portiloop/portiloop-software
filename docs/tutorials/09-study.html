@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>09 · From one night to a study · Portiloop tutorials</title>
+  <meta name="description" content="How to turn Portiloop nights into a study: stimulation (Cond B) versus sham (Cond A), within-subject and group designs, blinding in practice, what to measure, statistics chosen in advance (paired tests, FDR, effect sizes), the group_comparison notebook, and the pitfalls specific to the Portiloop software.">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <style>
+    /* page-local styles for tutorial 09 */
+    canvas.plot.raster { height: 178px; }
+    .bk-tables h4 { margin: 1.2em 0 0.2em; font-size: 0.98rem; }
+    .bk-tables p.who { margin: 0 0 0.4em; font-size: 0.9em; color: var(--fg-muted); }
+    .bk-tables table { font-size: 0.88em; margin: 0.4em 0 0.8em; }
+    .bk-tables td.mono, .bk-tables th.mono { font-family: var(--font-mono); }
+    .bk-tables td, .bk-tables th { white-space: nowrap; }
+    .controls input[type="text"] { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); width: 7em; }
+    .controls input[type="number"] { width: 5em; }
+    .btnrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+    .readout .v.small-v { font-size: 1rem; }
+    .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 1em 0; }
+    .roles > div { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; background: var(--bg-elev); font-size: 0.93em; }
+    .roles > div strong { display: block; margin-bottom: 2px; }
+    blockquote.callout { margin-left: 0; margin-right: 0; }
+  </style>
+</head>
+<body data-page="09-study" data-root="..">
+<main>
+<article class="content">
+
+  <div class="eyebrow">Tutorial 09 · Processing the recordings</div>
+  <h1>From one night to a study</h1>
+  <p class="lead">One stimulation night shows that the Portiloop detected slow oscillations and played sounds; it cannot show that the sounds did anything. This tutorial explains what a study needs on top of that: a sham condition, a design, blinding that the software does not provide, measures and statistics chosen before looking at the data, the group notebook of the analysis package, and the pitfalls that are specific to the Portiloop software.</p>
+
+  <dl class="meta">
+    <div><dt>Time</dt><dd>45 to 60 minutes</dd></div>
+    <div><dt>Level</dt><dd>Intermediate</dd></div>
+    <div><dt>You need</dt><dd><a href="07-responses.html">07</a> (responses); <a href="05-files.html">05</a> (files) helps</dd></div>
+    <div><dt>Runs in browser</dt><dd>Widgets yes (synthetic data); the notebook needs Python</dd></div>
+  </dl>
+
+  <div class="objectives">
+    <h3>In this tutorial you will</h3>
+    <ul>
+      <li>Understand why an average aligned on detections always shows a slow wave, and why the comparison that matters is stimulation (Cond B) against sham (Cond A)</li>
+      <li>Choose between a within-subject design and a comparison between groups, and plan the nights</li>
+      <li>Set up blinding with a key holder and coded files, knowing exactly where the software reveals the condition</li>
+      <li>Decide what to measure and how to test it before seeing the data: per-participant averages, paired tests, FDR over a pre-chosen window, effect sizes with confidence intervals</li>
+      <li>Run and adapt <code>group_comparison.ipynb</code></li>
+      <li>Recognise the pitfalls: unequal numbers of stimulations, Stop/Start gaps, lead-off, the persisted condition, the commit that swapped Cond A and Cond B, and stage selection from unvalidated automatic staging</li>
+    </ul>
+  </div>
+
+  <!-- ============================================================== -->
+  <h2 id="one-night">Why one night proves little</h2>
+  <p>In <a href="07-responses.html">tutorial 07</a> you averaged the EEG of the tutorial night (a test night recorded by the lab in Cond B, sound played) around its 1,930 stimulation markers. With the default settings of <code>portiloop_analysis</code>, 1,707 epochs were kept, and the average slow-band response at Cz has a minimum of -68.0 µV at -0.42 s, a maximum of +23.7 µV at +0.18 s (where the sound lands), then a negative wave near +0.6 s (about -27 µV) and a positive wave near +1 s (about +18 µV); its P900 minus N550 amplitude is 31.0 µV.</p>
+  <p>Most of that picture is guaranteed by the way the markers were chosen, whatever the sound does:</p>
+  <ul>
+    <li><strong>Selection.</strong> A marker is placed only when the detector has just seen a large slow oscillation on Cz (peak-to-peak above 75 µV, negative part beyond 40 µV, and duration limits; see <a href="03-control-center.html">tutorial 03</a>), and it fires at the predicted up-state. An average aligned on these moments must show a deep down-state before 0 and an up-state at 0. The same would happen with no sound at all.</li>
+    <li><strong>Continuation.</strong> Slow oscillations come in trains, so a detected one is often followed by another about a second later. A negative then positive wave after the marker can therefore be partly endogenous.</li>
+    <li><strong>Time of night and stage.</strong> Markers cluster in the periods with most slow-wave activity, so any measure averaged over markers describes those periods, not the night.</li>
+  </ul>
+  <p>What would show an effect of the sound is a difference between nights that are identical except for the sound. That is what the two conditions of the Control Center are for. In Cond A the whole pipeline runs (filtering, detection, the stimulation decision, the markers in the <code>stimulation</code> column), but the sound is not played:</p>
+<pre data-file="portiloop/src/custom/custom_stimulators.py (send_stimulation, branch main, lines 350 to 357)"><code class="language-python">    def send_stimulation(self, lsl_text, sound):
+        stim_enabled = self.config_dict.get('stimulate', True) if self.config_dict is not None else True
+        if not stim_enabled and sound:
+            lsl_text = "SHAM_STIM"
+        # Send lsl marker
+        self.lsl_streamer.push_marker(lsl_text)
+        # Send sound to patient
+        if sound and stim_enabled:</code></pre>
+  <p>The condition comes from the Control tab toggle: <code>forward=lambda x: x == 'Cond B'</code> sets <code>stim_on</code>, which is written as <code>run_dict['stimulate']</code> (<a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/simple_gui/simple_gui.py#L625-L629">simple_gui.py, lines 625 to 629</a>, and line 195). So <strong>Cond B is stimulation and Cond A is sham</strong>. In both, the CSV has the same columns and the <code>stimulation</code> column marks the times a sound was played (Cond B) or would have been played (Cond A).</p>
+
+  <blockquote class="callout neuro"><span class="callout-title">For neuroscientists: the sham condition of Ngo et al. (2013)</span>The study that introduced closed-loop auditory stimulation of slow oscillations used the same logic [1]: "During the Sham condition, stimulation time points were marked but no stimulation was applied." Their comparison of the averages is the template for a Portiloop study: "Whereas in the Sham condition an individual SO cycle occurred, the two auditory stimuli in phase with the predicted SO up states formed a sequence of three succeeding SO cycles". The sham average also shows a slow oscillation; the effect is the <em>difference</em>. (Their protocol played two sounds per detection; the Portiloop upstate pipeline plays one.)</blockquote>
+
+  <div class="callout note"><span class="callout-title">What the tutorial night can and cannot tell you</span>The tutorial night is a single Cond B night. It is perfect for learning the files and the analysis, and it shows that detection and targeting work (the sound lands near the up-state). It cannot show whether the waves after the marker were evoked by the sound, because there is no sham night of the same person to compare with. We do not have one, so on this page the stim versus sham comparison is illustrated with synthetic data, clearly labelled.</div>
+
+  <!-- ============================================================== -->
+  <h2 id="designs">Study designs</h2>
+  <h3 id="within">Within-subject: stimulation and sham nights in each participant</h3>
+  <p>Each participant sleeps one Cond B night and one Cond A night; half of the participants have the stimulation night first, half the sham night first (counterbalancing), so that order effects (better sleep on the second night, practice on the memory task) cancel out on average. This is the design of Ngo et al. (2013): "Each subject was tested in two experimental conditions, a Stimulation condition and a Sham condition, with the order of conditions balanced across subjects. The subject's two experimental conditions were separated by an interval of at least 1 week." [1]</p>
+  <ul>
+    <li><strong>Adaptation night.</strong> The first night with electrodes is usually worse (the "first-night effect"). Ngo et al. used one: "subjects were accustomed to sleeping under laboratory conditions during an adaptation night, including the attachment of electrodes" [1]. With the Portiloop, a suggestion is to run the adaptation night exactly like an experimental night in Cond A (no sound), so the participant and the experimenter practise the whole procedure; do not analyse it as a sham night.</li>
+    <li><strong>Why it is efficient.</strong> People differ a lot in slow-wave amplitude (with age, skull thickness, electrode contact). In a within-subject design, each participant is their own control, and a paired test removes those differences. The simulator <a href="#sim">below</a> shows how much this matters.</li>
+    <li><strong>Behavioural outcomes</strong> need parallel versions of the task (different word lists on the two nights), assigned in counterbalanced order too.</li>
+  </ul>
+  <h3 id="between">Between groups</h3>
+  <p>The second analysis notebook, <code>group_comparison.ipynb</code>, compares groups of participants: "here, younger and older adults". A comparison between groups uses independent (unpaired) tests, and needs more participants for the same precision because people differ. Comparing groups on stimulation nights only tells you that the response to stimulation <em>and</em> selection differ between groups (older adults have smaller slow waves, so the detector selects different events). If you want to know whether the <em>effect</em> of stimulation differs between groups, each participant needs both a stim and a sham night (a mixed design: condition within subjects, group between subjects), and the test is on the per-participant stim minus sham differences.</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Design</th><th>Question it answers</th><th>Test on per-participant values</th><th>In the package</th></tr></thead>
+    <tbody>
+      <tr><td>Within-subject (stim and sham night per participant)</td><td>Does the sound change the response, the sleep or the memory?</td><td>Paired t-test</td><td>Time course: <code>compare_time_courses(stim, sham, time, window=..., paired=True)</code>; single measure: <code>scipy.stats.ttest_rel</code> (see <a href="#paired-code">the code below</a>)</td></tr>
+      <tr><td>Between groups, stim nights only</td><td>Does the response to stimulated detections differ between groups?</td><td>Independent t-test</td><td><code>compare_time_courses</code> (independent t-tests with FDR, the default <code>paired=False</code>)</td></tr>
+      <tr><td>Mixed (both nights, two groups)</td><td>Does the effect of the sound differ between groups?</td><td>Independent t-test on the stim minus sham differences</td><td><code>compare_time_courses</code> on the differences</td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ============================================================== -->
+  <h2 id="blinding">Blinding in practice</h2>
+  <p>The protocol tells the experimenter to "select Cond A or Cond B, depending on the experimenter's instructions". Neutral labels are a good start, but <strong>the software does not blind anyone</strong>: the meaning of A and B is fixed in the code (and documented on this site), and the condition is written in several places.</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Where</th><th>What it shows</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>File and folder names</td><td>Suffix <code>_CONDB</code> (sound) or <code>_CONDA</code> (sham): <code>stim_str = "CONDB" if self.stim_on else "CONDA"</code></td><td>simple_gui.py</td></tr>
+      <tr><td>Control tab during the night</td><td><code>Current experiment: &lt;name&gt;</code>, with the suffix</td><td>simple_gui.py</td></tr>
+      <tr><td><code>_metadata.json</code></td><td><code>"stimulate": true</code> or <code>false</code>, and <code>"filename"</code> with the suffix</td><td>simple_gui.py, capture.py</td></tr>
+      <tr><td>Device log (<code>~/workspace/logs/portiloop.log</code>)</td><td>A line <code>STIMON = True</code> or <code>False</code> at every Start</td><td>simple_gui.py</td></tr>
+      <tr><td>LSL markers (off in the protocol)</td><td><code>"STIM"</code> or <code>"SHAM_STIM"</code></td><td>custom_stimulators.py</td></tr>
+      <tr><td>The participant</td><td>May hear the sounds when awake; the protocol tells participants: "If you wake up during the night and the sounds prevent you from falling back asleep, press the Stop button, then immediately press the Start button."</td><td>protocol</td></tr>
+    </tbody>
+  </table></div>
+  <p>The CSV columns do not reveal the condition: <code>stimulation</code> has markers in both conditions, and <code>stimulation_on</code> is 1 while detection was running, whatever the condition. The <code>"Test Sound"</code> button plays the sound in both conditions.</p>
+
+  <h3 id="roles">Who knows what</h3>
+  <p>Blinding is therefore organisational. A workable split of roles (a suggestion, to adapt to your ethics approval and team size):</p>
+  <div class="roles">
+    <div><strong>Key holder</strong>Generates the assignment and the codes, keeps the key, makes the blinded copy of the files. Does not run nights, score sleep, test participants or analyse.</div>
+    <div><strong>Night experimenter</strong>Receives only "participant 07, night 2: Cond A". Is not told what A and B mean (they can find out, so count them as not blind and keep them away from the outcome measures).</div>
+    <div><strong>Morning tester and sleep scorer</strong>Run the memory tests and score the sleep without knowing the condition.</div>
+    <div><strong>Analyst</strong>Works on coded files, with the pairing of nights but not the condition, until the analysis script is frozen.</div>
+  </div>
+
+  <h3 id="procedure">A suggested procedure</h3>
+  <ol class="steps">
+    <li><strong>Before the first participant: write the analysis plan</strong> (measures, windows, tests, exclusion rules; see <a href="#plan">below</a>) and register it.</li>
+    <li><strong>The key holder generates the assignment</strong> with the helper below (or any randomisation tool) and keeps the key file away from the shared folders.</li>
+    <li><strong>Each night, the experimenter sets the toggle as written on the night sheet</strong>, presses Start, and checks that the <code>Current experiment</code> label ends with the expected suffix. (Seeing the suffix is unavoidable; it is the only check that the right condition is running.)</li>
+    <li><strong>In the morning, the SD card goes to the key holder</strong>, who copies the folders and logs which folder belongs to which participant and night.</li>
+    <li><strong>The key holder makes the blinded copy</strong>: every file renamed with the night's code, the date and time kept (needed to put several files of one night in order), and the fields <code>"stimulate"</code> and <code>"filename"</code> removed from the metadata. The script below does it; logs and <code>Previous run.json</code> are not passed on.</li>
+    <li><strong>The analyst develops and freezes the analysis</strong> on the coded files: rejection rules, number of kept epochs per night, exclusions, the exact script. Only then does the key holder reveal which code is stim, and the frozen script is run once.</li>
+  </ol>
+<pre data-file="make_blinded_copy.py (suggestion; tested on synthetic recordings with real-looking names)"><code class="language-python">"""Make a blinded copy of Portiloop recordings for the analysts. Run by the key holder only.
+
+rename_map.csv has two columns, folder and code: one row per recording folder (a night interrupted by Stop and
+Start has several folders, which all get the code of that night).
+"""
+import csv
+import json
+import re
+import shutil
+from pathlib import Path
+
+SOURCE = Path("recordings")    # the folders copied from the SD cards (names end with _CONDA or _CONDB)
+TARGET = Path("blinded")       # the copy given to the analysts
+HIDDEN = ("stimulate", "filename")  # metadata fields that reveal the condition
+NAME = re.compile(r"^.*_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_COND[AB](.*)$")
+
+with open("rename_map.csv", newline="") as f:
+    for row in csv.DictReader(f):
+        folder, code = SOURCE / row["folder"], row["code"]
+        stamp = NAME.match(folder.name).group(1)
+        out = TARGET / f"{code}_{stamp}"     # keep the date and time: load_recording orders files with it
+        out.mkdir(parents=True, exist_ok=False)
+        for file in sorted(folder.iterdir()):
+            match = NAME.match(file.name)
+            if match is None:
+                print("not copied (unexpected name):", file)
+                continue
+            new = out / f"{code}_{match.group(1)}{match.group(2)}"
+            if file.name.endswith("_metadata.json"):
+                metadata = json.loads(file.read_text(encoding="utf-8-sig"))
+                for field in HIDDEN:
+                    metadata.pop(field, None)
+                new.write_text(json.dumps(metadata, indent=4))
+            else:
+                shutil.copy2(file, new)
+            print(file.name, "->", new.name)</code></pre>
+  <p>We tested it on synthetic recordings named like real ones (one Cond B night, and a Cond A night split in two files by a Stop/Start): the copy contained no <code>COND</code> and no <code>stimulate</code>, and <code>load_recording</code> read the two files of the coded sham night in the right order, with the gap between them. The script keeps the date and time in the names, so the analyst knows which night came first; that does not reveal the condition as long as the order of conditions is random per participant and stays with the key holder.</p>
+
+  <div class="callout warning"><span class="callout-title">The data can unblind</span>Coding the files hides the labels, not the physiology. A clear evoked N550/P900 in the average of one night tells the analyst which night was stimulated. This is why the plan must be fixed before the analyst sees any average: blinding then protects the choices that cannot be fully specified in advance (rejection of bad nights, sleep scoring), and the registered plan protects the rest.</div>
+
+  <div class="widget" id="bk">
+    <div class="widget-title">Assignment and code table</div>
+    <p class="widget-desc">Generates a random, counterbalanced order of Cond A and Cond B for each participant (in permuted blocks, so that the orders stay balanced if recruitment stops early), and a random 4-character code for every experimental night. Everything is computed in your browser with its cryptographic random generator; nothing is sent or stored, and a reload gives a different assignment, so download the files you need. <strong>What to try:</strong> change the number of participants; note that the analyst's list gives the two codes of each participant in random order, not in night order.</p>
+    <div class="controls">
+      <label for="bk-n">Participants <input type="number" id="bk-n" min="2" max="80" step="1" value="12"></label>
+      <label for="bk-prefix">Recording name prefix <input type="text" id="bk-prefix" value="CLAS_" maxlength="16" spellcheck="false"></label>
+      <label for="bk-block">Block size <select id="bk-block"><option value="2">2</option><option value="4" selected>4</option></select></label>
+      <label for="bk-adapt"><input type="checkbox" id="bk-adapt" checked> Adaptation night first</label>
+    </div>
+    <div class="btnrow">
+      <button class="btn" type="button" id="bk-gen">Generate a new assignment</button>
+      <button class="btn secondary" type="button" id="bk-dl-key">Download key (CSV)</button>
+      <button class="btn secondary" type="button" id="bk-dl-nights">Download night sheet (CSV)</button>
+      <button class="btn secondary" type="button" id="bk-dl-analyst">Download analyst list (CSV)</button>
+    </div>
+    <div class="readout">
+      <div><div class="k">Cond B first</div><div class="v" id="bk-bfirst">…</div></div>
+      <div><div class="k">Cond A first</div><div class="v" id="bk-afirst">…</div></div>
+      <div><div class="k">Experimental nights</div><div class="v" id="bk-nights">…</div></div>
+    </div>
+    <div class="bk-tables" id="bk-tables"></div>
+    <div class="status" id="bk-status"></div>
+  </div>
+
+  <!-- ============================================================== -->
+  <h2 id="measures">What to measure</h2>
+  <p>Each measure below is computed <strong>once per participant and night</strong>, then compared between conditions. All windows are in seconds relative to the marker.</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Measure</th><th>How</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Evoked slow-wave amplitude, P900 minus N550</td><td><code>evoked_slow_wave_amplitude(time, average)</code>: mean of 0.8 to 1.0 s minus mean of 0.5 to 0.6 s of the slow-band average</td><td>The main candidate for the primary outcome: the docstring calls it the "negative and positive components of the auditory K-complex". On the tutorial night: 31.0 µV (no sham night to compare).</td></tr>
+      <tr><td>Sigma (spindle) envelope after the sound</td><td><code>window_mean(time, sigma_average, window, baseline=...)</code>, for example a window around +1 s</td><td>On the tutorial night the baseline-corrected envelope rises by +0.9 µV near +0.13 s and again near +1 s (<a href="07-responses.html">tutorial 07</a>). Choose the window in advance.</td></tr>
+      <tr><td>Values at the moment of stimulation</td><td><code>value_at(time, average, 0.0)</code> on the slow and sigma averages</td><td>What <code>group_comparison.ipynb</code> reports. It describes the brain state that was targeted, and is contaminated by the response after 0 (see <a href="#notebook-leak">below</a>).</td></tr>
+      <tr><td>Number of stimulations, and rate per minute of detection</td><td>Sum of the <code>stimulation</code> column; minutes with <code>stimulation_on</code> = 1</td><td>A manipulation check, and an outcome in itself (the sound can change how many slow oscillations follow). Tutorial night: 1,930 stimulations in 348.4 minutes of detection (minute 25.0 to 373.4), about 5.5 per minute.</td></tr>
+      <tr><td>Time in each sleep stage, sleep latency, awakenings</td><td>From a hypnogram (<code>load_hypnogram</code>)</td><td>Needs validated scoring, done blind to the condition. A safety outcome: stimulation should not fragment sleep.</td></tr>
+      <tr><td>Behavioural outcomes</td><td>Outside the Portiloop: for example retention of word pairs learned before sleep, tested in the morning</td><td>Ngo et al. (2013) compared word pairs recalled after Stimulation and Sham nights with a paired t-test [1]. Use parallel task versions.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Prefer measures based on fixed windows (window means) to measures that search for a peak: the maximum of a noisy average grows with the noise, so a night with fewer epochs would look like it had a larger peak. A window mean has no such bias.</p>
+
+  <!-- ============================================================== -->
+  <h2 id="plan">Choosing windows and statistics before looking</h2>
+  <p>A response averaged over thousands of epochs has a hundred or more time points, two bands and several electrodes. If you look at the stim and sham averages, see where they differ most, and then test that window, the test will be "significant" far too often: the selection and the test use the same noise. Kriegeskorte et al. (2009) call this circular analysis, or "double dipping" [3]. The cure is to write down, before the data exist (or before anyone unblinded sees them), the outcome, its window, the electrode, the test, and the exclusion rules, and to register that plan [4]. Anything decided later is reported as exploratory.</p>
+
+  <h3 id="per-participant">The unit of analysis is the participant</h3>
+  <p>Compute one average per participant and night, then do statistics on those averages (n = number of participants). Do not pool the epochs of all participants into one big set and test epochs: epochs from the same night are not independent (the tutorial night has a median interval of 3.10 s between stimulations, 5 % of the intervals are shorter than 0.81 s, so 10 s epochs overlap heavily), and the question is about people, not about slow oscillations. A test on pooled epochs has thousands of degrees of freedom and will find tiny, meaningless differences. The <code>sem</code> method of the package says the same about a single night: "Epochs closer than their length share samples, so the SEM may underestimate the uncertainty."</p>
+
+  <h3 id="paired">Paired tests for within-subject designs</h3>
+  <p>For stim and sham nights of the same people, use a paired test on the per-participant values: it tests whether the stim minus sham differences are centred on zero, and removes the differences between people. <code>compare_time_courses</code> in <code>portiloop_analysis.measures</code> does this time point by time point when called with <code>paired=True</code> ("True when the rows of a and b are the same participants in the same order (within-subject design, e.g. a stimulation night and a sham night per participant): paired t-tests"); it then calls <code>stats.ttest_rel</code> and corrects with the FDR. Its default, <code>paired=False</code>, runs independent t-tests (<code>stats.ttest_ind</code>), which is right only for two groups of different people. The rows of the two arrays must be in the same participant order; the function checks only that the shapes match. For the single pre-chosen measure, a paired t-test from scipy is enough:</p>
+<pre data-file="paired_analysis.py (within-subject analysis after unblinding; tested on synthetic recordings)" id="paired-code"><code class="language-python">import numpy as np
+from scipy import stats
+from portiloop_analysis import (EpochSettings, compare_time_courses, event_locked_responses,
+                                evoked_slow_wave_amplitude, load_recording)
+
+settings = EpochSettings(notch_hz=50)  # the mains frequency where the nights were recorded
+nights = {  # participant: (files of the stimulation night, files of the sham night), filled after unblinding
+    "P01": (["blinded/K7QX_2026-11-02_22-01-03/K7QX_2026-11-02_22-01-03.csv"],
+            ["blinded/R2MD_2026-11-09_22-05-41/R2MD_2026-11-09_22-05-41.csv",
+             "blinded/R2MD_2026-11-09_23-40-12/R2MD_2026-11-09_23-40-12.csv"]),
+    # ... one line per participant
+}
+
+stim, sham, kept = [], [], []
+for participant, (stim_files, sham_files) in nights.items():
+    pair = []
+    for files, averages in ((stim_files, stim), (sham_files, sham)):
+        responses = event_locked_responses(load_recording(files, channel="Cz", verbose=False), settings)
+        averages.append(responses.mean("slow"))  # one average per participant and night
+        pair.append(responses.n_kept)
+    kept.append((participant, *pair))
+time = responses.time
+stim, sham = np.array(stim), np.array(sham)
+print("kept epochs (participant, stim, sham):", kept)
+
+# 1. The main measure: P900 minus N550, one number per participant and night, paired t-test
+amp_stim, amp_sham = evoked_slow_wave_amplitude(time, stim), evoked_slow_wave_amplitude(time, sham)
+diff = amp_stim - amp_sham
+test = stats.ttest_rel(amp_stim, amp_sham)
+n = len(diff)
+half = stats.t.ppf(0.975, n - 1) * diff.std(ddof=1) / np.sqrt(n)
+print(f"P900-N550, stim minus sham: {diff.mean():.1f} uV, 95% CI {diff.mean() - half:.1f} to "
+      f"{diff.mean() + half:.1f}, t({n - 1}) = {test.statistic:.2f}, p = {test.pvalue:.3g}, "
+      f"dz = {diff.mean() / diff.std(ddof=1):.2f}")
+
+# 2. The time course: paired t-test at every time point of the window chosen in advance, then FDR
+p, p_fdr = compare_time_courses(stim, sham, time, window=(0.4, 1.1), paired=True)
+print("time points with FDR-corrected p < 0.05:", time[p_fdr < 0.05])</code></pre>
+  <p>For a comparison between groups, the same function with its default (independent t-tests): <code>p, p_fdr = compare_time_courses(young, older, time, window=(0.4, 1.1))</code>, with one average per participant in each array (the groups may have different sizes). Its docstring gives the rule: "Testing fewer time points makes the correction less severe; choose the window before looking at the data."</p>
+
+  <h3 id="fdr">Multiple time points and the FDR</h3>
+  <p>Testing every time point at p &lt; 0.05 almost guarantees false positives somewhere: an epoch of -5 to +5 s at 250 Hz has 2,501 time points. The Benjamini-Hochberg procedure [2] (<code>fdr_bh</code>) controls the false discovery rate: among the time points declared significant, the expected proportion of false ones stays below 5 %. It sorts the p-values, multiplies the k-th smallest by m/k (m = number of tests), and makes the result monotonic. Two consequences:</p>
+  <ul>
+    <li>The fewer tests, the milder the correction. A window chosen in advance (for example 0.4 to 1.1 s, around the N550 and P900) gives more power where you expect the effect than testing the whole epoch.</li>
+    <li>The strongest design is a single number per participant chosen in advance (the P900 minus N550 amplitude): one test, no correction. The time-point tests then describe <em>when</em> the conditions differ, as a secondary analysis.</li>
+  </ul>
+  <p>Cluster-based permutation tests [5] are a common alternative for EEG time courses; they are not in <code>portiloop_analysis</code>.</p>
+
+  <h3 id="effect-size">Effect sizes and confidence intervals</h3>
+  <p>Report the mean stim minus sham difference in µV with its 95 % confidence interval, and a standardized effect size. For within-subject designs this is Cohen's d<sub>z</sub>: in Lakens' words, "The standardized mean difference effect size for within-subjects designs is referred to as Cohen's dz", with "the standard deviation of the difference scores" as denominator [6]. The same paper recommends to "report the confidence interval around the effect size". A p-value alone says nothing about how large the effect is, and a non-significant result with a wide interval is not evidence of no effect.</p>
+
+  <div class="widget" id="sim">
+    <div class="widget-title">Stim versus sham simulator (synthetic participants)</div>
+    <p class="widget-desc"><strong>Synthetic data, not EEG.</strong> Each participant has one average for a stimulation night and one for a sham night. Both contain the slow oscillation the detector selected (down-state at -0.42 s and up-state at +0.18 s, as on the tutorial night), a waveform specific to that participant (identical on both nights; its size is the variability setting), and 6 µV of night-to-night noise. Only the stim night adds an evoked N550/P900 whose size, in µV of P900 minus N550, is the participant's true effect (the effect setting, plus person-to-person scatter of half the variability). Paired t-tests are run at each of the 101 time points (25 Hz, -1.5 to +2.5 s); the green band is the window chosen in advance, 0.4 to 1.1 s. Thin lines: one participant (blue sham, orange stim); thick lines: group means. <strong>What to try:</strong> set the effect to 0 and look at the uncorrected row; raise the variability and compare the paired and independent p-values; click "Repeat 1,000 studies".</p>
+    <div class="controls">
+      <label for="sim-n">Participants <input type="range" id="sim-n" min="4" max="40" step="1" value="12"><output for="sim-n"></output></label>
+      <label for="sim-eff">True effect <input type="range" id="sim-eff" min="0" max="30" step="1" value="8"><output for="sim-eff"></output></label>
+      <label for="sim-var">Between-participant variability <input type="range" id="sim-var" min="0" max="30" step="1" value="10"><output for="sim-var"></output></label>
+    </div>
+    <div class="btnrow">
+      <button class="btn secondary" type="button" id="sim-new">New participants</button>
+      <button class="btn" type="button" id="sim-mc">Repeat 1,000 studies</button>
+    </div>
+    <canvas class="plot tall" id="sim-plot" aria-label="Per-participant and group average responses in the stimulation and sham conditions"></canvas>
+    <canvas class="plot raster" id="sim-raster" aria-label="Time points where the paired t-tests are significant, without correction, with FDR over all time points and with FDR in the pre-chosen window"></canvas>
+    <div class="readout">
+      <div><div class="k">P900 minus N550, stim minus sham (95 % CI)</div><div class="v small-v" id="sim-diff">…</div></div>
+      <div><div class="k">Effect size d<sub>z</sub></div><div class="v" id="sim-dz">…</div></div>
+      <div><div class="k">Paired t-test p</div><div class="v" id="sim-pp">…</div></div>
+      <div><div class="k">Independent t-test p (wrong design)</div><div class="v" id="sim-pi">…</div></div>
+    </div>
+    <div class="status" id="sim-status"></div>
+  </div>
+  <p>The JavaScript t-tests and FDR of this widget were checked against Python: on the default example (12 participants, effect 8 µV, variability 10 µV, first draw), the p-values of all 101 time points agree with <code>scipy.stats.ttest_rel</code>, the FDR-adjusted values with <code>portiloop_analysis.measures.fdr_bh</code>, the P900 minus N550 values with <code>evoked_slow_wave_amplitude</code>, and the confidence interval with <code>scipy.stats.t.ppf</code>, to a relative error below 10<sup>-9</sup> (details in the <a href="#check">note at the end</a>).</p>
+  <p>That first draw is a typical small study. The true effect is there (it is built in), yet the P900 minus N550 difference is 9.5 µV with a 95 % confidence interval from -0.5 to 19.4 µV (paired p = 0.060, d<sub>z</sub> = 0.60): the data are compatible with no effect and with a large one. Five time points pass p &lt; 0.05 without correction, none survives the FDR over all 101 points, and two (0.78 and 0.82 s) survive the FDR restricted to the 18 points of the pre-chosen window. The independent test, which ignores that the two nights come from the same people, gives p = 0.29.</p>
+
+  <!-- ============================================================== -->
+  <h2 id="notebook">The group_comparison notebook</h2>
+  <p><a href="https://github.com/Portiloop/portiloop-software/blob/main/examples/processing/group_comparison.ipynb"><code>examples/processing/group_comparison.ipynb</code></a> follows the analysis of an earlier study ("the BigStim study") and compares groups of participants. Its introduction lists the three steps:</p>
+  <blockquote class="callout note"><span class="callout-title">group_comparison.ipynb, first cell</span>"1. for every participant, cut 30 s epochs (-15 to +15 s) around the stimulations made during N2 and N3 sleep, in the slow band (slow-wave activity, SWA), the sigma envelope (spindles) and the broadband EEG; 2. reject artifacts, subtract a baseline (-2.5 to -0.5 s before the stimulation) and average per participant; 3. compare the groups, here on the amplitude of the slow and sigma responses at the moment of the stimulation."</blockquote>
+  <h3 id="notebook-settings">Settings</h3>
+  <p>Everything is in the configuration cell: a table of participants (<code>participant</code>, <code>age_group</code>, <code>condition</code>, <code>recording</code>, <code>hypnogram</code>, <code>format</code>), the channel (Cz), the montage, the group order, the output folder, and the epoch settings. They differ from the single-night defaults of <a href="07-responses.html">tutorial 07</a>:</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Setting</th><th>Group notebook</th><th>Package default</th></tr></thead>
+    <tbody>
+      <tr><td><code>window_s</code></td><td>15 (epochs -15 to +15 s)</td><td>5</td></tr>
+      <tr><td><code>notch_hz</code></td><td>60</td><td>60 (set 50 for recordings made on 50 Hz mains, as in Zambia)</td></tr>
+      <tr><td><code>slow_band</code>, <code>broadband</code></td><td>0.5 to 4 Hz; 0.5 to 30 Hz</td><td>0.1 to 4 Hz; 0.1 to 20 Hz</td></tr>
+      <tr><td>Rejection</td><td><code>max_abs_uv=250 / 2.35</code> (about 106 µV), no jump check (handled by <code>bad_sections</code>: jumps above 222 µV, off-head runs, good stretches shorter than 5 minutes)</td><td>peak-to-peak 350 µV, jumps 1000 µV</td></tr>
+      <tr><td>Baselines</td><td>-2.5 to -0.5 s for all three bands</td><td>slow: mean of the epoch; sigma: -1.5 to -1.0 s</td></tr>
+      <tr><td><code>min_interval_s</code></td><td>2.0 (markers less than 2 s after the previous one are "duplicates")</td><td>none</td></tr>
+      <tr><td><code>stages</code></td><td>("N2", "N3"): needs a hypnogram</td><td>all markers</td></tr>
+    </tbody>
+  </table></div>
+  <h3 id="notebook-outputs">What it produces</h3>
+  <ul>
+    <li><code>group_results/&lt;participant&gt;_responses.npz</code>: time axis, kept epochs of every band, status of every marker;</li>
+    <li>a table of kept and rejected markers per participant;</li>
+    <li><code>values_at_stimulation.csv</code> and <code>values_at_stimulation.pdf</code>: per participant, the slow and sigma averages at t = 0, with box plots by group (one dot per participant);</li>
+    <li><code>group_averages.pdf</code>: the average of the participants' averages per group, ± 1 SEM across participants.</li>
+  </ul>
+  <p>With an empty participant table it writes and analyses six synthetic participants: "three "young" participants with large responses and three "older" participants with smaller ones" (evoked waves of 60 and 35 µV). We ran it (about one minute on a desktop); the markers kept per demo participant were 91, 101, 90, 100, 103 and 68, the others being rejected mostly because their (synthetic) stage was not N2 or N3. The notebook does <strong>not</strong> run a statistical test: it ends with figures. Add the tests of your plan, for example <code>compare_time_courses</code> between the groups.</p>
+  <h3 id="notebook-adapt">Adapting it to stim versus sham</h3>
+  <p>The demo recordings are all stimulation nights (their names end with <code>_CONDB</code>, like the device's stimulation recordings). For a within-subject study, list two rows per participant (one per night) and use the <code>condition</code> column (described in the notebook as "any other grouping you want to keep in the table") for "stim" and "sham"; then compare per-participant averages with the paired code above, not with <code>plot_groups</code> and independent tests.</p>
+  <div class="callout warning" id="notebook-leak"><span class="callout-title">Values at t = 0 include the response after it</span>The filters of <code>portiloop_analysis</code> are zero-phase (they run forwards and backwards), so they spread a response in both directions in time. We checked this with the notebook's own settings (0.5 to 4 Hz, baseline -2.5 to -0.5 s) on a signal containing only the evoked wave of the demo recordings (60 µV, which is exactly 0 µV at t = 0): after filtering, the value at t = 0 is +6.1 µV (and +3.9 µV at -0.25 s). The demo participants' slow-band values at t = 0 (0.6 to 5.7 µV, larger for the "young" group) come from this leakage, since the synthetic stimulations are not locked to any phase. With real data, a stim versus sham or group difference at t = 0 can therefore reflect the response after the sound, not only the state that was targeted. The notebook now warns about it in its section 5: "Differences between groups at t = 0 can therefore come from the response that follows the sound."</div>
+
+  <!-- ============================================================== -->
+  <h2 id="pitfalls">Pitfalls</h2>
+
+  <h3 id="pit-counts">Different numbers of stimulations between conditions</h3>
+  <p>The two nights of a participant rarely have the same number of markers: sleep differs from night to night, and the sound itself may change how many slow oscillations qualify (Ngo et al. describe stimulation producing trains of slow oscillations [1]). With all delays at 0, the only spacing the software imposes between sounds is <code>wait_t = .1</code> s, so nearby detections are stimulated too (minimum interval on the tutorial night: 0.328 s). Consequences: a night with fewer epochs has a noisier average; epochs with a neighbouring stimulation inside them contain part of its response; and the composition of the epochs (stage, time of night) can differ. Report the counts per condition, test them as an outcome, use window means rather than peaks, and consider the <code>min_interval_s</code> setting or the same time range in both nights. On the tutorial night, the first half contributed 974 kept epochs and the second half 733.</p>
+
+  <h3 id="pit-stopstart">Stop and Start during the night</h3>
+  <p>When a participant presses Stop then Start (as the protocol allows), the software starts a new recording: a new file and folder with a new date and time, a short gap, and the "Stimulation starts after" delay counted again from the new Start, with detection paused in both conditions. A night may therefore consist of several files and have less stimulation time. Load all files of a night together (<code>load_recording([file1, file2])</code>), which places them on one timeline with the gap as missing data; epochs touching the gap are rejected. Check that every file of a night has the same condition suffix and <code>"stimulate"</code> value: the toggle is only locked during a recording, so it can be changed between Stop and Start.</p>
+
+  <h3 id="pit-leadoff">Nights with lead-off</h3>
+  <p>If the detection electrode is disconnected, or the reference or bias comes off, detection and stimulation pause (for the rest of the recording when the detection channel is disabled). The tutorial night shows the result: the Cz electrode (the detection electrode) came off around minute 373 and the last 70 minutes have no stimulation. Keep the <code>_leadoff.json</code> file with each recording (<code>load_recording</code> uses it to mark the data as missing; the tutorial night's file was not retrieved), and define in the plan when a night is excluded (for example a minimum number of kept epochs, or of minutes with detection running), applied blind to the condition.</p>
+
+  <h3 id="pit-persist">The condition is remembered</h3>
+  <p>The toggle state is saved and restored: <code>"stim_on"</code> is one of the <code>PERSISTED_FIELDS</code> of the Control Center, and so is <code>"custom_exp_name"</code>, the recording name. A new session opens with the last condition <em>and</em> the last participant's name. Loading a preset also restores the condition saved in it. Every night, set the toggle and the recording name actively, then read the <code>Current experiment</code> label after Start.</p>
+
+  <div class="callout danger" id="pit-swap"><span class="callout-title">Known issue: recordings with the opposite meaning of Cond A and Cond B</span>
+    <p>Commit <code>fad9e20</code> (2026-10-13, 03:58, "Changed names of STIM ON and STIM OFF to COND B and COND A") mapped the names the other way round:</p>
+<pre data-file="git show fad9e20 (excerpt)"><code class="language-diff">-        stim_str = "STIMON" if self.stim_on else "STIMOFF"
++        stim_str = "CONDA" if self.stim_on else "CONDB"
+...
++                        forward=lambda x: x == 'Cond A',</code></pre>
+    <p>Commit <code>b041e3c</code> the same day (06:45) set the current mapping (<code>"CONDB" if self.stim_on else "CONDA"</code>). A recording made on a device running <code>fad9e20</code> or the commit between them (<code>0b699e2</code>) has the <strong>opposite</strong> meaning: <code>_CONDA</code> was the stimulation night. Two checks:</p>
+    <ul>
+      <li>Trust <code>"stimulate"</code> in <code>_metadata.json</code>, not the suffix: in all these versions it is <code>run_dict['stimulate'] = self.stim_on</code>, true when the sound was played.</li>
+      <li>The software version does not help (<code>"0.2.0"</code> before and after), but <code>b041e3c</code> also added <code>"pipeline"</code> and <code>"sleep_timeout"</code> to the metadata. A <code>_CONDA</code>/<code>_CONDB</code> file whose metadata has no <code>"sleep_timeout"</code> was made with the swapped mapping.</li>
+    </ul>
+    <p>Related, also on 2026-10-13: before commit <code>9d598ac</code> (07:12), the stimulator was created only when stimulating (<code>create_stimulator = config_dict['detect'] and config_dict['stimulate'] and stimulator_cls is not None</code>), so sham recordings made with earlier versions have <strong>no <code>stimulation</code> column</strong>. Their <code>detection</code> column still marks the detections, and <code>load_recording(files, markers="detection")</code> uses it as the event times (the default, <code>markers="stimulation"</code>, stops with an error that points to this option). On the tutorial night (Cond B) the detection and stimulation columns have the same 1,930 markers, but we have not checked whether they always coincide (the stimulator's 0.1 s minimum gap, for example, applies to sounds, not to detections); the function's docstring says the same: "Check that detections and stimulations coincide in your version of the software before relying on "detection"." If the stim nights are loaded with their <code>stimulation</code> column and the old sham nights with <code>detection</code>, the two conditions are not marked in exactly the same way: say so in the report.</p>
+  </div>
+
+  <h3 id="pit-stages">Stage selection from automatic staging</h3>
+  <p>Keeping only N2 and N3 stimulations (<code>stages=("N2", "N3")</code>) is only as good as the hypnogram. The automatic staging used offline in <a href="06-first-look.html">tutorial 06</a> has not been validated on Portiloop recordings, because no expert-scored Portiloop data was available. On the tutorial night it scored no N3 at all, and labelled some stimulation-rich periods (minutes 235 to 280) as wake: of the 1,930 stimulations, 1,157 fall in its N2 epochs and 683 in its W epochs. Selecting N2/N3 with it would keep at most the 1,103 kept epochs in its N2 and silently drop 544 kept epochs it called wake. The errors may also differ between conditions (sounds evoke K-complex-like waves that a stager may read differently; we have not tested this). Use expert scoring done blind to the condition, or at least check the automatic stages (<a href="06-first-look.html">tutorial 06</a>) and report results with all stimulations as well.</p>
+
+  <h3 id="pit-settings">Different settings between nights</h3>
+  <p>The two nights must differ only in the condition. Compare the <code>_metadata.json</code> files of each pair: pipeline, notch (the tutorial night was recorded with 60 Hz although the protocol asks for 50 Hz), volume, "Stimulation starts after" (<code>sleep_timeout</code>), detection channel, and the delays. Several of these are remembered from the previous session, so a change made for one participant carries over to the next.</p>
+
+  <!-- ============================================================== -->
+  <h2 id="exercises">Exercises</h2>
+  <details class="exercise"><summary>How often do uncorrected tests find something when there is nothing?</summary><p>In the simulator, set the true effect to 0 (12 participants, variability 10 µV) and click "Repeat 1,000 studies". In what fraction of the studies does at least one time point reach p &lt; 0.05 without correction, with FDR over all points, and with FDR in the window?</p></details>
+  <details class="solution"><summary>Answer</summary><p>With these settings (the repetitions use a fixed seed, so you get the same numbers as we did): 88.4 % of the studies have at least one "significant" time point without correction, 5.1 % with FDR over the 101 points, and 4.5 % with FDR over the 18 points of the window. With no true effect, every one of these is a false positive. FDR keeps the rate near 5 % here because, when no effect exists anywhere, every discovery is false, and controlling the false discovery rate at 5 % then amounts to controlling the chance of any false positive at 5 %.</p></details>
+
+  <details class="exercise"><summary>When does pairing help?</summary><p>Set the effect to 8 µV and compare the power (fraction of studies with p &lt; 0.05 on P900 minus N550) of the paired and the independent test, with a variability of 0, 10 and 20 µV.</p></details>
+  <details class="solution"><summary>Answer</summary><p>In our runs: with variability 0, paired 62 % and independent 67 % (with no stable differences between people, pairing brings nothing and halves the degrees of freedom); with 10 µV, paired 53 % and independent 11 %; with 20 µV, paired 39 % and independent 0.6 %. Real participants differ a lot, which is why within-subject designs with paired tests are the norm in CLAS studies. Note also that the time-point tests (any significant point with FDR in the window: 26.5 % at 10 µV) have less power than the single pre-chosen measure.</p></details>
+
+  <details class="exercise"><summary>What must the key holder hide?</summary><p>An analyst receives a USB stick with the SD card folders, the device log and the <code>Previous run.json</code> preset. List everything on it that reveals the condition.</p></details>
+  <details class="solution"><summary>Answer</summary><p>The folder and file names (<code>_CONDA</code>/<code>_CONDB</code>), the <code>"stimulate"</code> and <code>"filename"</code> fields of every <code>_metadata.json</code>, the <code>STIMON = True/False</code> lines of <code>portiloop.log</code>, and <code>"stim_on"</code> in <code>Previous run.json</code>. Only the coded copy (renamed files, two fields removed) should be given. The <code>stimulation</code> and <code>stimulation_on</code> columns do not reveal it; the averages themselves may.</p></details>
+
+  <details class="exercise"><summary>Interrupted sham night</summary><p>A participant pressed Stop and Start at 02:10 during a Cond A night with "Stimulation starts after" set to 45 minutes. What will you find on the SD card, and what does it mean for the comparison with the stim night?</p></details>
+  <details class="solution"><summary>Answer</summary><p>Two folders with two date-time stamps, both ending in <code>_CONDA</code> (check it, and check <code>"stimulate": false</code> in both metadata files). After 02:10 there are no markers for 45 minutes (detection paused), and a short gap between the files. Load both files together; compare the number of markers and minutes of detection with the stim night, and apply the exclusion rule of your plan without looking at which night is which.</p></details>
+
+  <!-- ============================================================== -->
+  <h2 id="check">Note: how the widget's statistics were checked</h2>
+  <p class="small">The simulator's code (its random generator, model and tests) was run outside the browser with Node.js on the default example, and the 12 × 2 synthetic averages were passed to Python: <code>scipy.stats.ttest_rel</code> at each time point, <code>portiloop_analysis.measures.fdr_bh</code> on all points and on the window, <code>evoked_slow_wave_amplitude</code> on the same time axis, <code>scipy.stats.ttest_ind</code> and <code>scipy.stats.t.ppf</code> for the interval. The largest relative difference in any p-value was below 10<sup>-13</sup>, and the confidence limits differed by less than 10<sup>-10</sup> µV. Separately, the t-tests, the quantile function and the FDR were compared with scipy on 24 random data sets of 3 to 40 participants (p-values down to 10<sup>-18</sup>): relative errors below 10<sup>-13</sup> for the p-values, identical FDR values, and differences below 10<sup>-10</sup> for the t quantiles and the confidence limits. The scripts are kept with the site's working files, not on the site.</p>
+
+  <h2 id="references">References</h2>
+  <ol class="refs">
+    <li>Ngo HVV, Martinetz T, Born J, Mölle M (2013). Auditory closed-loop stimulation of the sleep slow oscillation enhances memory. <em>Neuron</em> 78(3): 545-553. <a href="https://doi.org/10.1016/j.neuron.2013.03.006">doi:10.1016/j.neuron.2013.03.006</a></li>
+    <li>Benjamini Y, Hochberg Y (1995). Controlling the false discovery rate: a practical and powerful approach to multiple testing. <em>Journal of the Royal Statistical Society: Series B (Methodological)</em> 57(1): 289-300. <a href="https://doi.org/10.1111/j.2517-6161.1995.tb02031.x">doi:10.1111/j.2517-6161.1995.tb02031.x</a></li>
+    <li>Kriegeskorte N, Simmons WK, Bellgowan PSF, Baker CI (2009). Circular analysis in systems neuroscience: the dangers of double dipping. <em>Nature Neuroscience</em> 12(5): 535-540. <a href="https://doi.org/10.1038/nn.2303">doi:10.1038/nn.2303</a></li>
+    <li>Nosek BA, Ebersole CR, DeHaven AC, Mellor DT (2018). The preregistration revolution. <em>Proceedings of the National Academy of Sciences</em> 115(11): 2600-2606. <a href="https://doi.org/10.1073/pnas.1708274114">doi:10.1073/pnas.1708274114</a></li>
+    <li>Maris E, Oostenveld R (2007). Nonparametric statistical testing of EEG- and MEG-data. <em>Journal of Neuroscience Methods</em> 164(1): 177-190. <a href="https://doi.org/10.1016/j.jneumeth.2007.03.024">doi:10.1016/j.jneumeth.2007.03.024</a></li>
+    <li>Lakens D (2013). Calculating and reporting effect sizes to facilitate cumulative science: a practical primer for t-tests and ANOVAs. <em>Frontiers in Psychology</em> 4: 863. <a href="https://doi.org/10.3389/fpsyg.2013.00863">doi:10.3389/fpsyg.2013.00863</a></li>
+    <li>Code: <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/simple_gui/simple_gui.py">portiloop/src/simple_gui/simple_gui.py</a>, <a href="https://github.com/Portiloop/portiloop-software/blob/917f1f3/portiloop/src/custom/custom_stimulators.py">portiloop/src/custom/custom_stimulators.py</a>, <a href="https://github.com/Portiloop/portiloop-software/blob/main/examples/processing/portiloop_analysis/measures.py">examples/processing/portiloop_analysis/measures.py</a> (branch main, the software of Portiloop v2.3).</li>
+  </ol>
+
+</article>
+</main>
+
+<script src="../assets/js/portiloop.js"></script>
+<script src="../assets/js/data.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = PL.ui.$;
+
+  /* STATS-BEGIN: t-tests and Benjamini-Hochberg in plain JavaScript (checked against scipy, see the page text) */
+  const ST = (function () {
+    // log of the gamma function (Lanczos approximation, g = 7, n = 9)
+    const LG = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313,
+      -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+    function lgamma(x) {
+      if (x < 0.5) return Math.log(Math.PI / Math.abs(Math.sin(Math.PI * x))) - lgamma(1 - x);
+      x -= 1;
+      let a = LG[0];
+      const t = x + 7.5;
+      for (let i = 1; i < 9; i++) a += LG[i] / (x + i);
+      return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+    }
+    // continued fraction of the regularized incomplete beta function (modified Lentz)
+    function betacf(a, b, x) {
+      const TINY = 1e-300;
+      let c = 1, d = 1 - (a + b) * x / (a + 1);
+      if (Math.abs(d) < TINY) d = TINY;
+      d = 1 / d;
+      let h = d;
+      for (let m = 1; m <= 300; m++) {
+        const m2 = 2 * m;
+        let aa = m * (b - m) * x / ((a + m2 - 1) * (a + m2));
+        d = 1 + aa * d; if (Math.abs(d) < TINY) d = TINY;
+        c = 1 + aa / c; if (Math.abs(c) < TINY) c = TINY;
+        d = 1 / d; h *= d * c;
+        aa = -(a + m) * (a + b + m) * x / ((a + m2) * (a + m2 + 1));
+        d = 1 + aa * d; if (Math.abs(d) < TINY) d = TINY;
+        c = 1 + aa / c; if (Math.abs(c) < TINY) c = TINY;
+        d = 1 / d;
+        const del = d * c;
+        h *= del;
+        if (Math.abs(del - 1) < 1e-15) break;
+      }
+      return h;
+    }
+    function ibeta(x, a, b) { // regularized incomplete beta I_x(a, b)
+      if (x <= 0) return 0;
+      if (x >= 1) return 1;
+      const bt = Math.exp(lgamma(a + b) - lgamma(a) - lgamma(b) + a * Math.log(x) + b * Math.log(1 - x));
+      if (x < (a + 1) / (a + b + 2)) return bt * betacf(a, b, x) / a;
+      return 1 - bt * betacf(b, a, 1 - x) / b;
+    }
+    // two-sided p-value of Student's t with df degrees of freedom
+    function pT(t, df) {
+      if (!isFinite(t)) return isNaN(t) ? NaN : 0;
+      return ibeta(df / (df + t * t), df / 2, 0.5);
+    }
+    // quantile of Student's t (q in (0.5, 1)), by bisection on the two-sided p-value
+    const qCache = {};
+    function qT(q, df) {
+      const key = q + "|" + df;
+      if (key in qCache) return qCache[key];
+      const target = 2 * (1 - q);
+      let lo = 0, hi = 1000;
+      for (let i = 0; i < 200; i++) {
+        const mid = 0.5 * (lo + hi);
+        if (pT(mid, df) > target) lo = mid; else hi = mid;
+      }
+      return (qCache[key] = 0.5 * (lo + hi));
+    }
+    function mean(x) { let s = 0; for (const v of x) s += v; return s / x.length; }
+    function sd(x) { const m = mean(x); let s = 0; for (const v of x) s += (v - m) * (v - m); return Math.sqrt(s / (x.length - 1)); }
+    // paired t-test (scipy.stats.ttest_rel): a[i] and b[i] belong to the same participant
+    function paired(a, b) {
+      const d = a.map((v, i) => v - b[i]);
+      const n = d.length, m = mean(d), s = sd(d), se = s / Math.sqrt(n);
+      const t = m / se, df = n - 1;
+      const h = qT(0.975, df) * se;
+      return { t, df, p: pT(t, df), meanDiff: m, ci: [m - h, m + h], dz: m / s };
+    }
+    // independent t-test with pooled variance (scipy.stats.ttest_ind, equal_var=True)
+    function independent(a, b) {
+      const na = a.length, nb = b.length, ma = mean(a), mb = mean(b);
+      let ssa = 0, ssb = 0;
+      for (const v of a) ssa += (v - ma) * (v - ma);
+      for (const v of b) ssb += (v - mb) * (v - mb);
+      const df = na + nb - 2, sp2 = (ssa + ssb) / df;
+      const t = (ma - mb) / Math.sqrt(sp2 * (1 / na + 1 / nb));
+      return { t, df, p: pT(t, df) };
+    }
+    // Benjamini-Hochberg adjusted p-values (same as portiloop_analysis.measures.fdr_bh); NaN stays NaN
+    function fdrBH(p) {
+      const idx = [];
+      p.forEach((v, i) => { if (isFinite(v)) idx.push(i); });
+      const out = p.map(() => NaN), n = idx.length;
+      if (!n) return out;
+      idx.sort((i, j) => p[i] - p[j]);
+      const adj = idx.map((i, k) => p[i] * n / (k + 1));
+      for (let k = n - 2; k >= 0; k--) adj[k] = Math.min(adj[k], adj[k + 1]);
+      idx.forEach((i, k) => { out[i] = Math.min(adj[k], 1); });
+      return out;
+    }
+    return { pT, qT, mean, sd, paired, independent, fdrBH };
+  })();
+  /* STATS-END */
+
+  /* SIM-BEGIN: synthetic stim and sham nights (not real EEG; see the widget description) */
+  const SIM = (function () {
+    const T = [];
+    for (let i = 0; i <= 100; i++) T.push(-1.5 + i * 0.04); // -1.5 to +2.5 s at 25 Hz, like epochs.json
+    const G = (t, mu, s) => Math.exp(-((t - mu) / s) * ((t - mu) / s));
+    // slow oscillation that the detector selected: down-state at -0.42 s, up-state at +0.18 s (as on the tutorial
+    // night), then a damped continuation; present in both conditions (selection, not stimulation)
+    const ENDO = T.map((t) => -G(t, -0.42, 0.2) + 0.4 * G(t, 0.18, 0.22) - 0.3 * G(t, 0.75, 0.25) + 0.12 * G(t, 1.4, 0.3));
+    // evoked response, only in the stimulation condition: N550 and P900 (shape of portiloop_analysis.demo)
+    const EV0 = T.map((t) => -G(t, 0.55, 0.12) + 0.5 * G(t, 0.9, 0.2));
+    const winMean = (x, a, b) => { let s = 0, n = 0; T.forEach((t, i) => { if (t >= a - 1e-9 && t <= b + 1e-9) { s += x[i]; n++; } }); return s / n; };
+    const amp = (x) => winMean(x, 0.8, 1.0) - winMean(x, 0.5, 0.6); // evoked_slow_wave_amplitude: P900 minus N550
+    const k = amp(EV0);
+    const EV = EV0.map((v) => v / k); // scaled so that the evoked part adds exactly 1 uV to P900 minus N550
+    const peak = Math.max.apply(null, EV.map(Math.abs));
+    const TRUE = EV.map((v) => Math.abs(v) > 0.01 * peak); // time points where stim and sham truly differ
+    const NOISE_UV = 6; // residual noise of one participant's average (finite number of epochs), uV
+    function smoothNoise(rng, rms) {
+      const out = new Array(T.length).fill(0);
+      for (let j = 0; j < 6; j++) {
+        const f = 0.3 + 2.7 * rng.uniform(), ph = 2 * Math.PI * rng.uniform(), a = rng.gaussian();
+        T.forEach((t, i) => { out[i] += a * Math.sin(2 * Math.PI * f * t + ph); });
+      }
+      const s = Math.sqrt(out.reduce((acc, v) => acc + v * v, 0) / out.length) || 1;
+      return out.map((v) => v / s * rms);
+    }
+    // one study: n participants, each with a stim and a sham average
+    function study(rng, n, effect, variability) {
+      const stim = [], sham = [], effects = [];
+      for (let p = 0; p < n; p++) {
+        const so = Math.max(15, 60 + 12 * rng.gaussian()); // this participant's slow-oscillation amplitude, uV
+        const own = smoothNoise(rng, variability);              // this participant's own waveform, the same on both nights
+        const e = effect + 0.5 * variability * rng.gaussian();  // this participant's true effect, uV
+        const soStim = so * (1 + 0.1 * rng.gaussian()), soSham = so * (1 + 0.1 * rng.gaussian());
+        const nStim = smoothNoise(rng, NOISE_UV), nSham = smoothNoise(rng, NOISE_UV); // night-to-night noise
+        stim.push(T.map((_, i) => soStim * ENDO[i] + own[i] + e * EV[i] + nStim[i]));
+        sham.push(T.map((_, i) => soSham * ENDO[i] + own[i] + nSham[i]));
+        effects.push(e);
+      }
+      return { stim, sham, effects };
+    }
+    // the tests of the widget
+    function analyse(s, win) {
+      const nT = T.length, pUnc = new Array(nT).fill(NaN);
+      for (let i = 0; i < nT; i++) pUnc[i] = ST.paired(s.stim.map((r) => r[i]), s.sham.map((r) => r[i])).p;
+      const pFdrAll = ST.fdrBH(pUnc);
+      const pWin = pUnc.map((v, i) => (T[i] >= win[0] - 1e-9 && T[i] <= win[1] + 1e-9 ? v : NaN));
+      const pFdrWin = ST.fdrBH(pWin);
+      const aStim = s.stim.map(amp), aSham = s.sham.map(amp);
+      return { pUnc, pFdrAll, pFdrWin, aStim, aSham, ampPaired: ST.paired(aStim, aSham), ampInd: ST.independent(aStim, aSham) };
+    }
+    return { T, ENDO, EV, TRUE, NOISE_UV, amp, study, analyse };
+  })();
+  /* SIM-END */
+
+  /* ---------------------------------------------------------------- widget 1: stim vs sham simulator */
+  const WIN = [0.4, 1.1];
+  let simSeed = 1, current = null;
+  function alpha(hex, a) {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+    if (!m) return hex;
+    const v = parseInt(m[1], 16);
+    return "rgba(" + (v >> 16) + "," + ((v >> 8) & 255) + "," + (v & 255) + "," + a + ")";
+  }
+  function settings() {
+    return { n: parseInt($("#sim-n").value, 10), eff: parseFloat($("#sim-eff").value), v: parseFloat($("#sim-var").value) };
+  }
+  function compute() {
+    const s = settings();
+    const st = SIM.study(PL.rng(simSeed), s.n, s.eff, s.v);
+    current = { st, an: SIM.analyse(st, WIN) };
+  }
+  function fmtP(p) { return p < 0.001 ? p.toExponential(1) : p.toFixed(3); }
+  function drawSim() {
+    if (!current) return;
+    const T = SIM.T, st = current.st, an = current.an;
+    const cs = PL.color("c2"), ch = PL.color("c1");
+    const series = [], wide = ($("#sim-plot").clientWidth || 600) > 560; // thin lines in the legend only on wide screens
+    st.sham.forEach((y, i) => series.push({ x: T, y, color: alpha(ch, 0.28), width: 1, label: wide && i === 0 ? "Sham, one participant" : undefined }));
+    st.stim.forEach((y, i) => series.push({ x: T, y, color: alpha(cs, 0.28), width: 1, label: wide && i === 0 ? "Stim, one participant" : undefined }));
+    const mean = (rows) => T.map((_, i) => ST.mean(rows.map((r) => r[i])));
+    series.push({ x: T, y: mean(st.sham), color: ch, width: 2.6, label: "Sham (Cond A) mean" });
+    series.push({ x: T, y: mean(st.stim), color: cs, width: 2.6, label: "Stim (Cond B) mean" });
+    PL.plot($("#sim-plot"), {
+      xRange: [-1.5, 2.5], xLabel: "Time from the marker (s)", yLabel: "µV (synthetic)", series,
+      regions: [{ x0: WIN[0], x1: WIN[1], color: alpha(PL.color("c3"), 0.13), label: wide ? "Pre-chosen window" : undefined }],
+      markers: [{ x: 0, color: PL.color("stim") }],
+    });
+    drawRaster();
+    const pr = an.ampPaired;
+    $("#sim-diff").textContent = pr.meanDiff.toFixed(1) + " µV [" + pr.ci[0].toFixed(1) + ", " + pr.ci[1].toFixed(1) + "]";
+    $("#sim-dz").textContent = pr.dz.toFixed(2);
+    $("#sim-pp").textContent = fmtP(pr.p);
+    $("#sim-pi").textContent = fmtP(an.ampInd.p);
+  }
+  function drawRaster() {
+    const canvas = $("#sim-raster"), an = current.an, T = SIM.T;
+    const dpr = window.devicePixelRatio || 1, W = canvas.clientWidth || 600, H = canvas.clientHeight || 178;
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    const l = 52, r = 24, w = W - l - r, dt = 0.04;
+    const X = (t) => l + (t + 1.5) / 4 * w;
+    ctx.font = "12px " + (getComputedStyle(document.documentElement).getPropertyValue("--font-sans") || "sans-serif");
+    const count = (p) => p.filter((v) => v < 0.05).length;
+    const fp = (p) => p.filter((v, i) => v < 0.05 && !SIM.TRUE[i]).length;
+    const rows = [
+      { label: "True difference (known only in a simulation)", mask: SIM.TRUE, color: PL.color("c3") },
+      { label: "p < 0.05, no correction: " + count(an.pUnc) + " points (" + fp(an.pUnc) + " false)", mask: an.pUnc.map((v) => v < 0.05), color: PL.color("warn") },
+      { label: "FDR over all 101 points: " + count(an.pFdrAll) + " (" + fp(an.pFdrAll) + " false)", mask: an.pFdrAll.map((v) => v < 0.05), color: PL.color("c4") },
+      { label: "FDR in the window only: " + count(an.pFdrWin) + " (" + fp(an.pFdrWin) + " false)", mask: an.pFdrWin.map((v) => v < 0.05), color: PL.color("c1") },
+    ];
+    const rowH = 34, top = 4;
+    rows.forEach((row, k) => {
+      const y = top + k * rowH;
+      ctx.fillStyle = PL.color("text"); ctx.textAlign = "left"; ctx.textBaseline = "top";
+      ctx.fillText(row.label, Math.max(4, l - 44), y);
+      ctx.fillStyle = PL.color("grid"); ctx.fillRect(l, y + 16, w, 12);
+      ctx.fillStyle = PL.color("stim"); ctx.fillRect(X(0) - 0.5, y + 14, 1.5, 16);
+      if (k === 3) { ctx.strokeStyle = PL.color("c3"); ctx.lineWidth = 1; ctx.strokeRect(X(WIN[0]) + 0.5, y + 15.5, X(WIN[1]) - X(WIN[0]), 13); }
+      ctx.fillStyle = row.color;
+      row.mask.forEach((on, i) => { if (on) ctx.fillRect(X(T[i] - dt / 2), y + 16, Math.max(1, X(dt) - X(0)), 12); });
+    });
+    // axis
+    const ya = top + 4 * rowH + 2;
+    ctx.strokeStyle = PL.color("axis"); ctx.beginPath(); ctx.moveTo(l, ya); ctx.lineTo(l + w, ya); ctx.stroke();
+    ctx.fillStyle = PL.color("text"); ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let t = -1; t <= 2.01; t += 1) { ctx.beginPath(); ctx.moveTo(X(t), ya); ctx.lineTo(X(t), ya + 4); ctx.stroke(); ctx.fillText(t.toFixed(0) + " s", X(t), ya + 5); }
+  }
+  function runMC() {
+    const s = settings(), R = 1000, rng = PL.rng(7);
+    const c = { unc: 0, all: 0, win: 0, uncFP: 0, allFP: 0, amp: 0, ampInd: 0 };
+    const any = (p) => p.some((v) => v < 0.05), fp = (p) => p.some((v, i) => v < 0.05 && !SIM.TRUE[i]);
+    let r = 0;
+    $("#sim-mc").disabled = true;
+    function chunk() {
+      for (let k = 0; k < 50 && r < R; k++, r++) {
+        const a = SIM.analyse(SIM.study(rng, s.n, s.eff, s.v), WIN);
+        if (any(a.pUnc)) c.unc++; if (any(a.pFdrAll)) c.all++; if (any(a.pFdrWin)) c.win++;
+        if (fp(a.pUnc)) c.uncFP++; if (fp(a.pFdrAll)) c.allFP++;
+        if (a.ampPaired.p < 0.05) c.amp++; if (a.ampInd.p < 0.05) c.ampInd++;
+      }
+      if (r < R) { $("#sim-status").textContent = "Simulating… " + r + " / " + R; setTimeout(chunk, 0); return; }
+      const pc = (x) => (100 * x / R).toFixed(1) + " %";
+      $("#sim-status").textContent = "1,000 studies with " + s.n + " participants, effect " + s.eff + " µV, variability " + s.v +
+        " µV (fixed seed). At least one significant time point: no correction " + pc(c.unc) + " (with a false one: " + pc(c.uncFP) +
+        "), FDR over all points " + pc(c.all) + " (false: " + pc(c.allFP) + "), FDR in the window " + pc(c.win) +
+        ". P900 minus N550 with p < 0.05: paired test " + pc(c.amp) + ", independent test " + pc(c.ampInd) + ".";
+      $("#sim-mc").disabled = false;
+    }
+    chunk();
+  }
+  function updateSim() { compute(); drawSim(); }
+  PL.ui.bind("#sim-n", updateSim, (v) => v.toFixed(0));
+  PL.ui.bind("#sim-eff", updateSim, (v) => v.toFixed(0) + " µV");
+  PL.ui.bind("#sim-var", updateSim, (v) => v.toFixed(0) + " µV");
+  $("#sim-new").addEventListener("click", () => { simSeed++; updateSim(); $("#sim-status").textContent = "Draw " + simSeed + " of synthetic participants."; });
+  $("#sim-mc").addEventListener("click", runMC);
+  PL.onRedraw(drawSim);
+  updateSim();
+  $("#sim-status").textContent = "Draw 1 of synthetic participants (the example checked against scipy).";
+
+  /* ---------------------------------------------------------------- widget 2: assignment and codes */
+  const CODE_CHARS = "ACDEFHJKLMNPQRTUVWXY34679"; // no B, O, I, S, Z, 0, 1, 2, 5, 8 (easily confused)
+  const cryptoOK = !!(window.crypto && window.crypto.getRandomValues);
+  function randInt(n) { // uniform integer in [0, n)
+    if (!cryptoOK) return Math.floor(Math.random() * n);
+    const buf = new Uint32Array(1), lim = Math.floor(4294967296 / n) * n;
+    do { window.crypto.getRandomValues(buf); } while (buf[0] >= lim);
+    return buf[0] % n;
+  }
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = randInt(i + 1); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  let plan = null;
+  function generate() {
+    let n = parseInt($("#bk-n").value, 10);
+    if (!isFinite(n)) n = 12;
+    n = Math.max(2, Math.min(80, n)); $("#bk-n").value = n;
+    const block = parseInt($("#bk-block").value, 10);
+    const prefix = ($("#bk-prefix").value || "").replace(/[^A-Za-z0-9_-]/g, "");
+    const orders = [];
+    while (orders.length < n) {
+      const b = []; for (let k = 0; k < block / 2; k++) { b.push("BA"); b.push("AB"); }
+      shuffle(b).forEach((o) => { if (orders.length < n) orders.push(o); });
+    }
+    const used = new Set();
+    const code = () => { let c; do { c = ""; for (let k = 0; k < 4; k++) c += CODE_CHARS[randInt(CODE_CHARS.length)]; } while (used.has(c)); used.add(c); return c; };
+    const rows = orders.map((o, i) => {
+      const id = String(i + 1).padStart(2, "0");
+      const nights = [{ night: 1, cond: o[0] }, { night: 2, cond: o[1] }].map((x) => Object.assign(x, { code: code() }));
+      return { id, name: prefix + (i + 1), order: o, nights, analystOrder: shuffle(nights.slice()) };
+    });
+    plan = { rows, adapt: $("#bk-adapt").checked, made: new Date().toISOString().slice(0, 16).replace("T", " ") };
+    renderPlan();
+  }
+  const meaning = (c) => (c === "B" ? "stimulation (sound)" : "sham (no sound)");
+  function table(head, body, monoCols) {
+    const th = head.map((h, k) => '<th' + (monoCols.includes(k) ? ' class="mono"' : "") + ">" + h + "</th>").join("");
+    const tr = body.map((r) => "<tr>" + r.map((c, k) => "<td" + (monoCols.includes(k) ? ' class="mono"' : "") + ">" + c + "</td>").join("") + "</tr>").join("");
+    return '<div class="scroll-x"><table><thead><tr>' + th + "</tr></thead><tbody>" + tr + "</tbody></table></div>";
+  }
+  function nightSheet() {
+    const head = ["Participant", "Recording name"].concat(plan.adapt ? ["Adaptation night"] : []).concat(["Night 1", "Night 2"]);
+    const body = plan.rows.map((r) => [r.id, r.name].concat(plan.adapt ? ["Cond A"] : []).concat(r.nights.map((x) => "Cond " + x.cond)));
+    return { head, body };
+  }
+  function keyTable() {
+    const head = ["Participant", "Night", "Toggle", "Meaning", "Analysis code"];
+    const body = [];
+    plan.rows.forEach((r) => r.nights.forEach((x) => body.push([r.id, String(x.night), "Cond " + x.cond, meaning(x.cond), x.code])));
+    return { head, body };
+  }
+  function analystTable() {
+    return { head: ["Participant", "Code 1", "Code 2"], body: plan.rows.map((r) => [r.id, r.analystOrder[0].code, r.analystOrder[1].code]) };
+  }
+  function renderPlan() {
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const ns = nightSheet(), ks = keyTable(), as = analystTable();
+    const bFirst = plan.rows.filter((r) => r.order === "BA").length;
+    $("#bk-bfirst").textContent = bFirst;
+    $("#bk-afirst").textContent = plan.rows.length - bFirst;
+    $("#bk-nights").textContent = 2 * plan.rows.length + (plan.adapt ? " (+" + plan.rows.length + ")" : "");
+    $("#bk-tables").innerHTML =
+      "<h4>1. Night sheet</h4><p class=\"who\">For the people running the nights. Says which toggle position to set, not what it means." +
+      (plan.adapt ? " Adaptation night in Cond A: the whole procedure, no sound, not analysed as a sham night." : "") + "</p>" +
+      table(ns.head, ns.body.map((r) => r.map(esc)), [1]) +
+      "<h4>2. Key</h4><p class=\"who\">For the key holder only. Links every experimental night to its condition and to the code used to rename its files.</p>" +
+      table(ks.head, ks.body.map((r) => r.map(esc)), [4]) +
+      "<h4>3. Analyst list</h4><p class=\"who\">For the analysts. Tells which two codes belong to the same participant (needed for paired tests), in random order, without the condition.</p>" +
+      table(as.head, as.body.map((r) => r.map(esc)), [1, 2]);
+    $("#bk-status").textContent = "Generated " + plan.made + (cryptoOK ? " with the browser's cryptographic random generator." : " (crypto API unavailable: Math.random used; do not use for a real study).") + " Not stored anywhere: download or print it now.";
+  }
+  function download(name, t) {
+    const csv = [t.head].concat(t.body).map((r) => r.map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(",")).join("\r\n") + "\r\n";
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+  }
+  $("#bk-gen").addEventListener("click", generate);
+  $("#bk-dl-key").addEventListener("click", () => plan && download("key_KEEP_PRIVATE.csv", keyTable()));
+  $("#bk-dl-nights").addEventListener("click", () => plan && download("night_sheet.csv", nightSheet()));
+  $("#bk-dl-analyst").addEventListener("click", () => plan && download("analyst_list.csv", analystTable()));
+  ["#bk-n", "#bk-block", "#bk-adapt"].forEach((s) => $(s).addEventListener("change", generate));
+  $("#bk-prefix").addEventListener("change", generate);
+  generate();
+})();
+</script>
+</body>
+</html>

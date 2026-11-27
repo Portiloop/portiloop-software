@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>11 · Fast acquisition: ABR and FFR · Portiloop tutorials</title>
+  <meta name="description" content="Recording auditory brainstem responses to clicks (ABR) and frequency-following responses to the syllable /da/ (FFR) with the Portiloop v2.3 and its fast acquisition (2 to 16 kSPS): why a high sampling rate is needed, how the capture program and the triggers work, installation, the Click ABR and FFR pipelines, the files, and how to analyse them. Describes code under review (branch fast-acquisition and pull request #12).">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <style>
+    /* page-local styles for tutorial 11 */
+    .quote { margin: 1em 0; padding: 8px 14px; border-left: 3px solid var(--border); color: var(--fg); background: var(--bg-elev); border-radius: 0 8px 8px 0; }
+    .quote cite { display: block; font-style: normal; font-size: 0.88em; color: var(--fg-muted); margin-top: 4px; }
+    .controls label { flex-wrap: wrap; max-width: 100%; }
+    .controls select { max-width: 100%; min-width: 0; }
+    canvas.plot.tl { height: 150px; }
+    canvas.plot.ph { height: 150px; }
+    canvas.plot.avg { height: 260px; }
+    canvas.plot.abr { height: 280px; }
+    canvas.plot.da { height: 240px; }
+    canvas.plot.sp { height: 200px; }
+    .legend-row { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--fg-muted); margin: 4px 0 8px; }
+    .legend-row i { display: inline-block; width: 14px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
+    .flow { width: 100%; height: auto; display: block; margin: 0.6em 0 0.2em; }
+    .flow .box { fill: var(--bg-elev); stroke: var(--border); stroke-width: 1.5; }
+    .flow .box.ads { stroke: var(--plot-c3); }
+    .flow .box.cap { stroke: var(--plot-c1); }
+    .flow .box.snd { stroke: var(--plot-c2); }
+    .flow text { fill: var(--fg); font-size: 13px; font-family: var(--font-sans, system-ui, sans-serif); }
+    .flow text.m { fill: var(--fg-muted); font-size: 11.5px; }
+    .flow text.h { font-weight: 600; font-size: 14px; }
+    .flow .arr { stroke: var(--fg-muted); stroke-width: 1.6; fill: none; }
+    .flow .arr.snd { stroke: var(--plot-c2); }
+    .flow .head { fill: var(--fg-muted); }
+    .flow .head.snd { fill: var(--plot-c2); }
+    .flow.narrow { display: none; max-width: 420px; }
+    @media (max-width: 600px) { .flow.wide { display: none; } .flow.narrow { display: block; } }
+    .verified td:first-child { min-width: 12em; }
+    .tight li { margin: 0.15em 0; }
+    .wrap-any { overflow-wrap: anywhere; }
+  </style>
+</head>
+<body data-page="11-fast-abr-ffr" data-root="..">
+<main>
+<article class="content">
+
+  <div class="eyebrow">Tutorial 11 · Advanced</div>
+  <h1>Fast acquisition: ABR and FFR</h1>
+  <p class="lead">Auditory brainstem responses (ABR) and frequency-following responses (FFR) last a few milliseconds and contain frequencies of hundreds to thousands of hertz: the Portiloop's usual 250 Hz cannot record them. This tutorial explains the fast acquisition of the Portiloop v2.3 (2 to 16 kSPS), its two auditory pipelines, "Click ABR (fast)" and "FFR (fast)", the files they write, and how to turn those files into averaged responses.</p>
+
+  <dl class="meta">
+    <div><dt>Time</dt><dd>60 minutes to read</dd></div>
+    <div><dt>Level</dt><dd>Advanced (installation on the device, Python analysis)</dd></div>
+    <div><dt>You need</dt><dd>Tutorials <a href="02-preparation.html">02</a>, <a href="03-control-center.html">03</a> and <a href="05-files.html">05</a>; a Portiloop v2.3 with the code under review installed</dd></div>
+    <div><dt>Runs in browser</dt><dd>Widgets yes; the recordings need the device</dd></div>
+  </dl>
+
+  <div class="callout danger"><span class="callout-title">Code under review, not in the released software</span>Everything on this page describes code that is <strong>not on branch main</strong> (the released v2.3 software of tutorials 01 to 10). It lives on branch <code>fast-acquisition</code> of Portiloop/portiloop-software (commits <code>869d823</code> "Added a fast acquisition pipeline (2 to 16 kSPS)", <code>07456b2</code> "Added an FFR pipeline (sounds and triggers during the fast acquisition)" and <code>5537fed</code>, the module build steps) and in <a href="https://github.com/Portiloop/portiloop-software/pull/12">pull request #12</a>, "Fast acquisition with updated ABR and FFR", which adds the Click ABR pipeline (<code>8cbbfb3</code>) and the random ABR timing and per-trial FFR noise (<code>c528336</code>). The pull request was <strong>open and under review</strong> when we wrote this page. Names, parameters, file formats and behaviour may change before (or if) the code reaches main. All links point to the reviewed head, <a href="https://github.com/TomsCoder/portiloop-software/tree/c528336f10a3b94d683b6092fcdc72f1fbf73dff"><code>c528336</code></a> [1].</div>
+
+  <div class="objectives">
+    <h3>In this tutorial you will</h3>
+    <ul>
+      <li>See why ABR and FFR need sampling rates of several kilohertz, and what the amplifier itself keeps at each rate</li>
+      <li>Understand how the fast acquisition reads the amplifier, what it writes, and what it does not do (no filtering, detection, stimulation or lead-off protection)</li>
+      <li>Install it on a Portiloop and run the Click ABR and FFR pipelines, including Test Sound and Cond A</li>
+      <li>Know how the trigger codes get into the right CSV row, and what delay they do not include</li>
+      <li>Read the output files and analyse them: epochs, band-pass, averages, adding and subtracting polarities, split-half reliability</li>
+      <li>Know what has and has not been tested, and the open points of the code under review</li>
+    </ul>
+  </div>
+
+  <div class="callout warning"><span class="callout-title">What this page is based on</span>We read the code, the README of the fast acquisition, the commit history and the pull request's description. <strong>We have no ABR or FFR recording</strong> and did not run the code on a device. Results quoted from the pull request are labelled as such; the widgets are illustrations with numbers taken from the code; the analysis code below was tested only on synthetic recordings that we generated ourselves (section <a href="#analysis">Analysis</a>).</div>
+
+  <h2 id="why">Why a fast acquisition</h2>
+  <p>The two responses are short and fast:</p>
+  <ul>
+    <li><strong>ABR.</strong> After a click, the scalp records a series of small waves from the auditory nerve and the brainstem, numbered with Roman numerals since Jewett and Williston described them within the first 10 ms after the click [2]. They are sub-microvolt and sharp. Skoe and Kraus, describing the filters used for brainstem responses to complex sounds, write that "the bandpass filters match the range of settings used for click-ABRs and typically fall in the range of 100-3000 Hz" [3].</li>
+    <li><strong>FFR.</strong> To a periodic sound such as a vowel, neurons of the auditory pathway phase-lock to the waveform, and the scalp potential follows the sound's periodicity (its fundamental frequency, F0) and part of its harmonics: "Typically all harmonics present in the stimulus are present in the FFR, at least up to about 1.2-1.3 kHz" [4]. Analyses are typically filtered "at or around 70-2000 Hz" [4].</li>
+  </ul>
+  <p>The overnight pipelines record at 250 Hz: one sample every 4 ms, so two or three samples per ABR. The sampling rate is not the only limit: the ADS1299 amplifier of the Portiloop has a digital filter whose bandwidth follows the data rate. Its datasheet lists the -3 dB bandwidth at each rate [6]:</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Data rate (SPS)</th><th>250</th><th>2000</th><th>4000</th><th>8000</th><th>16000</th></tr></thead>
+    <tbody>
+      <tr><td>-3 dB bandwidth of the ADS1299 (Hz) [6]</td><td>65</td><td>524</td><td>1048</td><td>2096</td><td>4193</td></tr>
+      <tr><td>Samples in 10 ms</td><td>2.5</td><td>20</td><td>40</td><td>80</td><td>160</td></tr>
+      <tr><td>Delay of that filter (our calculation, see below)</td><td>6 ms</td><td>0.75 ms</td><td>0.38 ms</td><td>0.19 ms</td><td>0.094 ms</td></tr>
+    </tbody>
+  </table></div>
+  <p>At 250 Hz the amplifier itself removes everything above about 65 Hz, before any software sees the signal: an ABR or an FFR at 98 Hz is not there to be recovered. The filter is "a third-order sinc filter" which, after a step change at the input, "takes 3 × tDR to settle" [6] (tDR is the sample period). A sinc filter is symmetric, so its delay is half of that, 1.5 sample periods: this is our calculation, not a datasheet value. It is a constant delay that the trigger times do not include (see <a href="#triggers">Triggers</a>). For an ABR, 8 or 16 kSPS keep the 100 to 3000 Hz band; for an FFR analysed up to 2000 Hz, 8 kSPS is at the limit (2096 Hz at -3 dB) and 16 kSPS keeps it. The code does not recommend a rate; its default for the fast pipelines is 8000 (<code>DEFAULT_FAST_FREQUENCY = 8000</code>, <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/simple_gui/simple_gui.py#L53-L55"><code>simple_gui.py</code>, line 55</a>), and the pull request's ABR test was made at 16 kSPS.</p>
+
+  <div class="widget" id="avg">
+    <div class="widget-title">Averaging a schematic ABR, and what each sampling rate keeps</div>
+    <p class="widget-desc">What to try: raise the number of trials and watch the waves come out of the noise; then switch the rate to 250 Hz. <strong>Schematic</strong>: the dashed "true" response is an invented shape with five sub-microvolt peaks in the first 10 ms, not data. The amplifier's filter is modelled as a third-order sinc at each rate (as in the datasheet), the noise as white noise whose level grows with the bandwidth; real EEG noise is not white, so the noise numbers are illustrative.</p>
+    <div class="controls">
+      <label for="avg-n">Trials averaged <input type="range" id="avg-n" min="0" max="40" step="1" value="30"><output for="avg-n"></output></label>
+      <label for="avg-fs">Sampling rate <select id="avg-fs"><option value="250">250 Hz (overnight pipelines)</option><option value="2000">2000</option><option value="4000">4000</option><option value="8000">8000</option><option value="16000" selected>16000</option></select></label>
+      <label for="avg-sd">Single-trial noise at 16 kSPS (µV RMS) <input type="range" id="avg-sd" min="1" max="20" step="1" value="5"><output for="avg-sd"></output></label>
+      <label for="avg-seed">Random draw <input type="range" id="avg-seed" min="1" max="20" step="1" value="1"><output for="avg-seed"></output></label>
+    </div>
+    <canvas class="plot abr" id="avg-plot" aria-label="Schematic ABR, its version after the amplifier's filter, and the average of noisy trials at the chosen rate"></canvas>
+    <div class="readout">
+      <div><div class="k">Samples in 0 to 10 ms</div><div class="v" id="avg-ns">…</div></div>
+      <div><div class="k">Amplifier -3 dB bandwidth</div><div class="v" id="avg-bw">…</div></div>
+      <div><div class="k">Noise left in the average</div><div class="v" id="avg-nl">…</div></div>
+      <div><div class="k">Largest sample, 4 to 9 ms</div><div class="v" id="avg-pk">…</div></div>
+    </div>
+    <div class="status" id="avg-status"></div>
+  </div>
+  <p>Averaging N trials divides the random noise by √N: from 5 µV to 0.16 µV with 1,000 trials and 0.05 µV with 10,000, which is why ABR runs have thousands of clicks. Averaging cannot bring back what the amplifier's filter has removed: at 250 Hz the average converges to a slow, delayed bump, not to an ABR.</p>
+
+  <h2 id="how">How the fast acquisition works</h2>
+  <p>The README of the fast acquisition explains the problem in one sentence: "Python cannot read the ADS1299 faster than about 1 kSPS, so the capture runs in a C program, <code>adscapture.c</code>, which reads each conversion by driving the SPI controller's registers directly through a small kernel module, <code>spimap</code>." (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/fast_capture/README.md#L1-L7"><code>README.md</code>, lines 3 to 6</a>). In more detail (README lines 58 to 72; <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/fast_capture/adscapture.c#L1-L27"><code>adscapture.c</code>, header</a>):</p>
+  <ul>
+    <li>The amplifier is configured through the normal kernel driver: reset, the same register settings as the other pipelines (<code>mod_config()</code>), read back and checked, then START.</li>
+    <li>Each conversion is then read by the program itself, without the kernel: about 18 µs per read at 16 MHz, against 65 to 130 µs through the kernel driver. The "data ready" line of the ADS1299 (DRDY) is polled on CPU 3 by a thread with real-time priority (<code>SCHED_FIFO</code>, priority 10).</li>
+    <li>A writer thread on the other CPUs writes the CSV, through a buffer of 524,288 conversions ("32 s at 16 kSPS"), so that a slow SD card does not delay the reads. It also sends a decimated copy (means of blocks of samples, 250 Hz) to the Python process, which feeds the Control Center's display and, if "Stream LSL" is checked, the LSL stream "Portiloop Raw Data" (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/fast_capture.py#L158-L163"><code>fast_capture.py</code>, lines 158 to 163</a>). The README: "It is only meant for viewing."</li>
+    <li>The program stops on the GUI's Stop, at the end of the duration (or of the run, for the ABR and FFR pipelines), when less than 200 MB are free, if DRDY stops for 1 s, or if its parent process dies.</li>
+  </ul>
+  <svg class="flow wide" viewBox="0 0 720 300" role="img" aria-label="Diagram: the ADS1299 is read by adscapture's reader on CPU 3 through spimap; a writer thread writes the CSV and a 250 Hz decimated copy to the Python process for display and LSL; for the ABR and FFR pipelines, ffrplay plays the run through ALSA and sends each onset time to adscapture, which writes the trigger code in the CSV.">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+      <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head snd" d="M0,0 L10,5 L0,10 z"/></marker>
+    </defs>
+    <rect class="box ads" x="10" y="20" width="150" height="110" rx="10"/>
+    <text class="h" x="24" y="46">ADS1299</text>
+    <text x="24" y="70">2 to 16 kSPS</text>
+    <text class="m" x="24" y="92">DRDY at each</text>
+    <text class="m" x="24" y="108">conversion</text>
+    <rect class="box cap" x="230" y="20" width="250" height="150" rx="10"/>
+    <text class="h" x="244" y="46">adscapture (C)</text>
+    <text x="244" y="70">reader: CPU 3, polls DRDY,</text>
+    <text x="244" y="90">reads via /dev/spimap</text>
+    <text x="244" y="114">writer: CSV, triggers,</text>
+    <text x="244" y="134">_stats.json</text>
+    <text class="m" x="244" y="156">+ means of blocks → 250 Hz</text>
+    <path class="arr" d="M162,75 L226,75" marker-end="url(#ah)"/>
+    <rect class="box" x="550" y="20" width="160" height="110" rx="10"/>
+    <text class="h" x="564" y="46">Python</text>
+    <text x="564" y="70">display, LSL</text>
+    <text class="m" x="564" y="92">(250 Hz copy,</text>
+    <text class="m" x="564" y="108">for viewing)</text>
+    <path class="arr" d="M482,75 L546,75" marker-end="url(#ah)"/>
+    <rect class="box snd" x="230" y="210" width="250" height="80" rx="10"/>
+    <text class="h" x="244" y="236">ffrplay (ABR, FFR)</text>
+    <text x="244" y="258">plays the run (ALSA, 48 kHz)</text>
+    <text class="m" x="244" y="278">sends each onset time</text>
+    <path class="arr snd" d="M355,206 L355,174" marker-end="url(#ahs)"/>
+    <text class="m" x="364" y="196">stdin: trial, code, time</text>
+    <rect class="box" x="550" y="210" width="160" height="80" rx="10"/>
+    <text x="564" y="240">Earphones</text>
+    <text class="m" x="564" y="262">same sound, both ears</text>
+    <path class="arr snd" d="M482,250 L546,250" marker-end="url(#ahs)"/>
+  </svg>
+  <svg class="flow narrow" viewBox="0 0 360 520" role="img" aria-label="Diagram: the ADS1299 is read by adscapture; it writes the CSV and sends a 250 Hz copy to Python for display and LSL; ffrplay plays the run and sends the onset times to adscapture.">
+    <defs>
+      <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+      <marker id="ahs2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head snd" d="M0,0 L10,5 L0,10 z"/></marker>
+    </defs>
+    <rect class="box ads" x="10" y="10" width="300" height="60" rx="10"/>
+    <text class="h" x="24" y="36">ADS1299</text>
+    <text class="m" x="24" y="56">2 to 16 kSPS, DRDY at each conversion</text>
+    <path class="arr" d="M110,72 L110,96" marker-end="url(#ah2)"/>
+    <rect class="box cap" x="10" y="100" width="300" height="130" rx="10"/>
+    <text class="h" x="24" y="126">adscapture (C)</text>
+    <text x="24" y="150">reader: CPU 3, via /dev/spimap</text>
+    <text x="24" y="172">writer: CSV, triggers, _stats.json</text>
+    <text class="m" x="24" y="196">+ means of blocks → 250 Hz</text>
+    <path class="arr" d="M110,232 L110,256" marker-end="url(#ah2)"/>
+    <rect class="box" x="10" y="260" width="300" height="56" rx="10"/>
+    <text x="24" y="284">Python: display, LSL</text>
+    <text class="m" x="24" y="304">(the 250 Hz copy, for viewing)</text>
+    <rect class="box snd" x="10" y="350" width="300" height="80" rx="10"/>
+    <text class="h" x="24" y="376">ffrplay (ABR, FFR)</text>
+    <text x="24" y="398">plays the run (ALSA, 48 kHz)</text>
+    <text class="m" x="24" y="418">sends each onset time to adscapture</text>
+    <path class="arr snd" d="M312,390 L340,390 L340,165 L314,165" marker-end="url(#ahs2)"/>
+    <path class="arr snd" d="M110,432 L110,456" marker-end="url(#ahs2)"/>
+    <rect class="box" x="10" y="460" width="300" height="50" rx="10"/>
+    <text x="24" y="490">Earphones (both ears)</text>
+  </svg>
+
+  <h3 id="not-available">What the fast acquisition does not do</h3>
+  <blockquote class="quote">"Not available in this pipeline: filtering, detection, stimulation, and lead-off detection during the recording (its checks need register commands, which would interrupt the reads). The electrodes OFF at the last impedance check are disabled, as in the other pipelines."<cite>README.md, lines 54 to 56 [1]</cite></blockquote>
+  <p>In practice: the CSV contains the raw signals only (the notch setting does not apply); an electrode that comes off during the run is not detected or removed from the bias loop as it is during a night (<a href="04-night.html#leadoff">tutorial 04</a>), so check the impedances just before each run; and the "Stimulation starts after" delay of the Advanced tab is not used: <code>start_fast_capture()</code> receives the pause flag but never reads it (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/fast_capture.py#L97-L104">lines 97 to 104</a>), so the sounds of an ABR or FFR run start about 1 s after the capture starts, whatever that setting says.</p>
+
+  <h3 id="loss">Lost samples</h3>
+  <p>The program keeps one CSV row per conversion even when a read fails: "A missed conversion, a frame with a bad status byte, or one lost because the writer was too slow, repeats the previous row, and its row index is listed in <code>lost_samples</code> of <code>_stats.json</code>, as in the other pipelines." (README lines 40 to 43). The README's tests with the amplifier's internal test signal:</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Rate</th><th>Duration</th><th>Lost</th><th>Half-periods with the wrong number of rows</th></tr></thead>
+    <tbody>
+      <tr><td>2000</td><td>30 s</td><td>0</td><td>0 of 57</td></tr>
+      <tr><td>4000</td><td>30 s</td><td>0</td><td>0 of 57</td></tr>
+      <tr><td>8000</td><td>20 s</td><td>0</td><td>0 of 38</td></tr>
+      <tr><td>16000</td><td>2 min</td><td>2 (missed, filled)</td><td>0 of 232</td></tr>
+      <tr><td>16000</td><td>10 min</td><td>14 (missed, filled: 1.5 per million)</td><td>0 of 1167</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small muted">From <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/fast_capture/README.md#L149-L165">README.md, lines 149 to 165</a> ("Tests (red-ibis, 5 Nov 2026)"); measured by the authors, not by us.</p>
+  <p>A repeated sample inside an epoch is a tiny distortion, but it is easy to exclude: the analysis below drops every epoch that contains a row listed in <code>lost_samples</code>. Note that the list stops at 100,000 entries (<code>MAX_LOST_LISTED</code>, <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/fast_capture/adscapture.c#L74">adscapture.c, line 74</a>); <code>nb_lost_samples</code> has the full count.</p>
+
+  <h2 id="install">Installation on the Portiloop</h2>
+  <p>The fast pipelines appear in the Pipeline list only on a Portiloop where they were installed: <code>custom_pipelines.py</code> adds "Acquisition only (fast)", "FFR (fast)" and "Click ABR (fast)" only if the capture program is built, <code>/dev/spimap</code> exists and is accessible, and the SPI controller is kept powered (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/fast_capture.py#L54-L72"><code>fast_capture_status()</code></a>; <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/custom/custom_pipelines.py#L39-L78"><code>custom_pipelines.py</code>, lines 39 to 78</a>).</p>
+  <ol class="steps">
+    <li><strong>Put the code under review on the device.</strong> The Portiloop runs its software from <code>~/portiloop-software</code>. Check out branch <code>fast-acquisition</code> (or the pull request's head) there, with Git LFS, since the sound files are stored with it. How you update a device depends on how it was set up; this is not documented in the branch.</li>
+    <li><strong>Run the installer, as the user mendel (not with sudo):</strong>
+<pre data-file="terminal (on the Portiloop)"><code class="language-bash">bash ~/portiloop-software/portiloop/fast_capture/install.sh
+sudo systemctl restart simplegui</code></pre>
+      The script (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/fast_capture/install.sh"><code>install.sh</code></a>) refuses to run unless the kernel is <code>4.19.125-mtk</code> and the prebuilt module's "vermagic" matches the kernel's own modules; it compiles <code>adscapture</code> and the sound player <code>ffrplay</code> with gcc ("libasound2-dev is needed" for the player), installs <code>spimap.ko</code> under <code>/lib/modules/4.19.125-mtk/extra</code>, loads it at boot, and installs a udev rule that gives <code>/dev/spimap</code> to the group <code>input</code> and keeps the SPI controller powered.</li>
+    <li><strong>Check.</strong> After the restart, the Pipeline list of the Advanced tab (<a href="03-control-center.html#pipeline">tutorial 03</a>) shows the three fast pipelines, and the Sample frequency list offers 2000, 4000, 8000 and 16000 for them.</li>
+  </ol>
+  <div class="callout warning"><span class="callout-title">Another kernel needs another module</span>The module was built "on red-ibis for the Mendel kernel 4.19.125-mtk" (README line 23). For any other kernel it must be rebuilt on the Portiloop itself; the README gives the steps (lines 167 to 208), which need the Mendel kernel source, not included in the repository. The module cannot be unloaded: to remove it, delete the three installed files, run <code>sudo depmod -a</code> and reboot (lines 27 to 28).</div>
+  <div class="callout note"><span class="callout-title">Security note from the README</span>"Any process that can open <code>/dev/spimap</code> (root and the group <code>input</code>) can drive the SPI controller, including its DMA addresses, which could be used to read or write the physical memory. On the Portiloops, mendel is in that group and already has sudo." (lines 232 to 236).</div>
+
+  <h2 id="running">Running a recording</h2>
+  <ol class="steps">
+    <li><strong>Electrodes and impedance.</strong> Place the electrodes (see <a href="#montage">Montage</a>) and run the Check tab. An electrode OFF at that check is switched off in the recording (<a href="03-control-center.html#off-disabled">tutorial 03</a>); there is no lead-off check during the run.</li>
+    <li><strong>Advanced tab.</strong> Pipeline "Click ABR (fast)" or "FFR (fast)"; Sample frequency 8000 or 16000 (see <a href="#why">above</a>); Sound output volume as calibrated; "Save recording locally" checked; Cond B to play the sounds, Cond A for a silent run with triggers (<a href="#test-conda">below</a>).</li>
+    <li><strong>Test Sound</strong> plays a few seconds of the run's stimuli at the current volume (<a href="#test-conda">below</a>). It is refused during a run: "No test sound during a run." (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/simple_gui/simple_gui.py#L484-L497"><code>simple_gui.py</code>, lines 484 to 497</a>).</li>
+    <li><strong>Start.</strong> One Start is one run: the capture starts, then the player; after 1 s of silence (longer if the sound card is still held by a previous sound, see <a href="#triggers">Triggers</a>) the stimuli begin. The participant should be still and relaxed (an ABR is easily buried in muscle activity); whether awake or asleep is a choice of your protocol.</li>
+    <li><strong>End.</strong> The recording stops by itself at the end of the run (the log says "End of the FFR run: stopping the capture." or "End of the Click ABR run: ...", <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/fast_capture.py#L202-L205">fast_capture.py, lines 202 to 205</a>): about 91.5 s for a Click ABR run, about 201.4 s for an FFR run (our computation from the parameters, see below). Stop ends it earlier. The LED is cyan during a Cond B run, purple during a Cond A run and yellow at the end (<code>leds.led1(...)</code>, lines 113 and 272).</li>
+  </ol>
+
+  <h2 id="montage">Montage</h2>
+  <p>The code and the README of the fast acquisition do not say where to put the electrodes, and the lab's protocol for ABR and FFR recordings is not documented in the repository (the FFR code refers to a protocol document, "FFR_Timeline_and_parameters.pdf", which is not in it). We can only say what is common and how it maps onto the Portiloop.</p>
+  <blockquote class="quote">"For cABRs, a vertical one-channel montage is the most common configuration." Their preferred placements: Cz (active), "ipsilateral earlobe (reference), and forehead or contralateral earlobe (ground)."<cite>Skoe and Kraus (2010), a tutorial on brainstem responses to complex sounds [3]</cite></blockquote>
+  <p>On the Portiloop, every channel is an electrode minus the REF electrode, and the BIAS electrode is the driven ground (<a href="02-preparation.html#ref-bias">tutorial 02</a>). The CLAS montage already contains such a vertical derivation: channel 6 is Cz, recorded against the REF on the right mastoid, with the bias on the right earlobe; channels 7 (Fz) and 8 (Fpz) are midline-to-mastoid derivations too. The Portiloop plays "the same sound in both ears" (<code>CHANNELS = 2</code>, <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/ffr.py#L77">ffr.py, line 77</a>), so "ipsilateral" has no meaning here. Choose the montage with whoever designed your study and record it in your notes: the files do not store electrode names.</p>
+  <div class="callout warning"><span class="callout-title">Earphones and stimulus artifact</span>Skoe and Kraus recommend that "Stimulus artifact can be minimized by using electromagnetically shielded insert earphones", warn that "Because circumaural headphones increase the chances for stimulus artifact contamination" and that, if the transducer is not properly shielded, "the electrical signal can 'leak' and get picked up by the electrodes" [3]. The CLAS study uses small in-ear earphones taped to the ears (<a href="04-night.html#sound">tutorial 04</a>); the pull request does not say which earphones its ABR test used. Unshielded earphones close to mastoid electrodes are a likely source of artifact; the polarity alternation (below) cancels it in the added average but not in the subtracted one.</div>
+
+  <h2 id="abr">The Click ABR pipeline</h2>
+  <p>"Click ABR (fast)" (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/click_abr.py"><code>click_abr.py</code></a>, added by the pull request) plays a train of clicks during a fast acquisition, with a trigger code in the CSV at each one. Its parameters (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/click_abr.py#L38-L44">lines 38 to 44</a>):</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Parameter</th><th>Value in the code</th></tr></thead>
+    <tbody>
+      <tr><td>Click</td><td>a square of 5 frames at 48 kHz (<code>CLICK_FRAMES = 5</code>): 104.2 µs, "the nearest to 100 us (the same burst at 44.1 kHz, burst.wav, would need resampling, which makes a square ring)"; made in code, no sound file</td></tr>
+      <tr><td>Amplitude</td><td>0.1 of digital full scale (<code>CLICK_AMPLITUDE = 0.1</code>): the int16 value 3277, or -3277</td></tr>
+      <tr><td>Polarity and trigger code</td><td><code>POLARITIES = (("+", 5), ("-", 6))</code>: 5 = "positive click (condensation)", 6 = "negative click (rarefaction)"</td></tr>
+      <tr><td>Order</td><td>strictly alternating, starting with + (+ - + - ...)</td></tr>
+      <tr><td>Clicks per run</td><td>2000 (<code>N_TRIALS</code>): 1000 of each polarity</td></tr>
+      <tr><td>Onset to onset (SOA)</td><td>uniformly random between 40 and 50 ms (<code>SOA_MS = (40.0, 50.0)</code>), rounded to the frame (1/48 ms); mean 45 ms, about 22 clicks per second</td></tr>
+      <tr><td>Silence</td><td>1 s before the first click, 0.5 s after the last one (<code>LEAD_IN_S</code>, <code>TAIL_S</code> of <code>ffr.py</code>)</td></tr>
+      <tr><td>Duration of a run</td><td>91.46 s on average (91.13 to 91.85 s over 200 seeds, computed by us with the code's <code>make_run()</code>); the docstring says "about 92 s", the pull request "~91 s"</td></tr>
+      <tr><td>Randomness</td><td>a seed drawn for each run (<code>secrets.randbits(32)</code>), saved in the metadata: the run can be rebuilt with <code>make_run(seed)</code></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout note"><span class="callout-title">Condensation or rarefaction at the eardrum?</span>The code calls the positive click "condensation". Whether a positive digital sample pushes the earphone membrane towards the eardrum depends on the digital-to-analogue converter, the amplifier and the wiring of the earphones; the repository does not document a measurement of it. ABR waves can differ between rarefaction and condensation clicks, so if the polarities are analysed separately, check the acoustic polarity with a microphone in an ear simulator. The added average (below) does not depend on it.</div>
+  <div class="callout note"><span class="callout-title">Click level</span>The README asks to calibrate the FFR's /da/ to 80 dB SPL, but gives no target level for the clicks; their level depends on the volume setting, the earphones and their fit, as for the CLAS sounds (<a href="03-control-center.html#volume">tutorial 03</a>). Report a measured level (clicks are usually specified in peak-equivalent SPL), or say that it was not measured.</div>
+
+  <h3 id="jitter">Why the timing is random</h3>
+  <p>The first version of the pipeline (<code>8cbbfb3</code>) used a fixed SOA of 32 ms ("1536 frames, 31.25 Hz"). The second commit replaced it, and the README explains why:</p>
+  <blockquote class="quote">"Why the jitter: with a fixed SOA of 32 ms (1.5 audio periods of 1024 frames), the periodic activity of the Portiloop was time-locked to the clicks and left two artifacts in the average (about 1 and 11.7 ms after the trigger, after the + and the - clicks). A random SOA spreads it over the epoch, as the line noise."<cite>README.md, lines 142 to 144 [1]</cite></blockquote>
+  <p>The "audio period" is the block of 1024 frames in which the sound system hands samples to the sound card (<code>period_size 1024</code> at <code>rate 48000</code> in the device's <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/setup_files/asound.conf#L6-L20"><code>asound.conf</code></a>): 21.33 ms. With a fixed 32 ms SOA, two clicks span exactly 3 periods, so every + click falls at the same place in the period (frame 896 of 1024, by our computation from the code's onsets) and every - click half a period later (frame 384). Anything the device does once per period then sits at a fixed latency after the + clicks and at a latency 10.67 ms different after the - clicks. Our arithmetic: 1 ms + 10.67 ms = 11.67 ms, which is consistent with the two artifacts the authors saw, if one event per audio period caused both. With the random SOA, the positions of the clicks in the period are spread evenly: we checked it on 200 runs built with the code (each of 16 bins of the period holds between 0.98 and 1.02 of its expected share, for both polarities), which agrees with the pull request's own check. The widget shows the effect.</p>
+
+  <div class="widget" id="jit">
+    <div class="widget-title">Fixed 32 ms versus random 40 to 50 ms: a periodic artifact in the average</div>
+    <p class="widget-desc">What to try: compare the two timings; move the artifact's position in the audio period; turn the noise off to see the artifact alone. <strong>Illustrative</strong>: the onsets follow the code (fixed: <code>8cbbfb3</code>; random: the rules of <code>c528336</code>, drawn with this page's own random generator), but the artifact (one brief 1 µV transient per 1024-frame period) and the noise are invented; the real artifact's shape and size are not documented.</p>
+    <div class="controls">
+      <label for="jit-mode">Timing <select id="jit-mode"><option value="fixed">Fixed SOA 32 ms (first version)</option><option value="random" selected>Random SOA 40 to 50 ms (pull request)</option></select></label>
+      <label for="jit-lat">Artifact: latency after the + clicks with the fixed SOA (ms) <input type="range" id="jit-lat" min="0" max="21" step="0.5" value="1"><output for="jit-lat"></output></label>
+      <label for="jit-seed">Random draw <input type="range" id="jit-seed" min="1" max="20" step="1" value="1"><output for="jit-seed"></output></label>
+      <label><input type="checkbox" id="jit-noise" checked> Background noise (5 µV RMS per trial)</label>
+    </div>
+    <div class="legend-row" aria-hidden="true"><span><i style="background:var(--plot-c1)"></i>+ click (code 5)</span><span><i style="background:var(--plot-c2)"></i>- click (code 6)</span><span><i style="background:var(--warn)"></i>artifact (once per audio period)</span><span><i style="background:var(--plot-grid);border:1px solid var(--plot-axis)"></i>audio period boundaries (1024 frames)</span></div>
+    <canvas class="plot tl" id="jit-tl" aria-label="The first 300 ms of a run: clicks, audio periods and artifacts"></canvas>
+    <canvas class="plot ph" id="jit-ph" aria-label="Where the clicks fall within the audio period"></canvas>
+    <canvas class="plot avg" id="jit-avg" aria-label="Averages of the + clicks, of the - clicks, and their sum"></canvas>
+    <div class="readout">
+      <div><div class="k">Distinct click positions in the period (+ / -)</div><div class="v" id="jit-pos">…</div></div>
+      <div><div class="k">Artifact peak, + average</div><div class="v" id="jit-ap">…</div></div>
+      <div><div class="k">Artifact peak, - average</div><div class="v" id="jit-am">…</div></div>
+      <div><div class="k">Artifact peak in the added ABR</div><div class="v" id="jit-as">…</div></div>
+    </div>
+    <div class="status" id="jit-status"></div>
+  </div>
+  <p>Two things to notice. First, adding the two polarities does not remove this artifact: it is locked to the device, not to the sign of the click, so with the fixed SOA it appears in the added ABR at both latencies with half its size. Second, the random SOA does not remove the artifact from the recording; it spreads it over the epoch, where it averages down like noise. The pull request lists as still to do: "record one ABR run and one FFR run, and check in the ABR that the 1 ms and 11.7 ms artifacts are gone."</p>
+
+  <h2 id="ffr">The FFR pipeline</h2>
+  <p>"FFR (fast)" (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/ffr.py"><code>ffr.py</code></a>, branch fast-acquisition, changed by the pull request) plays the syllable /da/ in four conditions during a fast acquisition.</p>
+  <p><strong>The /da/.</strong> One file, <code>portiloop/sounds/ffr/da_positive.wav</code>: mono, 32-bit float, 44.1 kHz, 5292 samples (120 ms), RMS 0.100 and peak 0.334 of full scale. Its description file (<code>da_positive.json</code>) says how it was made: "Praat KlattGrid; tmda-pav CV presets v3 (filtered stop release)", consonant "d", vowel "a", <code>"frequency_hz": 98.0</code>, <code>"consonant_duration_ms": 20.0</code>, 2 ms onset and offset ramps. It is therefore a synthetic /da/ with an F0 of 98 Hz (our autocorrelation of the file also gives 98.0 Hz), not the 40 ms or 170 ms /da/ used in many FFR studies [4]. When the run is prepared, /da/ is resampled once to the 48 kHz of the sound output with <code>scipy.signal.resample_poly</code> (160/147), giving 5760 frames; the negative /da/ is "exactly -1 x the positive /da/" (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/ffr.py#L142-L171"><code>make_conditions()</code></a>, <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/ffr.py#L205-L228"><code>render()</code></a>).</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Condition</th><th>Code</th><th>Sound</th></tr></thead>
+    <tbody>
+      <tr><td><code>+</code></td><td>1</td><td>positive /da/</td></tr>
+      <tr><td><code>-</code></td><td>2</td><td>negative /da/ (-1 × /da/)</td></tr>
+      <tr><td><code>+N</code></td><td>3</td><td>positive /da/ + a new pink-noise token</td></tr>
+      <tr><td><code>-N</code></td><td>4</td><td>negative /da/ + a new pink-noise token</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small muted"><code>CONDITIONS = (("+", 1), ("-", 2), ("+N", 3), ("-N", 4))</code>, <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/ffr.py#L64-L70">ffr.py, lines 64 to 70</a>. The noise is added, not inverted, in <code>-N</code>.</p>
+  <ul>
+    <li><strong>Noise</strong> (changed by the pull request): each noise trial gets its own pink noise, generated at 48 kHz by <code>make_noise()</code> (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/ffr.py#L118-L139">lines 118 to 139</a>): white Gaussian noise whose spectrum is shaped to 1/f power between 20 Hz and 22.05 kHz, 120 ms long, 2 ms raised-cosine ramps, scaled to "+10 dB SNR against /da/ (RMS over the 120 ms)". So the noise RMS is 0.0316 of full scale, against 0.100 for /da/. Each token comes from its own seed (<code>noise_seed</code> in <code>_trials.csv</code>), so it can be regenerated: "No token is ever repeated, so the noise does not average into the FFR." The first version used four fixed files, <code>noise1.wav</code> to <code>noise4.wav</code>, which are no longer used.</li>
+    <li><strong>Blocks</strong>: 250 blocks of the four conditions, shuffled within each block (<code>rng.permutation(4)</code>): 1000 trials, 250 per condition; "a condition can repeat back to back across blocks".</li>
+    <li><strong>Timing</strong>: SOA uniformly random between 195 and 205 ms, rounded to the frame, so 75 to 85 ms of silence between the end of one /da/ and the next; 1 s of silence before the first trial, 0.5 s after the last. A run lasts about 201.4 s (we built five runs with the code: 201.37 to 201.55 s; the docstring says "about 3.3 min", the README "about 3.4 min"). "A session is 4 runs, so 4 recordings."</li>
+    <li><strong>Level</strong>: /da/ has the same level in all conditions, "the level calibrated at 80 dB SPL" (docstring, line 13). The loudest sample of a run is "about 0.46 of full scale" according to the pull request; in our five runs it was 0.440 to 0.453. Each trial is checked for clipping before the run starts.</li>
+  </ul>
+
+  <h2 id="test-conda">Test Sound and Cond A</h2>
+  <ul>
+    <li><strong>Test Sound</strong>, with "FFR (fast)" selected: "a train of positive /da/ at 200 ms" for 5 s, 25 tokens (<code>test_sound()</code>, <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/ffr.py#L412-L439">ffr.py, lines 412 to 439</a>). The README says to use it to "calibrate it for 80 dB SPL" (a sound level meter and a coupler for your earphones are needed; the procedure is not described). With "Click ABR (fast)": "the clicks of a run (alternating, jittered SOA)" for 5 s, 111 clicks (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/click_abr.py#L180-L208">click_abr.py, lines 180 to 208</a>). Test Sound plays outside the recording and writes nothing.</li>
+    <li><strong>Cond A</strong>: "With the stimulation off ("Cond A"), the run is the same, with triggers, in silence." The player still runs and plays silence, and the trigger codes are written at the times the stimuli would have been played. The file name ends in <code>_CONDA</code>.</li>
+  </ul>
+  <div class="callout tip"><span class="callout-title">A use for Cond A (our suggestion)</span>Averaging a Cond A run on its triggers shows anything locked to the trials that is not caused by the sound reaching the ear: activity of the device or the player, or an artifact of the trigger timing. It should be flat. It does not test the electrical leak of the earphones (no sound is played); for that, a run with the earphones playing but not in the ears, or their tube clamped for insert earphones, is the usual check.</div>
+
+  <h2 id="triggers">Triggers: how a code gets into the right row</h2>
+  <p>The sound card and the amplifier have their own clocks, and the device's operating system cannot play a sound at an exact moment. The code does not try to; it measures when each onset is played and puts the code in the row recorded at that time (README lines 101 to 110; <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/fast_capture/ffrplay.c#L1-L25"><code>ffrplay.c</code>, header</a>; <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/fast_capture/adscapture.c#L263-L334"><code>adscapture.c</code>, lines 263 to 334</a>):</p>
+  <ol class="steps">
+    <li><strong>One sound for the whole run.</strong> The Python side renders the run (silences included) as one 48 kHz stream, so that the SOAs are "exact to the frame (1/48 ms)", and writes the schedule: trial, code and onset frame of each stimulus.</li>
+    <li><strong>The player follows the sound card's clock.</strong> <code>ffrplay</code> writes the stream in chunks of 5 ms through the <code>softvol</code> device (so the volume of the Control Center applies), and after each write asks ALSA which frame is being played, with the time (<code>CLOCK_MONOTONIC</code>). It fits a straight line to the last 2 s of these pairs and, when it writes an onset, sends "<code>&lt;trial&gt; &lt;code&gt; &lt;time&gt;</code>" to <code>adscapture</code>, about 100 ms before the onset is played.</li>
+    <li><strong>The capture program follows the amplifier's clock.</strong> Each row has an expected time, from a reference that follows the DRDY reads and whose period is re-estimated every second. The code of an onset goes into the row whose time is nearest; <code>offset_us</code> is the remaining difference (at most half a sample period: 31 µs at 16 kSPS).</li>
+    <li><strong>Problems are counted.</strong> A trigger that arrives after its row was written is "late": it is listed with its row in <code>_triggers.csv</code> and <code>_trials.csv</code> but not written in the CSV; two triggers in one row keep the first ("same_row"). The counts are in <code>_stats.json</code>, and the Python side logs "some triggers may be wrong" if there was an underrun, a late trigger or a shared row.</li>
+  </ol>
+  <p>The authors' measurements, quoted from the README (lines 112 to 122, "On bored-yarn (18 Nov 2026)"): the onset times "lie on a straight line in the onset frames to within 2 to 3 us RMS (14 us at most)"; "Over a run, the ADS's clock moves by up to 2.6 ms against the Coral's (0.25 % slower than nominal, varying by a few ppm): counting samples from the first trigger would put the last ones up to 40 rows off at 16 kSPS"; runs of 1000 trials at 8 and 16 kSPS had "no underrun, all the triggers in the CSV, 9 missed conversions (filled) in the run of 1000 trials at 16 kSPS, none at 8 kSPS".</p>
+  <div class="callout danger"><span class="callout-title">What the trigger time does not include</span>"Not included in the onset time: the latency of the codec, amplifier and earphones after the audio DMA, and the delay of the ADS1299's filter. Both are constant; measure them once (for example, the sound output through a divider into a channel) to place the onsets in absolute time." (README lines 124 to 126). Neither delay has been measured in the repository, and we have not measured them. Add to them the travel time of sound from the transducer to the eardrum (in air, about 1 ms for 34 cm; for insert earphones, the length of their tube). Until they are measured, ABR and FFR latencies from the Portiloop are relative: fine for comparing conditions or sessions recorded with the same setup, not for comparing with published normative latencies. A latency correction then shifts every trigger by the same number of samples.</div>
+  <p>One more detail: the sound system's PulseAudio daemon "keeps the sound card for about 5 s after a sound played through it", and the player waits for it (up to 10 s, <code>OPEN_TIMEOUT</code>), so a run started right after Test Sound has a longer silence before its first trial. The triggers are not affected.</p>
+
+  <h2 id="files">The files</h2>
+  <div class="callout disk"><span class="callout-title">On the hard drive: one ABR or FFR run</span>Same folder and names as the other pipelines (<a href="05-files.html#names">tutorial 05</a>): <code>&lt;name&gt;_&lt;date&gt;_&lt;time&gt;_CONDB/</code> on the SD card (or in the home folder of the internal memory without a card). Inside:
+    <ul class="tight">
+      <li><code>&lt;name&gt;.csv</code>: <code>raw_ch1</code> to <code>raw_ch8</code> in µV with 3 decimals ("the LSB is 0.022 uV at gain 24"), then <code>trigger</code>: the code (1 to 4 for the FFR, 5 or 6 for the ABR) in the row of each onset, 0 elsewhere. ("Acquisition only (fast)" writes <code>stimulation_on</code>, always 0, instead.) A new file <code>&lt;name&gt;_part2.csv</code>, ... starts every 28,800,000 rows, which a single run never reaches (30 minutes at 16 kSPS).</li>
+      <li><code>&lt;name&gt;_trials.csv</code>: one line per trial (the design), completed after the recording with the row of its trigger.</li>
+      <li><code>&lt;name&gt;_triggers.csv</code>: the triggers as written by the capture program: <code>trial,code,row,onset_time,offset_us,in_csv</code>.</li>
+      <li><code>&lt;name&gt;_metadata.json</code>: the settings, with a <code>fast_capture</code> section and an <code>ffr</code> or <code>click_abr</code> section.</li>
+      <li><code>&lt;name&gt;_stats.json</code>: the sampling statistics, with a <code>fast_capture</code> section and an <code>ffr_playback</code> or <code>click_abr_playback</code> section.</li>
+    </ul>
+  </div>
+  <p><strong>Sizes.</strong> The README gives "75 to 100 bytes per row". Our arithmetic for one run (the silence before the sounds adds a little):</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Run</th><th>2000 SPS</th><th>4000</th><th>8000</th><th>16000</th></tr></thead>
+    <tbody>
+      <tr><td>Click ABR, 91.5 s</td><td>0.18 M rows, 14 to 18 MB</td><td>0.37 M, 27 to 37 MB</td><td>0.73 M, 55 to 73 MB</td><td>1.46 M, 110 to 146 MB</td></tr>
+      <tr><td>FFR, 201.4 s</td><td>0.40 M rows, 30 to 40 MB</td><td>0.81 M, 60 to 81 MB</td><td>1.61 M, 121 to 161 MB</td><td>3.22 M, 242 to 322 MB</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="trials-csv">_trials.csv, column by column</h3>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Column</th><th>Click ABR</th><th>FFR</th></tr></thead>
+    <tbody>
+      <tr><td><code>trial</code></td><td colspan="2">1, 2, 3, ... in the order played</td></tr>
+      <tr><td><code>polarity</code> / <code>block</code>, <code>condition</code></td><td><code>+</code> or <code>-</code></td><td>block 1 to 250; <code>+</code>, <code>-</code>, <code>+N</code>, <code>-N</code></td></tr>
+      <tr><td><code>code</code></td><td>5 or 6</td><td>1 to 4</td></tr>
+      <tr><td><code>noise_seed</code></td><td>(none)</td><td>the seed of the trial's noise token, 0 without noise (replaces the old <code>noise</code> column, 1 to 4)</td></tr>
+      <tr><td><code>onset_frame</code></td><td colspan="2">onset in the rendered sound, in frames at 48 kHz</td></tr>
+      <tr><td><code>soa_ms</code></td><td colspan="2">time to the next onset (empty for the last trial)</td></tr>
+      <tr><td><code>row</code></td><td colspan="2">the CSV row of the trigger, counted "from 0 at the first data row" (the first row after the header): the index of the row when the CSV is read with pandas</td></tr>
+      <tr><td><code>offset_us</code></td><td colspan="2">onset time minus the time of that row</td></tr>
+      <tr><td><code>in_csv</code></td><td colspan="2">1 if the code was written in the CSV, 0 if the trigger was late or shared a row</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small muted">Fields: <code>trial_fields</code> in <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/ffr.py#L249-L252">ffr.py, line 252</a> and <a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/click_abr.py#L110-L112">click_abr.py, line 112</a>; the last three are added by <code>write_trials()</code> after the recording (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/ffr.py#L315-L332">lines 315 to 332</a>). If the recording process failed before that step, the file has no <code>row</code> column; the <code>trigger</code> column of the CSV still has the codes.</p>
+
+  <h3 id="metadata">_metadata.json and _stats.json</h3>
+  <ul>
+    <li><strong><code>_metadata.json</code></strong>: the usual settings (tutorial 05), with <code>"frequency"</code> the fast rate, <code>"python_clock": false</code>, <code>"leadoff_detection": false</code>, and <code>"fast_capture"</code>: <code>csv_rows_per_file</code>, <code>csv_files</code>, <code>decimated_rate</code> (250.0), <code>decimated_signal</code> ("means of N samples (GUI display and LSL only)") (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/fast_capture.py#L132-L142">fast_capture.py, lines 132 to 142</a>). The <strong><code>ffr</code></strong> section holds the stimulus parameters (the SHA-256 of <code>da_positive.wav</code>, rates, <code>snr_db</code>, <code>noise_rms</code>, <code>token_frames</code>), the <code>seed</code> and how it was used (<code>random_draws</code>), <code>numpy_version</code>, the trial counts, <code>trigger_codes</code>, <code>soa_ms</code>, <code>duration_s</code>, <code>sound</code> (false in Cond A), <code>volume</code>, and two definitions worth reading, <code>onset_time</code> and <code>trigger_row</code> (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/ffr.py#L282-L313">lines 282 to 313</a>). The <strong><code>click_abr</code></strong> section has the same structure, with <code>click_us</code>, <code>click_amplitude_full_scale</code>, the click samples, <code>order</code> and <code>mean_rate_hz</code> (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/src/core/click_abr.py#L136-L171">click_abr.py, lines 136 to 171</a>). Note that the metadata also keeps the overnight settings (detection channel, "Stimulation starts after", the stimulation delays), which these pipelines do not use.</li>
+    <li><strong><code>_stats.json</code></strong>: <code>os_time</code>, <code>nb_steps</code>, <code>os_sampling_frequency</code>, <code>nb_lost_samples</code>, <code>lost_samples</code>, then <code>fast_capture</code>: <code>stop_reason</code>, <code>rows</code>, <code>csv_files</code>, <code>missed_conversions</code>, <code>bad_status_frames</code>, <code>buffer_overflows</code>, <code>read_timeouts</code>, <code>longest_gap_us</code>, <code>ads_period_us</code>, and <code>triggers</code> (<code>received</code>, <code>in_csv</code>, <code>late</code>, <code>same_row</code>, <code>after_the_end</code>, <code>malformed</code>, <code>overflows</code>) (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/fast_capture/adscapture.c#L425-L457">adscapture.c, lines 425 to 457</a>). The player adds <code>ffr_playback</code> or <code>click_abr_playback</code>: <code>stop_reason</code>, <code>onsets</code>, <code>onsets_sent</code>, <code>onsets_sent_late</code>, <code>underruns</code>, <code>dac_rate_hz</code>, the scatter of the playback positions, and <code>exit_code</code> (<a href="https://github.com/TomsCoder/portiloop-software/blob/c528336f10a3b94d683b6092fcdc72f1fbf73dff/portiloop/fast_capture/ffrplay.c#L249-L272">ffrplay.c, lines 249 to 272</a>).</li>
+  </ul>
+  <div class="callout tip"><span class="callout-title">Check each run before analysing it</span>In <code>_stats.json</code>: <code>stop_reason</code> of the player is "end of the audio" (not "stopped (SIGTERM)"); <code>onsets_sent</code> equals <code>onsets</code> (2000 or 1000); <code>underruns</code> is 0; <code>triggers.in_csv</code> equals the number of trials and <code>late</code> and <code>same_row</code> are 0; <code>nb_lost_samples</code> is small. In <code>_metadata.json</code>: <code>ffr.sound</code> or <code>click_abr.sound</code> is true for a Cond B run.</div>
+
+  <h2 id="analysis">Analysis</h2>
+  <p>The repository has no analysis code for these recordings; <code>portiloop_analysis</code> (tutorials 06 to 09) is written for 250 Hz nights. The usual steps, which the sketch below implements:</p>
+  <ol class="steps">
+    <li><strong>Load</strong> the channel of the active electrode (all CSV parts, in order), the rate from the metadata, the trials with their rows, and the lost rows.</li>
+    <li><strong>Band-pass</strong> the continuous signal: 100 to 3000 Hz for the ABR [3], 70 to 2000 Hz for the FFR [4], with a zero-phase filter (forward and backward, so that latencies are not shifted), and a notch at the mains frequency (50 or 60 Hz) if mains noise is strong. The upper edge must stay below half the sampling rate: at 2 kSPS, the ABR band cannot be used as such.</li>
+    <li><strong>Epochs</strong> around each trigger row: -5 to +15 ms for the ABR (the next click comes at least 40 ms later), -40 to +200 ms for the FFR; subtract the mean of the pre-stimulus samples; drop epochs with a lost row or with an amplitude above a threshold (the 40 µV in the sketch is a placeholder: choose yours on your data).</li>
+    <li><strong>Average per polarity</strong>, then add and subtract.</li>
+    <li><strong>Reliability</strong>: correlate two independent halves.</li>
+    <li><strong>Latencies</strong>: correct for the constant delays if they have been measured (see <a href="#triggers">Triggers</a>).</li>
+  </ol>
+
+  <h3 id="polarity">Adding and subtracting the two polarities</h3>
+  <p>Anything that follows the sign of the stimulus (the electrical leak of the earphones, the cochlear microphonic of the hair cells) is inverted between the two polarities; anything that does not is the same in both. So:</p>
+  <ul>
+    <li><strong>ABR</strong>: the added average (+ and - averaged together) cancels the stimulus artifact and the cochlear microphonic: in Skoe and Kraus's words, "stimulus artifact and CM can be minimized from the response by adding responses to alternating stimulus polarities" [3]. The subtracted average shows what was cancelled, which is useful to see how large the artifact was.</li>
+    <li><strong>FFR</strong>: "Adding the responses to da0 and daπ biases the FFR to the envelope (FFRENV)", and "subtracting the responses to da0 and daπ biases the FFR to the fine structure" (TFS) [4]; Aiken and Picton separated envelope and spectral responses to vowels in the same way [5]. The envelope response is dominated by F0 (98 Hz here); the fine-structure response by the harmonics, and it keeps any stimulus artifact, which the addition cancels. Compute these from codes 1 and 2 (quiet) and, separately, from codes 3 and 4 (in noise).</li>
+  </ul>
+
+  <div class="widget" id="pol">
+    <div class="widget-title">Adding and subtracting polarities, with the real /da/ of the FFR pipeline</div>
+    <p class="widget-desc">What to try: look at the two sounds; then at the modelled responses; then at their sum and difference, with and without the stimulus artifact. The sound is the real <code>da_positive.wav</code> (resampled to 16 kHz). The responses are <strong>a model, not data</strong>: each polarity's response is the half-wave rectified sound (a crude stand-in for auditory nerve fibres firing during one phase of the pressure wave), low-pass filtered at 1 kHz and delayed by 8 ms (cABRs occur "at approximately 6-10 ms post-stimulus onset" [3]); the artifact is a scaled copy of the sound with no delay. Everything is band-passed 70 to 2000 Hz, as in the analysis.</p>
+    <div class="controls">
+      <label for="pol-view">Show <select id="pol-view"><option value="snd">The sound: +/da/ and -/da/</option><option value="resp">Recorded response to each polarity (model)</option><option value="sum" selected>Added and subtracted (model)</option></select></label>
+      <label><input type="checkbox" id="pol-art" checked> Stimulus artifact</label>
+    </div>
+    <canvas class="plot da" id="pol-t" aria-label="Waveforms of the selected view"></canvas>
+    <canvas class="plot sp" id="pol-f" aria-label="Spectra of the added and subtracted averages"></canvas>
+    <div class="readout">
+      <div><div class="k">F0 of the file</div><div class="v" id="pol-f0">…</div></div>
+      <div><div class="k">Largest peak, added</div><div class="v" id="pol-pa">…</div></div>
+      <div><div class="k">Largest peak, subtracted</div><div class="v" id="pol-ps">…</div></div>
+      <div><div class="k">Artifact left in added / subtracted</div><div class="v" id="pol-ar">…</div></div>
+    </div>
+    <div class="status" id="pol-status">Loading the /da/…</div>
+  </div>
+
+  <h3 id="split-half">Split-half reliability, and a trap of strict alternation</h3>
+  <p>A common check of an averaged response is to split the trials in two halves, average each, and correlate the two averages over the response window; "One method is to average the odd sweeps separate from the even sweeps" [4]. The pull request reports such a check for the ABR: "In the averaged ABR (10 000 trials), wave V is clear and the odd/even halves agree (r = 0.97)."</p>
+  <div class="callout warning"><span class="callout-title">Odd and even trials are the two polarities</span>The clicks alternate strictly, starting with +: every odd trial is a + click and every even trial a - click. Splitting by odd and even trial numbers therefore compares the + average with the - average, not two equivalent halves: it mixes reliability with the polarity-dependent parts (artifact, cochlear microphonic). Split by <strong>pairs</strong> instead (trials 1-2, 5-6, ... against 3-4, 7-8, ...), so that each half has both polarities, and compare the added averages of the halves. The pull request does not say how its halves were made. (Two thousand clicks per run also means that 10,000 trials are five runs; the pull request does not say how the runs were combined.)</div>
+
+  <h3 id="sketch">A Python sketch</h3>
+  <p>A minimal analysis with pandas, NumPy and SciPy. Replace the two prefixes with the path of a recording without <code>.csv</code> (for example <code>/media/sd/abr_2026-11-20_10-00-00_CONDB/abr_2026-11-20_10-00-00_CONDB</code>) and set <code>channel</code> and <code>mains</code> for your montage and site.</p>
+<pre data-file="abr_ffr_sketch.py (tested on synthetic data only)"><code class="language-python">import glob, json, re
+import numpy as np
+import pandas as pd
+from scipy.signal import butter, filtfilt, iirnotch, sosfiltfilt
+
+
+def load_run(prefix, channel="raw_ch6"):
+    """One fast recording: the channel in uV (all CSV parts), its rate, the trials and the lost rows."""
+    meta = json.load(open(prefix + "_metadata.json"))
+    stats = json.load(open(prefix + "_stats.json"))
+    parts = sorted(glob.glob(prefix + "_part*.csv"), key=lambda p: int(re.search(r"_part(\d+)\.csv$", p).group(1)))
+    x = np.concatenate([pd.read_csv(p, usecols=[channel])[channel].to_numpy(float)
+                        for p in [prefix + ".csv"] + parts])
+    trials = pd.read_csv(prefix + "_trials.csv")
+    trials = trials[trials["row"].notna()].copy()      # a trial without a row was not played or not received
+    trials["row"] = trials["row"].astype(int)
+    return x, meta["frequency"], trials, np.array(stats["lost_samples"], dtype=int)
+
+
+def epochs(x, fs, trials, lost, band, tmin, tmax, reject_uv, mains=None):
+    """Band-pass (zero phase), optional mains notch, epochs around each trigger row, baseline, rejection."""
+    xf = sosfiltfilt(butter(2, band, btype="bandpass", fs=fs, output="sos"), x)
+    if mains:                                          # 50 or 60 (Hz): the mains frequency of your site
+        xf = filtfilt(*iirnotch(mains, 30, fs), xf)
+    lags = np.arange(int(round(tmin * fs)), int(round(tmax * fs)) + 1)
+    ok = (trials["row"] + lags[0] &gt;= 0) &amp; (trials["row"] + lags[-1] &lt; len(x))
+    trials = trials[ok]
+    idx = trials["row"].to_numpy()[:, None] + lags
+    ep = xf[idx]
+    ep -= ep[:, lags &lt; 0].mean(axis=1, keepdims=True)  # baseline: the samples before the trigger
+    bad = np.isin(idx, lost).any(axis=1) | (np.abs(ep).max(axis=1) &gt; reject_uv)
+    return lags / fs, ep[~bad], trials[~bad].reset_index(drop=True)
+
+
+def split_half_r(t, ep, trials, codes, window):
+    """Correlation of two halves made of alternate PAIRS of trials (each half keeps both polarities)."""
+    pair = (trials["trial"] - 1) // 2
+    halves = []
+    for h in (0, 1):
+        sel = (pair % 2 == h).to_numpy()
+        halves.append(np.mean([ep[sel &amp; (trials["code"] == c).to_numpy()].mean(axis=0) for c in codes], axis=0))
+    w = (t &gt;= window[0]) &amp; (t &lt;= window[1])
+    return np.corrcoef(halves[0][w], halves[1][w])[0, 1]
+
+
+# ---- Click ABR (codes 5 = +, 6 = -): 100 to 3000 Hz, -5 to +15 ms
+x, fs, trials, lost = load_run("ABR_RECORDING_PREFIX")          # without ".csv"
+t, ep, tr = epochs(x, fs, trials, lost, (100, min(3000, 0.45 * fs)), -0.005, 0.015, reject_uv=40, mains=60)
+plus = ep[(tr["code"] == 5).to_numpy()].mean(axis=0)
+minus = ep[(tr["code"] == 6).to_numpy()].mean(axis=0)
+abr = (plus + minus) / 2            # the ABR: stimulus artifact and cochlear microphonic cancel
+artifact = (plus - minus) / 2       # what follows the polarity: stimulus artifact, cochlear microphonic
+print(len(tr), "epochs kept of", len(trials), "; split-half r (1 to 10 ms) =",
+      round(split_half_r(t, ep, tr, (5, 6), (0.001, 0.010)), 3))
+
+# ---- FFR (codes 1 = +/da/, 2 = -/da/; 3 and 4 with noise): 70 to 2000 Hz, -40 to +200 ms
+x, fs, trials, lost = load_run("FFR_RECORDING_PREFIX")
+t, ep, tr = epochs(x, fs, trials, lost, (70, min(2000, 0.45 * fs)), -0.040, 0.200, reject_uv=40, mains=60)
+r_pos = ep[(tr["code"] == 1).to_numpy()].mean(axis=0)
+r_neg = ep[(tr["code"] == 2).to_numpy()].mean(axis=0)
+env = (r_pos + r_neg) / 2           # added: envelope-following response (F0)
+tfs = (r_pos - r_neg) / 2           # subtracted: temporal fine structure (and any stimulus artifact)
+w = (t &gt;= 0.010) &amp; (t &lt; 0.130)      # response window: adjust to your latency
+f = np.fft.rfftfreq(w.sum(), 1 / fs)
+spec = lambda y: 2 * np.abs(np.fft.rfft(y[w] * np.hanning(w.sum()))) / np.hanning(w.sum()).sum()
+print("F0 (98 Hz) amplitude in the envelope response:", spec(env)[np.argmin(np.abs(f - 98))], "uV")</code></pre>
+  <div class="callout note"><span class="callout-title">How we tested it</span>Untested on real recordings (we have none). We tested it on two synthetic recordings that we made in the format of the code under review: the trials come from the pull request's own <code>make_run()</code> (2000 clicks; 1000 FFR trials), at 16 kSPS, with an invented ABR (largest peak 0.36 µV at 5.75 ms), a polarity-following artifact and "cochlear microphonic", one transient per audio period, 2 µV white noise per sample, 20 µV of 60 Hz mains, drift, movement bursts and 12 lost samples; and for the FFR, the half-wave rectified model of the widget plus a 2 µV stimulus artifact. Results: 1,849 of 2,000 ABR epochs kept; the added ABR correlates with the (filtered) invented one at r = 0.97 and its largest peak is at 5.75 ms; in the first 0.6 ms after the click, the + average reaches 3.90 µV of artifact and the added ABR 0.07 µV; the pair split-half r is 0.93, the odd/even (polarity) split 0.82. FFR: the envelope response has 0.077 µV at 98 Hz and 0.002 µV at 60 Hz (mains removed by the notch); it correlates with the modelled envelope at r = 0.88 and not with the artifact (r = -0.12), while the subtracted response correlates with the modelled fine structure plus artifact at r = 1.00 (0.996). These numbers say the code does what it claims on data that follow our assumptions; they say nothing about real Portiloop responses. Our scripts are kept with the site's working notes, not in the repository.</div>
+
+  <h2 id="pr-tests">What the pull request reports</h2>
+  <p>Quoted from the pull request's "Testing" section, as written by its author; we could not check them:</p>
+  <ul>
+    <li>"On the Portiloop (16 kSPS), before the random timing was added: a Click ABR run recorded all 2000 triggers in the CSV and the player reached the end of the sound. In the averaged ABR (10 000 trials), wave V is clear and the odd/even halves agree (r = 0.97)."</li>
+    <li>"Random timing: gaps are within 40 [to] 50 ms, mean 44.95 ms. Where the clicks fall within the 1024-frame audio periods is now spread evenly for both polarities." (offline, on a Mac)</li>
+    <li>"FFR noise: 500 noise tokens, all different. The spectrum slopes about −10 dB per decade (pink), the SNR is 10.00 dB, the same seed gives the same noise, and the rendered sound matches ±/da/ plus that trial's noise." (offline)</li>
+    <li>"Not yet tested on the Portiloop: the random timing and the new FFR noise."</li>
+  </ul>
+  <p class="small muted">"[to]": the pull request writes the range with a dash, which this site does not use. Our own checks with the code (above) agree: SOAs between 40.0 and 50.0 ms (mean 45.00 ms over 200 runs), noise at +10.00 dB SNR, five FFR runs with 250 trials per condition.</p>
+
+  <h2 id="verified">What is verified and what is not</h2>
+  <div class="scroll-x"><table class="verified">
+    <thead><tr><th>Statement</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Parameters of the Click ABR and FFR runs, file columns, metadata and statistics keys</td><td>Read in the code at <code>c528336</code>, with links; run durations, SOA ranges, click positions in the audio period, noise SNR and peaks computed by running the code's <code>make_run()</code>, <code>make_noise()</code> and <code>render()</code> on a desktop</td></tr>
+      <tr><td>The /da/ file: rate, length, RMS, peak, F0 98 Hz, synthesis method</td><td>Read in the file and its JSON; SHA-256 checked; F0 by our autocorrelation</td></tr>
+      <tr><td>Capture, trigger and lost-sample mechanisms</td><td>Read in <code>adscapture.c</code>, <code>ffrplay.c</code> and <code>fast_capture.py</code>; not run</td></tr>
+      <tr><td>Timing precision, lost-sample rates, trigger tests</td><td>The authors' measurements (README); not reproduced</td></tr>
+      <tr><td>The ABR recorded by the pull request (wave V, r = 0.97)</td><td>The author's statement; no recording available to us</td></tr>
+      <tr><td>Removal of the 1 and 11.7 ms artifacts by the random timing</td><td><strong>Not tested</strong>, by the pull request's own account; our explanation of the 11.7 ms is arithmetic consistent with theirs</td></tr>
+      <tr><td>Codec, amplifier and earphone latency; delay of the ADS1299 filter</td><td><strong>Unknown</strong> (not measured); the 1.5-sample delay of the filter is our calculation from the datasheet</td></tr>
+      <tr><td>Acoustic polarity of the "condensation" click; click level</td><td><strong>Unknown</strong></td></tr>
+      <tr><td>Montage used by the lab for ABR and FFR</td><td><strong>Not documented</strong> in the repository</td></tr>
+      <tr><td>The Python sketch</td><td>Tested on our synthetic recordings only</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="issues">Points for the review</h3>
+  <p>Things we noticed while reading the code under review, for its authors:</p>
+  <ol class="tight">
+    <li>The odd/even split-half of the PR's test splits by polarity under strict alternation (<a href="#split-half">above</a>); the method and the way five runs make 10,000 trials should be stated.</li>
+    <li>"Stimulation starts after" is silently ignored by the fast pipelines (<code>pause_value</code> is never read in <code>start_fast_capture()</code>), while the metadata still records <code>sleep_timeout</code> and the stimulation delays. A note in the GUI or the README, or leaving them out of the metadata, would avoid confusion.</li>
+    <li>The click's acoustic polarity ("condensation") and level are not documented or measured; the README gives a level only for /da/ (80 dB SPL).</li>
+    <li>The FFR code and metadata refer to <code>FFR_Timeline_and_parameters.pdf</code>, which is not in the repository; the montage is not documented anywhere.</li>
+    <li>Run durations differ slightly between texts: FFR "about 3.3 min" (docstring) and "about 3.4 min" (README) for 201.4 s; ABR "about 92 s" (docstring, README) and "~91 s" (PR) for 91.5 s.</li>
+    <li>The constant delays (codec, earphones, ADS1299 filter) are acknowledged but not measured; absolute latencies depend on them.</li>
+    <li><code>da_negative.wav</code> and <code>noise1.wav</code> to <code>noise4.wav</code> are still shipped but unused (the PR says so), and old FFR <code>_trials.csv</code> files have a <code>noise</code> column where new ones have <code>noise_seed</code>.</li>
+  </ol>
+
+  <h2 id="exercises">Exercises</h2>
+  <details class="exercise"><summary>Which rate?</summary><p>You plan an FFR analysis up to 2000 Hz and a click ABR analysed between 100 and 3000 Hz, in the same session. Which sampling rate do you choose, and why not 4000?</p></details>
+  <details class="solution"><summary>Answer</summary><p>16 kSPS. The ADS1299 filter is -3 dB at 1048 Hz at 4 kSPS and 2096 Hz at 8 kSPS: at 4 kSPS both bands are cut by the amplifier itself, and at 8 kSPS the FFR band is at the limit and the ABR band (up to 3000 Hz) is attenuated. At 16 kSPS the -3 dB point is 4193 Hz. The cost is the file size: about 110 to 146 MB per ABR run and 242 to 322 MB per FFR run.</p></details>
+
+  <details class="exercise"><summary>Reading the trials</summary><p>In an FFR <code>_trials.csv</code>, a trial (an invented example) has <code>condition</code> <code>-N</code>, <code>noise_seed</code> 3274565379, <code>row</code> 1,316,977 and <code>in_csv</code> 0. What sound did the participant hear, where is its epoch, and is the code in the CSV?</p></details>
+  <details class="solution"><summary>Answer</summary><p>The negative /da/ plus the pink-noise token made by <code>ffr.make_noise(3274565379, token_frames, noise_rms)</code> (the two values are in the <code>ffr</code> section of the metadata). Its epoch starts from CSV row 1,316,977 (counting from 0 at the first data row, the pandas index). <code>in_csv</code> 0 means the code 4 is not in the <code>trigger</code> column: the trigger was late or shared its row; the row in <code>_trials.csv</code> is still computed from its time. Check <code>triggers.late</code> in <code>_stats.json</code>, and decide whether to keep such trials.</p></details>
+
+  <details class="exercise"><summary>An artifact at 1 ms</summary><p>A colleague shows you an added click ABR from the first version of the pipeline (fixed 32 ms) with a sharp peak at 1 ms and another at 11.7 ms. Are they wave I and a late wave? What would you do?</p></details>
+  <details class="solution"><summary>Answer</summary><p>Probably neither: these are the two latencies the authors attributed to the device's periodic activity locked to the clicks with the fixed SOA (README, lines 142 to 144). Adding polarities does not remove them. Average the + and - clicks separately: an artifact appears at about 1 ms in one and about 11.7 ms in the other. Record new runs with the random SOA, and a Cond A run to check that the device leaves nothing locked to the triggers.</p></details>
+
+  <details class="exercise"><summary>Absolute latency</summary><p>Your wave V is at 6.2 ms after the trigger rows at 16 kSPS. Can you compare it with a published norm?</p></details>
+  <details class="solution"><summary>Answer</summary><p>Not yet. The trigger time is when the audio DMA reads the click; the codec, amplifier and earphone latency, the sound's travel to the eardrum and the ADS1299 filter delay (about 0.09 ms at 16 kSPS by our calculation) all come on top, and only the last one is known. Measure the rest once, as the README suggests (the sound output through a divider into a channel, plus the acoustic path), with no participant connected, and subtract it. Within your own study, with one setup, comparisons between conditions are valid without it.</p></details>
+
+  <h2 id="references">References</h2>
+  <ol class="refs">
+    <li>Portiloop software, branch fast-acquisition and pull request #12 "Fast acquisition with updated ABR and FFR" (open, under review), head <code>c528336</code>, 23 November 2026. <a href="https://github.com/Portiloop/portiloop-software/pull/12">github.com/Portiloop/portiloop-software/pull/12</a>; code at <a href="https://github.com/TomsCoder/portiloop-software/tree/c528336f10a3b94d683b6092fcdc72f1fbf73dff">TomsCoder/portiloop-software@c528336</a>. All file and line references on this page are to this commit.</li>
+    <li>Jewett DL, Williston JS (1971). Auditory-evoked far fields averaged from the scalp of humans. <em>Brain</em> 94(4): 681-696. <a href="https://doi.org/10.1093/brain/94.4.681">doi:10.1093/brain/94.4.681</a></li>
+    <li>Skoe E, Kraus N (2010). Auditory brain stem response to complex sounds: a tutorial. <em>Ear and Hearing</em> 31(3): 302-324. <a href="https://doi.org/10.1097/AUD.0b013e3181cdb272">doi:10.1097/AUD.0b013e3181cdb272</a></li>
+    <li>Krizman J, Kraus N (2019). Analyzing the FFR: a tutorial for decoding the richness of auditory function. <em>Hearing Research</em> 382: 107779. <a href="https://doi.org/10.1016/j.heares.2019.107779">doi:10.1016/j.heares.2019.107779</a></li>
+    <li>Aiken SJ, Picton TW (2008). Envelope and spectral frequency-following responses to vowel sounds. <em>Hearing Research</em> 245(1-2): 35-47. <a href="https://doi.org/10.1016/j.heares.2008.08.004">doi:10.1016/j.heares.2008.08.004</a></li>
+    <li>Texas Instruments. ADS1299, ADS1299-4, ADS1299-6 datasheet, SBAS499C (July 2012, revised January 2017): noise and bandwidth tables, digital decimation filter. <a href="https://www.ti.com/lit/ds/symlink/ads1299.pdf">ti.com/lit/ds/symlink/ads1299.pdf</a></li>
+  </ol>
+
+</article>
+</main>
+
+<script src="../assets/js/portiloop.js"></script>
+<script src="../assets/js/data.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = PL.ui.$;
+  const narrow = () => window.innerWidth < 600;
+  function gauss(t, mu, sd, a) { return a * Math.exp(-0.5 * Math.pow((t - mu) / sd, 2)); }
+  function canvasCtx(cv) {
+    const dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 600, H = cv.clientHeight || 150;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    ctx.font = "12px " + (getComputedStyle(document.documentElement).getPropertyValue("--font-sans") || "system-ui");
+    return { ctx, W, H };
+  }
+
+  /* ---------------- Widget 1: averaging a schematic ABR at each rate (ADS1299 sinc3 modelled) */
+  const BW = { 250: 65, 2000: 524, 4000: 1048, 8000: 2096, 16000: 4193 };   // ADS1299 datasheet, -3 dB (Hz)
+  const FB = 128000, T0 = -0.030, T1 = 0.030;                             // base grid (Hz, s)
+  function abrTrue(t) {                                                   // schematic, uV, t in s (invented)
+    const ms = t * 1000;
+    return gauss(ms, 1.6, 0.30, 0.15) + gauss(ms, 2.8, 0.30, 0.08) + gauss(ms, 3.8, 0.30, 0.18)
+      + gauss(ms, 5.0, 0.30, 0.12) + gauss(ms, 5.8, 0.40, 0.45) + gauss(ms, 7.2, 0.90, -0.35);
+  }
+  const NB = Math.round((T1 - T0) * FB), I0 = Math.round(-T0 * FB);
+  const baseT = new Float64Array(NB), baseX = new Float64Array(NB);
+  for (let i = 0; i < NB; i++) { baseT[i] = T0 + i / FB; baseX[i] = abrTrue(baseT[i]); }
+  const TRUE_PK = { v: -Infinity, t: 0 };
+  for (let i = 0; i < NB; i++) if (baseX[i] > TRUE_PK.v) { TRUE_PK.v = baseX[i]; TRUE_PK.t = baseT[i] * 1000; }
+  function boxcar(x, L) {                                                 // causal moving average of length L
+    const y = new Float64Array(x.length); let s = 0;
+    for (let i = 0; i < x.length; i++) { s += x[i]; if (i >= L) s -= x[i - L]; y[i] = s / L; }
+    return y;
+  }
+  const adsCache = {};
+  function adsKept(fs) {                                                  // third-order sinc = 3 boxcars
+    if (!adsCache[fs]) { const L = Math.round(FB / fs); adsCache[fs] = boxcar(boxcar(boxcar(baseX, L), L), L); }
+    return adsCache[fs];
+  }
+  function nTrials() { return Math.round(Math.pow(10, parseFloat($("#avg-n").value) / 10)); }
+  function drawAvg() {
+    const fs = parseInt($("#avg-fs").value, 10), N = nTrials(), sd16 = parseFloat($("#avg-sd").value);
+    const seed = parseInt($("#avg-seed").value, 10);
+    const L = Math.round(FB / fs), kept = adsKept(fs);
+    const sdAvg = sd16 * Math.sqrt(fs / 16000) / Math.sqrt(N);
+    const r = PL.rng(seed * 101 + fs);
+    const sx = [], sy = [];
+    for (let i = I0 - Math.round(0.004 * FB / L) * L; i < NB; i += L) {
+      const t = baseT[i]; if (t > 0.016) break;
+      sx.push(t * 1000); sy.push(kept[i] + sdAvg * r.gaussian());
+    }
+    const tx = [], ty = [], kx = [], ky = [];
+    for (let i = I0 - Math.round(0.004 * FB); i < I0 + Math.round(0.016 * FB); i += 16) { tx.push(baseT[i] * 1000); ty.push(baseX[i]); kx.push(baseT[i] * 1000); ky.push(kept[i]); }
+    const lim = Math.max(0.8, Math.min(3, 3 * sdAvg + 0.5));
+    PL.plot($("#avg-plot"), {
+      xRange: [-2, 14], yRange: [-lim, narrow() ? lim * 1.5 : lim], xLabel: "Time from the click (ms)", yLabel: "µV (schematic)",
+      series: [
+        { x: tx, y: ty, color: PL.color("text"), width: 1.3, dash: [4, 4], label: "true (schematic)" },
+        { x: kx, y: ky, color: PL.color("c3"), width: 1.4, label: "after the amplifier's filter" },
+        { x: sx, y: sy, color: PL.color("c1"), width: 1.8, label: "average of " + N.toLocaleString("en-US") },
+        { x: sx, y: sy, color: PL.color("c1"), points: true, radius: fs <= 2000 ? 3 : 1.4 },
+      ],
+      markers: [{ x: 0, color: PL.color("stim") }],
+    });
+    let pk = -Infinity, pkt = 0;
+    for (let i = 0; i < sx.length; i++) if (sx[i] >= 4 && sx[i] <= 9 && sy[i] > pk) { pk = sy[i]; pkt = sx[i]; }
+    $("#avg-ns").textContent = (fs * 0.01).toLocaleString("en-US") + " (one every " + (1000 / fs).toFixed(fs >= 4000 ? 3 : 2) + " ms)";
+    $("#avg-bw").textContent = BW[fs].toLocaleString("en-US") + " Hz";
+    $("#avg-nl").textContent = sdAvg.toFixed(sdAvg < 0.1 ? 3 : 2) + " µV RMS";
+    $("#avg-pk").textContent = (isFinite(pk) ? pk.toFixed(2) + " µV at " + pkt.toFixed(2) + " ms" : "no sample") + " (true " + TRUE_PK.v.toFixed(2) + " µV at " + TRUE_PK.t.toFixed(2) + " ms)";
+    $("#avg-status").textContent = "Noise left = noise per trial × √(rate / 16000) / √N (white noise). The amplifier's filter alone delays the response by about 1.5 sample periods: " +
+      (1.5 * 1000 / fs).toFixed(fs >= 8000 ? 3 : 2) + " ms at " + fs + " Hz.";
+  }
+  PL.ui.bind("#avg-n", drawAvg, () => nTrials().toLocaleString("en-US"));
+  PL.ui.bind("#avg-fs", drawAvg);
+  PL.ui.bind("#avg-sd", drawAvg);
+  PL.ui.bind("#avg-seed", drawAvg);
+
+  /* ---------------- Widget 2: fixed vs random SOA and a periodic artifact (onset rules of click_abr.py) */
+  const RATE = 48000, PER = 1024, LEAD = 48000, NCLK = 2000, FIXED_SOA = 1536;
+  const EP0 = -5, EP1 = 20, EFS = 16;                                      // epoch (ms) at 16 samples per ms
+  let JIT = null;
+  function clickOnsets(mode, seed) {
+    const on = new Array(NCLK);
+    if (mode === "fixed") { for (let i = 0; i < NCLK; i++) on[i] = LEAD + i * FIXED_SOA; return on; }
+    const r = PL.rng(seed * 7919 + 11); on[0] = LEAD;
+    for (let i = 1; i < NCLK; i++) on[i] = on[i - 1] + Math.round((40 + 10 * r.uniform()) * RATE / 1000);
+    return on;
+  }
+  function artShape(ms) { const u = ms / 0.15; return Math.exp(-0.5 * u * u); }   // brief transient, peak 1 uV
+  function computeJit() {
+    const mode = $("#jit-mode").value, seed = parseInt($("#jit-seed").value, 10), lat = parseFloat($("#jit-lat").value);
+    const on = clickOnsets(mode, seed);
+    const phi = ((LEAD % PER) + Math.round(lat * RATE / 1000)) % PER;   // artifact frame within the period
+    const n = (EP1 - EP0) * EFS + 1, sum = [new Float64Array(n), new Float64Array(n)], cnt = [0, 0];
+    const perMs = PER / RATE * 1000;
+    const posSet = [new Set(), new Set()], hist = [new Array(32).fill(0), new Array(32).fill(0)];
+    for (let i = 0; i < NCLK; i++) {
+      const p = i % 2, ph = on[i] % PER;
+      posSet[p].add(ph); hist[p][Math.floor(ph / PER * 32)]++; cnt[p]++;
+      const d0 = (((phi - ph) % PER) + PER) % PER / RATE * 1000;
+      for (let m = -1; m <= 1; m++) {
+        const te = d0 + m * perMs; if (te < EP0 - 1 || te > EP1 + 1) continue;
+        const k0 = Math.max(0, Math.floor((te - 0.8 - EP0) * EFS)), k1 = Math.min(n - 1, Math.ceil((te + 0.8 - EP0) * EFS));
+        for (let k = k0; k <= k1; k++) sum[p][k] += artShape(EP0 + k / EFS - te);
+      }
+    }
+    JIT = { mode, on, phi, sum, cnt, n, posSet, hist, perMs };
+  }
+  function drawTimeline() {
+    const { ctx, W, H } = canvasCtx($("#jit-tl"));
+    const span = 300, ml = 8, mr = 8, mid = H / 2 - 6, X = (ms) => ml + ms / span * (W - ml - mr);
+    const t0 = JIT.on[0];
+    ctx.strokeStyle = PL.color("grid"); ctx.lineWidth = 1;
+    for (let f = Math.ceil(t0 / PER) * PER; (f - t0) / RATE * 1000 <= span; f += PER) {
+      const x = X((f - t0) / RATE * 1000); ctx.beginPath(); ctx.moveTo(x, 6); ctx.lineTo(x, H - 24); ctx.stroke();
+    }
+    ctx.strokeStyle = PL.color("axis"); ctx.beginPath(); ctx.moveTo(ml, mid + 0.5); ctx.lineTo(W - mr, mid + 0.5); ctx.stroke();
+    ctx.fillStyle = PL.color("warn");
+    for (let f = Math.floor(t0 / PER) * PER + JIT.phi; (f - t0) / RATE * 1000 <= span; f += PER) {
+      const ms = (f - t0) / RATE * 1000; if (ms < 0) continue;
+      const x = X(ms); ctx.beginPath(); ctx.moveTo(x, H - 24); ctx.lineTo(x - 4, H - 16); ctx.lineTo(x + 4, H - 16); ctx.closePath(); ctx.fill();
+    }
+    for (let i = 0; i < JIT.on.length; i++) {
+      const ms = (JIT.on[i] - t0) / RATE * 1000; if (ms > span) break;
+      const up = i % 2 === 0, x = X(ms);
+      ctx.strokeStyle = PL.color(up ? "c1" : "c2"); ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.moveTo(x, mid); ctx.lineTo(x, up ? mid - 34 : mid + 34); ctx.stroke();
+    }
+    ctx.fillStyle = PL.color("text"); ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let s = 0; s <= span; s += (W < 500 ? 100 : 50)) ctx.fillText(s + " ms", Math.min(Math.max(X(s), 18), W - 22), H - 14);
+    ctx.textAlign = "left"; ctx.fillText("first 300 ms of the run", ml + 2, 2);
+  }
+  function drawPhase() {
+    const { ctx, W, H } = canvasCtx($("#jit-ph"));
+    const ml = 40, mr = 8, top = 22, base = H - 30, bw = (W - ml - mr) / 32;
+    const mx = Math.max(...JIT.hist[0], ...JIT.hist[1], 1);
+    ctx.strokeStyle = PL.color("axis"); ctx.beginPath(); ctx.moveTo(ml, base + 0.5); ctx.lineTo(W - mr, base + 0.5); ctx.stroke();
+    for (let b = 0; b < 32; b++) for (let p = 0; p < 2; p++) {
+      const h = JIT.hist[p][b] / mx * (base - top);
+      ctx.fillStyle = PL.color(p ? "c2" : "c1");
+      ctx.fillRect(ml + b * bw + p * bw / 2 + 0.5, base - h, Math.max(1, bw / 2 - 1), h);
+    }
+    ctx.fillStyle = PL.color("text"); ctx.textAlign = "center"; ctx.textBaseline = "top";
+    [0, 5, 10, 15, 20].forEach((ms) => ctx.fillText(ms + "", ml + ms / JIT.perMs * (W - ml - mr), base + 4));
+    ctx.textBaseline = "bottom"; ctx.fillText(W < 500 ? "position in the 21.33 ms audio period (ms)" : "position of the click in the 21.33 ms audio period (ms)", ml + (W - ml - mr) / 2, H);
+    ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillText("clicks per bin (+ and -)", ml, 2);
+    ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(mx, ml - 4, top); ctx.fillText("0", ml - 4, base);
+  }
+  function drawJitAvg() {
+    const noise = $("#jit-noise").checked, r = PL.rng(parseInt($("#jit-seed").value, 10) * 31 + (JIT.mode === "fixed" ? 1 : 2));
+    const t = [], a = [[], []], s = [], clean = [[], []];
+    for (let k = 0; k < JIT.n; k++) {
+      t.push(EP0 + k / EFS);
+      for (let p = 0; p < 2; p++) {
+        const v = JIT.sum[p][k] / JIT.cnt[p]; clean[p].push(v);
+        a[p].push(v + (noise ? 5 / Math.sqrt(JIT.cnt[p]) * r.gaussian() : 0));
+      }
+      s.push((a[0][k] + a[1][k]) / 2);
+    }
+    PL.plot($("#jit-avg"), {
+      xRange: [EP0, EP1], yRange: [-1.3, narrow() ? 2.2 : 1.4], xLabel: "Time from the click (ms)", yLabel: "µV (illustrative)",
+      series: [
+        { x: t, y: a[0], color: PL.color("c1"), width: 1.3, label: "+ clicks (1000)" },
+        { x: t, y: a[1], color: PL.color("c2"), width: 1.3, label: "- clicks (1000)" },
+        { x: t, y: s, color: PL.color("text"), width: 2.2, label: "added ABR" },
+      ],
+      markers: [{ x: 0, color: PL.color("stim") }],
+    });
+    const pk = (y) => Math.max(...y.map(Math.abs));
+    const pkAt = (y) => { let m = 0, i0 = 0; y.forEach((v, i) => { if (Math.abs(v) > m) { m = Math.abs(v); i0 = i; } }); return m.toFixed(2) + " µV at " + t[i0].toFixed(1) + " ms"; };
+    $("#jit-pos").textContent = JIT.posSet[0].size + " / " + JIT.posSet[1].size;
+    $("#jit-ap").textContent = pkAt(clean[0]);
+    $("#jit-am").textContent = pkAt(clean[1]);
+    $("#jit-as").textContent = pk(clean[0].map((v, i) => (v + clean[1][i]) / 2)).toFixed(2) + " µV";
+    const lat = parseFloat($("#jit-lat").value);
+    $("#jit-status").textContent = (JIT.mode === "fixed"
+      ? "Fixed SOA: every + click sits at frame 896 of the period and every - click at frame 384, so the artifact lands " + lat.toFixed(1) + " ms after the + clicks and " + ((lat + 512 / 48) % (1024 / 48)).toFixed(1) + " ms after the - clicks."
+      : "Random SOA: the clicks fall all over the period, so the artifact is spread over the epoch.") + " Readouts are without noise.";
+  }
+  function redrawJit() { if (!JIT) computeJit(); drawTimeline(); drawPhase(); drawJitAvg(); }
+  ["#jit-mode", "#jit-lat", "#jit-seed"].forEach((id) => PL.ui.bind(id, () => { computeJit(); redrawJit(); }, id === "#jit-lat" ? (v) => v.toFixed(1) : undefined));
+  PL.ui.bind("#jit-noise", () => drawJitAvg());
+
+  /* ---------------- Widget 3: polarity sum and difference with the real /da/ (model responses) */
+  let DA = null, POL = null;
+  function biquad(type, f0, fs, Q) {                                        // RBJ cookbook coefficients
+    const w = 2 * Math.PI * f0 / fs, c = Math.cos(w), al = Math.sin(w) / (2 * Q);
+    let b; if (type === "lp") b = [(1 - c) / 2, 1 - c, (1 - c) / 2]; else b = [(1 + c) / 2, -(1 + c), (1 + c) / 2];
+    const a0 = 1 + al; return { b: b.map((v) => v / a0), a: [1, -2 * c / a0, (1 - al) / a0] };
+  }
+  function filt(f, x) {
+    const y = new Float64Array(x.length); let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < x.length; i++) {
+      const v = f.b[0] * x[i] + f.b[1] * x1 + f.b[2] * x2 - f.a[1] * y1 - f.a[2] * y2;
+      x2 = x1; x1 = x[i]; y2 = y1; y1 = v; y[i] = v;
+    }
+    return y;
+  }
+  function filtfilt(f, x) { return filt(f, filt(f, x).reverse()).reverse(); }
+  function buildPol() {
+    const fs = DA.rate16_hz, pre = Math.round(0.020 * fs), N = Math.round(0.180 * fs), d = Math.round(0.008 * fs);
+    const s = new Float64Array(N); DA.x16.forEach((v, i) => { if (pre + i < N) s[pre + i] = v; });
+    const lp = biquad("lp", 1000, fs, Math.SQRT1_2), hp = biquad("hp", 70, fs, Math.SQRT1_2), lp2 = biquad("lp", 2000, fs, Math.SQRT1_2);
+    const shift = (x, k) => { const y = new Float64Array(N); for (let i = 0; i + k < N; i++) y[i + k] = x[i]; return y; };
+    const rp = shift(filt(lp, s.map((v) => Math.max(v, 0))), d), rm = shift(filt(lp, s.map((v) => Math.max(-v, 0))), d);
+    const g = 1 / Math.max(...rp.map(Math.abs));
+    const band = (x) => filtfilt(lp2, filtfilt(hp, x));
+    POL = { fs, pre, N, s, rp: band(rp.map((v) => v * g)), rm: band(rm.map((v) => v * g)), art: band(s.map((v) => 0.6 * v / 0.334)) };
+    POL.t = Array.from({ length: N }, (_, i) => (i - pre) / fs * 1000);
+  }
+  function spectrum(y, fs, i0, i1) {
+    const n = i1 - i0, fr = [], mag = []; let wsum = 0; const w = new Float64Array(n);
+    for (let i = 0; i < n; i++) { w[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (n - 1)); wsum += w[i]; }
+    for (let f = 0; f <= 1500; f += 4) {
+      let re = 0, im = 0; const k = 2 * Math.PI * f / fs;
+      for (let i = 0; i < n; i++) { const v = y[i0 + i] * w[i]; re += v * Math.cos(k * i); im -= v * Math.sin(k * i); }
+      fr.push(f); mag.push(2 * Math.hypot(re, im) / wsum);
+    }
+    return { fr, mag };
+  }
+  function drawPol() {
+    if (!POL) return;
+    const view = $("#pol-view").value, art = $("#pol-art").checked, A = art ? 1 : 0;
+    const recP = POL.rp.map((v, i) => v + A * POL.art[i]), recM = POL.rm.map((v, i) => v - A * POL.art[i]);
+    const add = recP.map((v, i) => (v + recM[i]) / 2), sub = recP.map((v, i) => (v - recM[i]) / 2);
+    const t = POL.t; let series, ylab = "model units", title = "";
+    if (view === "snd") {
+      series = [{ x: t, y: Array.from(POL.s), color: PL.color("c1"), width: 1.1, label: "+/da/ (da_positive.wav)" },
+                { x: t, y: Array.from(POL.s, (v) => -v), color: PL.color("c2"), width: 1.1, label: "-/da/" }];
+      ylab = "full scale"; title = "The real sound (16 kHz copy)";
+    } else if (view === "resp") {
+      series = [{ x: t, y: recP, color: PL.color("c1"), width: 1.2, label: "response to +" },
+                { x: t, y: recM, color: PL.color("c2"), width: 1.2, label: "response to -" }];
+      title = "Model, not data";
+    } else {
+      series = [{ x: t, y: sub, color: PL.color("c4"), width: 1.2, label: "subtracted: fine structure" },
+                { x: t, y: add, color: PL.color("c3"), width: 1.8, label: "added: envelope" }];
+      title = "Model, not data";
+    }
+    const yl = view === "snd" ? 0.45 : 1.4;
+    PL.plot($("#pol-t"), { xRange: [-20, 160], yRange: [-yl, narrow() ? yl * 1.6 : yl * 1.15], xLabel: "Time from the trigger (ms)", yLabel: ylab, title, series,
+      regions: [{ x0: 0, x1: 120, color: "rgba(128,128,128,0.08)" }] });
+    const i0 = POL.pre + Math.round(0.010 * POL.fs), i1 = POL.pre + Math.round(0.130 * POL.fs);
+    const sa = spectrum(add, POL.fs, i0, i1), ss = spectrum(sub, POL.fs, i0, i1);
+    PL.plot($("#pol-f"), { xRange: [0, 1500], xLabel: "Frequency (Hz), window 10 to 130 ms; line: F0 98 Hz", yLabel: "amplitude",
+      series: [{ x: ss.fr, y: ss.mag, color: PL.color("c4"), width: 1.2, label: "subtracted" },
+               { x: sa.fr, y: sa.mag, color: PL.color("c3"), width: 1.8, label: "added" }],
+      markers: [{ x: 98, color: PL.color("warn") }] });
+    const argmax = (sp, lo) => { let m = -1, f = 0; sp.mag.forEach((v, i) => { if (sp.fr[i] >= lo && v > m) { m = v; f = sp.fr[i]; } }); return f; };
+    $("#pol-pa").textContent = argmax(sa, 40) + " Hz";
+    $("#pol-ps").textContent = argmax(ss, 40) + " Hz";
+    const rms = (y) => Math.sqrt(y.reduce((a, v) => a + v * v, 0) / y.length);
+    const artAdd = recP.map((v, i) => (v + recM[i]) / 2 - (POL.rp[i] + POL.rm[i]) / 2), artSub = recP.map((v, i) => (v - recM[i]) / 2 - (POL.rp[i] - POL.rm[i]) / 2);
+    $("#pol-ar").textContent = art ? rms(artAdd).toFixed(3) + " / " + rms(artSub).toFixed(3) + " RMS" : "none added";
+  }
+  PL.ui.bind("#pol-view", drawPol);
+  PL.ui.bind("#pol-art", drawPol);
+  fetch("../assets/data/11-da.json").then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((d) => {
+    DA = d; buildPol(); drawPol();
+    $("#pol-f0").textContent = d.info.f0_autocorr_hz.toFixed(1) + " Hz";
+    $("#pol-status").textContent = "da_positive.wav: " + d.info.samples + " samples at " + d.info.rate_hz / 1000 + " kHz (" + d.info.duration_ms.toFixed(0) + " ms), peak " + d.info.peak.toFixed(3) + ", RMS " + d.info.rms.toFixed(3) + " of full scale; F0 by autocorrelation " + d.info.f0_autocorr_hz.toFixed(1) + " Hz (" + d.info.f0_in_json_hz + " Hz in its JSON). Shaded: the 120 ms of the sound.";
+  }).catch((e) => { $("#pol-status").textContent = "Could not load the /da/ (" + e.message + "); serve the docs folder over HTTP."; });
+
+  function all() { drawAvg(); redrawJit(); drawPol(); }
+  PL.onRedraw(all);
+  computeJit(); all();
+})();
+</script>
+</body>
+</html>

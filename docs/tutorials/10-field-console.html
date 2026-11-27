@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>10 · The Portiloop Field Console · Portiloop tutorials</title>
+  <meta name="description" content="Run wake EEG experiments with the Portiloop and a laptop over LSL using the Portiloop Field Console add-on: Portiloop settings, installation, folders and IDs, the signal check, the montage and reference, sensation level and audio-latency calibration, the gap-deviant mismatch negativity tasks, resting state, the sequencer, the output files and the analyses.">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <style>
+    /* page-local styles for tutorial 10 */
+    .quote { margin: 1em 0; padding: 8px 14px; border-left: 3px solid var(--border); color: var(--fg); background: var(--bg-elev); border-radius: 0 8px 8px 0; }
+    .quote cite { display: block; font-style: normal; font-size: 0.88em; color: var(--fg-muted); margin-top: 4px; }
+    .controls label { flex-wrap: wrap; max-width: 100%; }
+    .controls select { max-width: 100%; min-width: 0; }
+    canvas.plot.seq { height: 150px; }
+    canvas.plot.token { height: 200px; }
+    canvas.plot.erp { height: 240px; }
+    canvas.plot.lat { height: 260px; }
+    .legend-row { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--fg-muted); margin: 4px 0 8px; }
+    .legend-row i { display: inline-block; width: 14px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
+    .flow { width: 100%; height: auto; display: block; margin: 0.6em 0 0.2em; }
+    .flow .box { fill: var(--bg-elev); stroke: var(--border); stroke-width: 1.5; }
+    .flow .box.dev { stroke: var(--plot-c1); }
+    .flow .box.lap { stroke: var(--plot-c3); }
+    .flow .box.cal { stroke: var(--plot-c2); stroke-dasharray: 5 4; }
+    .flow text { fill: var(--fg); font-size: 13px; font-family: var(--font-sans, system-ui, sans-serif); }
+    .flow text.m { fill: var(--fg-muted); font-size: 11.5px; }
+    .flow text.h { font-weight: 600; font-size: 14px; }
+    .flow .arr { stroke: var(--fg-muted); stroke-width: 1.6; fill: none; }
+    .flow .arr.cal { stroke: var(--plot-c2); stroke-dasharray: 5 4; }
+    .flow .head { fill: var(--fg-muted); }
+    .flow .head.cal { fill: var(--plot-c2); }
+    .flow.narrow { display: none; max-width: 420px; }
+    @media (max-width: 600px) { .flow.wide { display: none; } .flow.narrow { display: block; } }
+    .verified td:first-child { white-space: nowrap; }
+    .tight li { margin: 0.15em 0; }
+  </style>
+</head>
+<body data-page="10-field-console" data-root="..">
+<main>
+<article class="content">
+
+  <div class="eyebrow">Tutorial 10 · Advanced</div>
+  <h1>The Portiloop Field Console</h1>
+  <p class="lead">The Portiloop Field Console is an add-on, written outside the Portiloop project, that turns a Portiloop and a laptop into a wake EEG setup: the Portiloop streams its signals over the network, and the laptop plays the sounds, records everything and analyses it. This tutorial explains how it works and how to set up and run a session with it: the Portiloop settings, installation, the signal check, the calibrations, the mismatch negativity and resting-state tasks, the files and the analyses.</p>
+
+  <dl class="meta">
+    <div><dt>Time</dt><dd>60 minutes to read; a first session takes longer</dd></div>
+    <div><dt>Level</dt><dd>Advanced (Python installation, command line)</dd></div>
+    <div><dt>You need</dt><dd>Tutorials <a href="01-overview.html">01</a> to <a href="05-files.html">05</a>; a laptop; a Portiloop v2.3</dd></div>
+    <div><dt>Runs in browser</dt><dd>Widgets yes; the add-on needs Python on a laptop</dd></div>
+  </dl>
+
+  <div class="objectives">
+    <h3>In this tutorial you will</h3>
+    <ul>
+      <li>Learn what the Field Console is for, who wrote it, and how it differs from an overnight Control Center recording</li>
+      <li>Set the Portiloop to stream its signals over LSL, and connect the laptop to them</li>
+      <li>Install the add-on and organise its Data and Shared folders and its identifiers</li>
+      <li>Check the signals, set the montage and the reference, and calibrate the sound level and the audio latency</li>
+      <li>Understand the gap-deviant oddball tasks, the resting state and the sequencer, with their real default parameters</li>
+      <li>Know what each output file contains, what each analysis computes, and what has and has not been verified here</li>
+    </ul>
+  </div>
+
+  <div class="callout warning"><span class="callout-title">What this page is based on</span>We read the add-on's code and documentation at commit <a href="https://github.com/TomsCoder/Portiloop-Field-Console/commit/49356cdcb1b06dd464e9a9ba372a41d141ca1685"><code>49356cd</code></a> (26 November 2026) [1]. <strong>We did not install or run it</strong>: we have not seen its windows, played its sounds or recorded with it. Every statement below about what it does comes from its code or its README, with links to the exact lines; the section <a href="#verified">What is verified and what is not</a> lists the limits. The Portiloop side is the v2.3 software (branch main of portiloop-software).</div>
+
+  <h2 id="what">What the Field Console is</h2>
+  <p>The add-on lives in its own repository, <a href="https://github.com/TomsCoder/Portiloop-Field-Console">TomsCoder/Portiloop-Field-Console</a>, under the internal name TMDA-PAV. Its README describes the release as follows:</p>
+  <blockquote class="quote">"This `eLife` branch contains only the tasks and analyses used for the published data: sensation-level (SL) calibration, computer audio-latency calibration, active (with practice) and passive gap-deviant MMN, and eyes-closed resting state, recorded through the experiment console, sequencer, and Portiloop signal check; and MMN amplitude/latency, obligatory P1-N1-P2 responses, active-MMN behavior, and resting-state analyses, plus the EEG montage/reference and audio-latency correction utilities."<cite>README.md, lines 23 to 29 [1]</cite></blockquote>
+  <p>(The repository on GitHub has a single branch, named <code>main</code>; the README still speaks of an "eLife" branch.) In practice it is a set of Python programs for a laptop:</p>
+  <ul class="tight">
+    <li><a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/experiment_console.py"><code>experiment_console.py</code></a>: the experimenter console (a PySide6 window) that holds the identifiers, the audio devices, the calibrations, and launches every task and analysis;</li>
+    <li><a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/portiloop_setup.py"><code>portiloop_setup.py</code></a>: the signal-quality console (live traces, spectra, montage, guided checks);</li>
+    <li>the tasks: <code>sl_task.py</code> (sensation level), <code>audio_latency_task.py</code>, <code>resting_state.py</code>, <code>oddball_active_training.py</code>, <code>oddball_active.py</code>, <code>oddball_passive.py</code>, all built on one recording engine, <code>oddball_paradigm_with_lsl.py</code>;</li>
+    <li>the analyses: <code>mne_analysis.py</code>, <code>mmn_standard_erp_analysis.py</code>, <code>mmn_behavior_analysis.py</code>, and two utilities, <code>eeg_montage.py</code> and <code>update_audio_latency.py</code> (README lines 37 to 58 [1]).</li>
+  </ul>
+
+  <h3 id="authorship">Authorship, AI use, citation and license</h3>
+  <p>The README states:</p>
+  <blockquote class="quote">"Author: Thomas M.D. Augereau (ORCID 0000-0001-6175-674X), CLASP (Coffey Lab; PI: Emily B.J. Coffey), Concordia University. AI use: the code was developed with AI-assisted code generation under the author's direction. The author reviewed it and validated the tasks, recordings, and analyses during pilot data collection; the automated tests in `tests/` cover the core logic."<cite>README.md, lines 5 to 11 [1]</cite></blockquote>
+  <p>To cite it, the README points to <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/CITATION.cff"><code>CITATION.cff</code></a>, which gives the title "Portiloop Field Console", version "1.0.0", the author Augereau, Thomas M.D. (affiliation "CLASP (Coffey Lab), Concordia University"), and asks: "If you use this software, please cite it using the metadata below." [2]</p>
+  <div class="callout danger"><span class="callout-title">The license is stated two ways</span>The <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/LICENSE"><code>LICENSE</code></a> file is the <strong>MIT License</strong> ("Copyright (c) 2026 TomsCoder"); it was put in place by the last commit, <code>49356cd</code> "Update LICENSE", which replaced the earlier PolyForm Noncommercial text, and GitHub reports the repository as MIT. The <strong>README</strong>, however, still says "License: PolyForm Noncommercial 1.0.0 ... commercial use is not permitted" (lines 12 to 17), <code>CITATION.cff</code> says <code>license: PolyForm-Noncommercial-1.0.0</code> (line 10), and every source file carries <code>SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0</code>. We do not resolve this here: if the terms matter for your use, ask the author.</div>
+
+  <h3 id="differs">How it differs from an overnight recording</h3>
+  <p>In tutorials 01 to 05 the Portiloop does everything by itself: it records to its SD card, detects slow oscillations and plays the sounds. With the Field Console the Portiloop is only the amplifier. It sends its samples over its own Wi-Fi network with the Lab Streaming Layer (LSL, an open protocol that streams time-stamped samples between programs and computers), and the laptop does the rest.</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th></th><th>Overnight (Control Center, tutorials 03 to 05)</th><th>Wake session (Field Console)</th></tr></thead>
+    <tbody>
+      <tr><td>Who records</td><td>The Portiloop, to its SD card (CSV)</td><td>The laptop, from the LSL stream (FIF, NPZ, SQLite)</td></tr>
+      <tr><td>Who plays the sounds</td><td>The Portiloop, when it detects an up-state</td><td>The laptop, through PsychoPy, on a fixed schedule</td></tr>
+      <tr><td>Pipeline on the Portiloop</td><td>"Sleep slow oscillations (upstate)"</td><td>No detection needed (we suggest "Acquisition only", see <a href="#portiloop-settings">below</a>)</td></tr>
+      <tr><td>Event timing</td><td>Marker in the same CSV row as the sample</td><td>Laptop clock, mapped to the EEG by LSL clock synchronisation, corrected by a measured audio delay</td></tr>
+      <tr><td>Signal check</td><td>Impedance in the Check tab</td><td>The Check tab, then the add-on's waveform checks (it does not measure impedance)</td></tr>
+      <tr><td>Montage</td><td>CLAS protocol: ECG, EOG, EMG, Cz, Fz, Fpz; REF right mastoid</td><td>Add-on default: TP10, Fz, Cz, FC1, FC2, Pz, EOG1, EOG2; REF TP9 (left mastoid); editable</td></tr>
+      <tr><td>Analysis</td><td><code>portiloop_analysis</code> (tutorials 06 to 09)</td><td>The add-on's MNE scripts</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 id="lsl">The data path: LSL from the Portiloop to the laptop</h2>
+  <svg class="flow wide" viewBox="0 0 720 300" role="img" aria-label="Diagram: the Portiloop streams Portiloop Raw Data over its Wi-Fi to the laptop; the laptop plays sounds into headphones and records the EEG; during calibration only, the headphone output is connected through an attenuator to a Portiloop input.">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+      <marker id="ahc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head cal" d="M0,0 L10,5 L0,10 z"/></marker>
+    </defs>
+    <rect class="box dev" x="10" y="20" width="250" height="150" rx="10"/>
+    <text class="h" x="24" y="46">Portiloop v2.3</text>
+    <text x="24" y="72">Electrodes → ADS1299</text>
+    <text x="24" y="94">Control Center: Start,</text>
+    <text x="24" y="114">"Stream LSL" checked</text>
+    <text class="m" x="24" y="140">LSL outlet "Portiloop Raw Data"</text>
+    <text class="m" x="24" y="158">(µV, all channels, no labels)</text>
+    <rect class="box lap" x="440" y="20" width="270" height="150" rx="10"/>
+    <text class="h" x="454" y="46">Laptop: Field Console</text>
+    <text x="454" y="72">LSL inlet (clock sync)</text>
+    <text x="454" y="94">PsychoPy sounds + markers</text>
+    <text x="454" y="114">Recorder: FIF, NPZ, SQLite</text>
+    <text class="m" x="454" y="140">Event time = trigger time</text>
+    <text class="m" x="454" y="158">+ measured audio delay</text>
+    <path class="arr" d="M262,95 L436,95" marker-end="url(#ah)"/>
+    <text class="m" x="280" y="84">Wi-Fi of the Portiloop</text>
+    <text class="m" x="280" y="114">(192.168.4.1)</text>
+    <rect class="box" x="470" y="215" width="210" height="60" rx="10"/>
+    <text x="484" y="240">Headphones</text>
+    <text class="m" x="484" y="260">participant</text>
+    <path class="arr" d="M575,172 L575,211" marker-end="url(#ah)"/>
+    <rect class="box cal" x="60" y="215" width="300" height="60" rx="10"/>
+    <text x="74" y="240">Calibration only: attenuator</text>
+    <text class="m" x="74" y="260">no participant connected</text>
+    <path class="arr cal" d="M468,250 L364,250" marker-end="url(#ahc)"/>
+    <path class="arr cal" d="M135,213 L135,174" marker-end="url(#ahc)"/>
+  </svg>
+  <svg class="flow narrow" viewBox="0 0 360 520" role="img" aria-label="Diagram: the Portiloop streams Portiloop Raw Data over its Wi-Fi to the laptop; the laptop plays sounds into headphones and records the EEG; during calibration only, the headphone output is connected through an attenuator to a Portiloop input.">
+    <defs>
+      <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+      <marker id="ahc2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head cal" d="M0,0 L10,5 L0,10 z"/></marker>
+    </defs>
+    <rect class="box dev" x="10" y="10" width="300" height="130" rx="10"/>
+    <text class="h" x="24" y="36">Portiloop v2.3</text>
+    <text x="24" y="60">Electrodes → ADS1299</text>
+    <text x="24" y="82">Start, "Stream LSL" checked</text>
+    <text class="m" x="24" y="106">LSL outlet "Portiloop Raw Data"</text>
+    <text class="m" x="24" y="124">(µV, all channels, no labels)</text>
+    <path class="arr" d="M110,142 L110,196" marker-end="url(#ah2)"/>
+    <text class="m" x="120" y="166">Wi-Fi of the Portiloop</text>
+    <text class="m" x="120" y="184">(192.168.4.1)</text>
+    <rect class="box lap" x="10" y="200" width="300" height="130" rx="10"/>
+    <text class="h" x="24" y="226">Laptop: Field Console</text>
+    <text x="24" y="250">LSL inlet (clock sync)</text>
+    <text x="24" y="272">PsychoPy sounds + markers</text>
+    <text x="24" y="294">Recorder: FIF, NPZ, SQLite</text>
+    <text class="m" x="24" y="318">Event time = trigger + audio delay</text>
+    <path class="arr" d="M110,332 L110,366" marker-end="url(#ah2)"/>
+    <rect class="box" x="10" y="370" width="300" height="50" rx="10"/>
+    <text x="24" y="400">Headphones (participant)</text>
+    <rect class="box cal" x="10" y="450" width="300" height="56" rx="10"/>
+    <text x="24" y="474">Calibration only: attenuator</text>
+    <text class="m" x="24" y="494">no participant connected</text>
+    <path class="arr cal" d="M312,478 L340,478 L340,75 L314,75" marker-end="url(#ahc2)"/>
+    <path class="arr cal" d="M200,422 L200,446" marker-end="url(#ahc2)"/>
+  </svg>
+  <p class="small muted">The audio-latency calibration path (dashed) is used only to measure the delay, with no participant connected; see <a href="#latency">Audio latency</a>.</p>
+
+  <h3 id="streams">What the Portiloop v2.3 publishes</h3>
+  <p>When "Stream LSL" is checked in the Advanced tab of the Control Center (<a href="03-control-center.html#lsl">tutorial 03</a>), the recording process creates up to three LSL streams when you press Start. Their definitions are in the Portiloop software:</p>
+<pre data-file="portiloop/src/core/output.py (branch main, lines 272 to 301, excerpt)"><code class="language-python">class LSLStreamer:
+    def __init__(self, streams, channel_count, frequency, id):
+        ...
+        lsl_info_raw = StreamInfo(name='Portiloop Raw Data',
+                                  type='eeg',
+                                  channel_count=channel_count,
+                                  nominal_srate=frequency,
+                                  channel_format='float32',
+                                  source_id=id)
+        ...
+        if streams['filtered']:
+            lsl_info = StreamInfo(name='Portiloop Filtered', ...)
+        ...
+        if streams['markers']:
+            lsl_markers_info = StreamInfo(name='Portiloop_stimuli',
+                                          type='Markers', ...)</code></pre>
+  <p>Each new sample is pushed as soon as the recording loop receives it from the acquisition process (<a href="https://github.com/Portiloop/portiloop-software/blob/main/portiloop/src/core/capture.py#L446-L449"><code>capture.py</code>, lines 446 to 449</a>; the streamer is created only if "Stream LSL" is checked, <a href="https://github.com/Portiloop/portiloop-software/blob/main/portiloop/src/core/capture.py#L243-L247">lines 243 to 247</a>). The raw values are in microvolts, the same as the <code>raw_ch</code> columns of the CSV (<a href="05-files.html">tutorial 05</a>). The Portiloop does not attach channel names to the stream: a receiver sees "ch1" to "ch8".</p>
+  <p>The Field Console uses <strong>only "Portiloop Raw Data"</strong>: the name is a constant, <code>TARGET_LSL_STREAM = "Portiloop Raw Data"</code> (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/config/montage.py#L14"><code>tmda_pav/config/montage.py</code>, line 14</a>), and it ignores the filtered stream and the Portiloop's markers. It opens the stream with LSL clock synchronisation, de-jittering and monotonic timestamps (<code>pylsl.proc_clocksync | pylsl.proc_dejitter | pylsl.proc_monotonize</code>, <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/recording/lsl.py#L62-L100"><code>tmda_pav/recording/lsl.py</code>, lines 62 to 100</a>), so that the EEG timestamps are expressed in the laptop's clock, the same clock used to time the sounds and key presses. Its own event markers go to a separate stream that it creates, "OddballMarkers", and they are also written into the FIF file.</p>
+
+  <div class="callout note"><span class="callout-title">Finding the stream on the Portiloop's Wi-Fi</span>LSL normally discovers streams by multicast, which some networks block. The add-on ships a file <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/lsl_api.cfg"><code>lsl_api.cfg</code></a> with two lines, <code>[lab]</code> and <code>KnownPeers = 192.168.4.1</code>: 192.168.4.1 is the Portiloop's address on its own network (<a href="03-control-center.html#wifi">tutorial 03</a>), and "KnownPeers" is "a list of known computers to query directly" [3]. The LSL library looks for <code>lsl_api.cfg</code> first in the file named by the <code>LSLAPICFG</code> environment variable, then in the current directory, then in <code>~/lsl_api/lsl_api.cfg</code>, then in <code>/etc/lsl_api/lsl_api.cfg</code> [4]. The experiment console starts every task from the repository folder (<code>subprocess.Popen(command, cwd=SCRIPT_DIR)</code>), so the file is found there; if you start a script from another folder, or use the standalone signal check (<a href="#standalone">below</a>) in another folder, copy the file next to it or into <code>~/lsl_api/</code>.</div>
+
+  <h2 id="portiloop-settings">Setting up the Portiloop for a wake session</h2>
+  <p>The add-on's documentation does not say how to configure the Portiloop. The steps below are what the Portiloop v2.3 code requires for the stream to exist and to contain what the add-on expects; they are our recommendation, not the add-on author's.</p>
+  <ol class="steps">
+    <li><strong>Power on and connect the laptop to the Portiloop's Wi-Fi.</strong> As for the phone in <a href="03-control-center.html#wifi">tutorial 03</a>; open <code>http://192.168.4.1:8081/</code> on the laptop or on a phone. The laptop is then on the Portiloop's network, which has no internet access: install everything beforehand.</li>
+    <li><strong>Place the electrodes and run the Check tab with all of them connected.</strong> An electrode that is OFF at the last check is switched off in the next recording and records zeros (<a href="03-control-center.html#off-disabled">tutorial 03</a>); the add-on's signal check would then report it as "flat or frozen".</li>
+    <li><strong>Advanced tab: Pipeline "Acquisition only".</strong> This pipeline has no filter, detector or stimulator (<a href="https://github.com/Portiloop/portiloop-software/blob/main/portiloop/src/custom/custom_pipelines.py#L10-L15"><code>custom_pipelines.py</code>, lines 10 to 15</a>), so the Portiloop never plays a sound of its own. Do not leave a sleep pipeline in Cond B: after the "Stimulation starts after" delay the Portiloop would start stimulating through its own audio output.</li>
+    <li><strong>Check "Stream LSL"</strong> (<a href="https://github.com/Portiloop/portiloop-software/blob/main/portiloop/src/simple_gui/simple_gui.py#L735"><code>simple_gui.py</code>, line 735</a>). Keeping "Save recording locally" checked as well gives an independent CSV backup on the SD card (tutorial 05). The sample frequency is read from the stream by the add-on; it does not ask for a particular value. We assume the default 250 Hz.</li>
+    <li><strong>Press Start.</strong> The LSL stream exists only while the Portiloop is recording; when you press Stop it disappears, and the add-on reports that "Portiloop Raw Data" was not found. Keep the Portiloop recording for the whole session.</li>
+  </ol>
+
+  <h2 id="install">Installation</h2>
+  <p>The add-on is a set of scripts, not an installable package: clone it and install its dependencies. The README gives the full installation as <code>python -m pip install -r requirements.txt</code> (line 611). <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/requirements.txt"><code>requirements.txt</code></a> lists numpy, scipy, pandas, matplotlib, mne, fooof (<code>&gt;=1.1.1,&lt;2</code>), python-picard, scikit-learn, psychopy, PySide6, pylsl, sounddevice, praat-parselmouth, and, on Windows only, pycaw and comtypes (used to set the system volume). No version is constrained except those of fooof and praat-parselmouth.</p>
+  <ol class="steps">
+    <li><strong>Get the code and create an environment.</strong>
+<pre data-file="terminal"><code class="language-bash">git clone https://github.com/TomsCoder/Portiloop-Field-Console.git
+cd Portiloop-Field-Console
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+python -m pip install -r requirements.txt</code></pre></li>
+    <li><strong>Run the tests.</strong> The README says they are "Fast checks that do not require EEG or audible playback":
+<pre data-file="terminal"><code class="language-bash">python -m unittest discover -s tests</code></pre></li>
+    <li><strong>Start the console.</strong>
+<pre data-file="terminal"><code class="language-bash">python experiment_console.py</code></pre></li>
+  </ol>
+  <div class="callout warning"><span class="callout-title">Python version and PsychoPy</span>The repository does not state a Python version. PsychoPy is the most demanding dependency (it plays the sounds and reads the keyboard); check its own installation instructions for the Python versions it supports before creating the environment. The recording engine's header recommends the Psychtoolbox audio backend for "the best onset precision" (<code>pip install psychtoolbox</code>, <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/oddball_paradigm_with_lsl.py#L55-L57"><code>oddball_paradigm_with_lsl.py</code>, lines 55 to 57</a>), and asks to run sessions "from a plain terminal ... with other heavy applications closed".</div>
+  <div class="callout danger"><span class="callout-title">Probable problem with NumPy 2.4 or later</span>The signal check computes band powers with <code>np.trapz</code> (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/portiloop_setup.py#L203"><code>portiloop_setup.py</code>, line 203</a>). NumPy removed this function in version 2.4: "<code>numpy.trapz</code>: deprecated since NumPy 2.0 (2023-08-18). Use <code>numpy.trapezoid</code> or <code>scipy.integrate</code> functions instead." [5]. Because the requirements do not pin NumPy, a new installation may get 2.4 or later, and the channel metrics of the signal check would then fail. We did not run it; if you see an <code>AttributeError</code> about <code>trapz</code>, installing a NumPy older than 2.4 should avoid it (untested).</div>
+  <p><strong>Operating systems.</strong> The README and code mention Windows, macOS and Linux. When you select an audio output, the console fixes the task's stream gain at 50% and asks the operating system to set its output volume to 50% (README lines 470 to 473): with <code>osascript</code> on macOS, through pycaw on Windows, with <code>pactl</code> or <code>wpctl</code> on Linux (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/audio/system_volume.py#L37-L86"><code>tmda_pav/audio/system_volume.py</code></a>). If it cannot verify the level, it asks you to set it by hand. On Windows the output list uses "the same WASAPI endpoint view that PsychoPy uses for playback" (README line 475).</p>
+
+  <h2 id="folders">Data and Shared folders, and the identifiers</h2>
+  <p>The console keeps two folders, which can be anywhere (for example in a folder synchronised between laptops; the README mentions Syncthing): <strong>Data</strong> "contains recordings, sound files, checkpoints, and derivatives" and <strong>Shared</strong> "contains ID-list operations, task protocols, and experiment sequences" (README lines 410 to 411). <strong>Create Data + Shared...</strong> makes both. The recording hierarchy is:</p>
+<pre data-file="README.md, lines 415 to 439"><code class="language-text">Data/
+  _laptops/
+    Laptop ID/
+      audio_latency.json
+      latency_runs/
+  Environment ID/
+    environment_baseline_YYYYMMDDTHHMMSSZ.wav
+    environment_baseline_YYYYMMDDTHHMMSSZ.json
+    Subject ID/
+      sl_calibration.json
+      Session ID/
+        activemmn_001_2026-09-27/
+        restingstate_pre_001_2026-09-27/
+        activemmn_post_002_2026-09-27/
+
+Shared/
+  id_events/
+  participant_ids/
+    laptop_letter_events/
+  protocols/
+    session_sequence_events/
+    sequences/</code></pre>
+  <ul>
+    <li><strong>Environment ID</strong>: the place where you record (for example a lab room or a field site). The quiet-room microphone baseline belongs to it, and the sensation-level calibration is per subject and per environment.</li>
+    <li><strong>Subject ID</strong>: the participant. <strong>Generate participant ID...</strong> creates "a short random ID containing the selected collection laptop's stable letter, such as <code>A7KMP</code>" (README lines 457 to 459). Never use names.</li>
+    <li><strong>Session ID</strong>: "identifies the study protocol, while the task suffix and iteration distinguish repeated measurements" (README lines 194 to 195). Each Session ID can be associated with one saved sequence.</li>
+    <li><strong>Laptop ID</strong>: the computer; the audio-latency calibration belongs to it.</li>
+    <li><strong>Suffix</strong> (optional): a label such as <code>pre</code> or <code>post</code>. The analyses use the suffixes <code>pre</code> and <code>post</code> to build within-subject comparisons.</li>
+  </ul>
+  <p>Each task run gets its own folder, named <code>task[_suffix]_NNN_YYYY-MM-DD</code> (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/experiment/task_session.py#L90-L126"><code>task_session.py</code>, lines 90 to 126</a>), with the task tokens <code>activemmn</code>, <code>passivemmn</code>, <code>restingstate</code>, <code>slcalibration</code> and <code>audiolatency</code>. The identifier lists themselves are stored as one small file per change in <code>Shared/id_events</code>, so that several laptops working offline do not overwrite each other (README lines 441 to 455).</p>
+
+  <h2 id="signal-check">The signal-quality console</h2>
+  <p>Before recording, run the signal check (task "Portiloop signal check", <code>portiloop_setup.py</code>). Its docstring is explicit about what it is:</p>
+  <blockquote class="quote">"Live, waveform-based setup checks for the FatigueMMN Portiloop montage. The monitor reads the LSL stream without modifying or recording the MMN task. It does not measure electrode impedance."<cite>portiloop_setup.py, lines 12 to 14 [1]</cite></blockquote>
+  <p>So the impedance check stays in the Portiloop's Check tab (<a href="03-control-center.html#check">tutorial 03</a>). The add-on's console shows, for the selected electrodes, the last 10 s of traces (optionally filtered: defaults high-pass 1 Hz, low-pass 40 Hz, notch 60 Hz, <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/config/montage.py#L22-L26"><code>montage.py</code>, lines 22 to 26</a>), a power spectrum over 30 s, and a table of metrics per channel computed on the last 2 s (drift on the last 10 s). The flags come from fixed rules (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/portiloop_setup.py#L209-L353"><code>compute_channel_metrics</code>, lines 209 to 353</a>):</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Flag</th><th>Rule in the code</th><th>Level</th></tr></thead>
+    <tbody>
+      <tr><td>flat or frozen</td><td>robust range ≤ 0, or more than 98% of consecutive samples identical</td><td>BAD</td></tr>
+      <tr><td>possible clipping</td><td>more than 2% of samples at the minimum or maximum</td><td>BAD</td></tr>
+      <tr><td>very small vs EEG channels</td><td>robust range (1st to 99th percentile) under 0.10 times the median of the EEG channels</td><td>BAD</td></tr>
+      <tr><td>peak-to-peak &gt; 200 uV</td><td>peak-to-peak over <code>HIGH_PTP_UV = 200.0</code></td><td>CHECK</td></tr>
+      <tr><td>very large vs EEG channels</td><td>robust range over 5 times the median of the EEG channels</td><td>CHECK</td></tr>
+      <tr><td>60 Hz dominates</td><td>power 58 to 62 Hz over power 1 to 30 Hz above 0.5</td><td>CHECK</td></tr>
+      <tr><td>strong slow drift</td><td>power 0.1 to 1 Hz over power 1 to 30 Hz above 3</td><td>CHECK</td></tr>
+      <tr><td>high-frequency noise</td><td>power 30 to 45 Hz over power 1 to 30 Hz above 1</td><td>CHECK</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout warning"><span class="callout-title">In a 50 Hz country</span>The line-noise rule looks only at 58 to 62 Hz. Where the mains are at 50 Hz (as in the CLAS protocol of tutorials 01 to 05), it will not flag mains noise; look at the spectrum yourself, and set the display notch to 50 Hz in the montage editor's filter settings.</div>
+  <p>Three <strong>guided checks</strong> record a short, instructed segment (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/portiloop_setup.py#L173-L189"><code>CHECK_DEFINITIONS</code>, lines 173 to 189</a>):</p>
+  <ul>
+    <li><strong>Quiet check</strong> (20 s): "Relax, look forward, and remain as still as possible." It reports how many channels are flagged.</li>
+    <li><strong>Blink check</strong> (12 s): "Blink firmly three times, with a short pause between blinks." It compares the range of EOG1 minus EOG2 with the quiet check (it needs two channels of type EOG).</li>
+    <li><strong>Eyes-closed check</strong> (20 s): "Close your eyes, relax, and remain still until the countdown ends." It compares the 8 to 13 Hz fraction at a channel named Pz with the quiet check, and says itself: "this is supportive, not pass/fail."</li>
+  </ul>
+  <p><strong>Save QC Report</strong> writes <code>setup_quality_&lt;time&gt;.json</code>, a channel CSV and trace and spectrum images in the session folder; the JSON records the montage, the filters, the stream and the guided checks, with the sentence "Waveform-based signal plausibility only; no electrode impedance or contact resistance was measured." The experiment console can warn before a recording if no report matches the identity and input map (this warning is "opt-in under EEG montage", README line 97).</p>
+  <p>The current version also has an <strong>Oscillations</strong> tab (band RMS over the last minute, in 1 s windows), a scalp topography that needs MNE, and a "Separate periodic / aperiodic" option, which the README calls "an exploratory live estimate, not the offline FOOOF peak model" (lines 89 to 115). The <strong>Portiloop EEG</strong> button at the top of the experiment console opens the same monitor without asking for identifiers and without saving.</p>
+
+  <h3 id="standalone">The standalone signal check</h3>
+  <p>The README describes a "generated single-file copy of the setup console", <code>dist/portiloop_setup_standalone.py</code>, built by <code>python tools/build_portiloop_setup_standalone.py</code>, that needs only Python and five libraries (numpy, scipy, matplotlib, PySide6, pylsl) and opens "without requesting Environment, Subject, or Session IDs" (lines 136 to 160). The <code>dist/</code> folder is not in the repository (it is ignored by <code>.gitignore</code>): you build the file yourself.</p>
+  <p>The Portiloop repository contains such a file, <code>examples/portiloop_check_standalone.py</code>, with <code>examples/portiloop_check_standalone_requirements.txt</code>. We compared it with the add-on's sources, without running either: it is a <strong>build from an earlier version</strong>. It embeds 7 modules where the current build script lists 13; it has no Oscillations tab, no periodic/aperiodic option, no "Hardware REF" setting (it always writes TP9) and no quick monitor mode; and its embedded modules do not carry the license header lines. Its traces, spectrum, metrics table, guided checks and QC report follow the same rules as above. If you need the features described in the README, build the standalone from the add-on's repository.</p>
+
+  <h2 id="montage">Montage and reference</h2>
+  <p>The Portiloop streams its eight inputs in a fixed order; the add-on gives them names and types. Its default montage is defined in <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/config/montage.py#L16-L44"><code>tmda_pav/config/montage.py</code>, lines 16 to 44</a>:</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Portiloop input</th><th>Field Console default</th><th>CLAS overnight protocol (<a href="02-preparation.html">tutorial 02</a>)</th></tr></thead>
+    <tbody>
+      <tr><td>CH1</td><td>TP10 (EEG)</td><td>ECG1</td></tr>
+      <tr><td>CH2</td><td>Fz (EEG)</td><td>ECG2</td></tr>
+      <tr><td>CH3</td><td>Cz (EEG)</td><td>EOG1</td></tr>
+      <tr><td>CH4</td><td>FC1 (EEG)</td><td>EOG2</td></tr>
+      <tr><td>CH5</td><td>FC2 (EEG)</td><td>EMG (chin)</td></tr>
+      <tr><td>CH6</td><td>Pz (EEG)</td><td>Cz</td></tr>
+      <tr><td>CH7</td><td>EOG1 (EOG)</td><td>Fz</td></tr>
+      <tr><td>CH8</td><td>EOG2 (EOG)</td><td>Fpz</td></tr>
+      <tr><td>REF</td><td>TP9 (left mastoid)</td><td>right mastoid</td></tr>
+      <tr><td>BIAS</td><td>left earlobe</td><td>right earlobe</td></tr>
+    </tbody>
+  </table></div>
+  <p>The two montages are different. If you wire the participant as for a CLAS night, you must tell the add-on, in <strong>Edit EEG montage...</strong>:</p>
+  <blockquote class="quote">"Enter the electrode name and signal type for each physical Portiloop input, or use the arrows to swap two adjacent assignments. CH1-CH8 are the original LSL inputs: the tool changes which electrode label is assigned to each input, not the order of the samples arriving from the device. REF and BIAS are separate hardware connections."<cite>README.md, lines 117 to 121 [1]</cite></blockquote>
+  <p>The editor also has a <strong>Hardware REF electrode</strong> field, which "records physical wiring; it does not electronically change the device reference" (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/docs/eeg_reference.md#L68-L76"><code>docs/eeg_reference.md</code>, lines 68 to 76</a>). With "Use one mapping for all EEG tasks" checked, the mapping is saved on the laptop and used for every new recording launched from the console (README lines 123 to 129). Names matter for the analyses: the MMN analysis averages the electrodes named Fz, Cz, FC1 and FC2 that exist, the eyes-closed check needs a channel named Pz, the blink check needs two channels of type EOG, and the resting-state analysis uses Fz, Cz and Pz.</p>
+  <blockquote class="quote">"Existing data is not relabelled. Each new EEG run saves its input map in `recording_montage.json`. To resume an interrupted run, restore the matching physical wiring and input map; otherwise start a new run. After changing assignments, run a new Portiloop signal check before collecting data."<cite>README.md, lines 131 to 134 [1]</cite></blockquote>
+
+  <h3 id="reference">Re-referencing after the recording</h3>
+  <p>Every Portiloop channel is recorded against the REF electrode. The utility <strong>EEG utility: montage and reference</strong> (<code>eeg_montage.py</code>) writes a re-referenced copy of a FIF file, never the original (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/docs/eeg_reference.md">docs/eeg_reference.md</a>). It follows MNE's procedure: the original reference is added back as a channel of zeros, then the mean of the selected electrodes is subtracted from every EEG channel.</p>
+  <blockquote class="quote">"Each EEG channel is then transformed by subtracting the mean of the selected electrodes. Thus the recovered Cz becomes `Cz - mean(TP9, TP10)`, not an absolute potential measurement. ... An arbitrary unmeasured scalp electrode cannot be recovered this way."<cite>docs/eeg_reference.md, lines 26 to 31 [1]</cite></blockquote>
+  <p>With the default wiring (REF on TP9, TP10 recorded on CH1), choosing TP9 and TP10 as the new reference gives each electrode minus the mean of the two mastoids (the restored TP9 is zero, so the subtraction is half of TP10). The copy is saved beside the source as, for example, <code>subject_ref-mean_TP9_TP10_raw.fif</code> with a <code>.reference.json</code> audit file; EOG, ECG, EMG and trigger channels are unchanged and no filtering is applied.</p>
+  <div class="callout neuro"><span class="callout-title">For neuroscientists</span>The MMN is usually largest at fronto-central sites and inverts in polarity at the mastoids when the nose or an average reference is used [6]; a mastoid reference therefore reduces part of the fronto-central MMN. Decide the reference before analysing, and use the same one for every participant: the analyses do not re-reference by themselves (the P1-N1-P2 provenance says "reference": "unchanged from main MMN preprocessing").</div>
+
+  <h2 id="sound">Sound level: output, baseline and sensation level</h2>
+  <p>The tasks need three things that the console checks at launch (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/experiment_console.py#L2950-L3010"><code>experiment_console.py</code>, lines 2950 to 3010</a>):</p>
+  <ul>
+    <li><strong>A fixed audio output</strong>: the stream gain is 50% (<code>DEFAULT_AUDIO_VOLUME_PCT = 50.0</code>) and the system volume is set to 50%. Keep the operating-system and headphone volume unchanged between calibration and tasks (README "Troubleshooting Order", line 600).</li>
+    <li><strong>A quiet-room baseline</strong> recorded with the selected microphone (<strong>Record quiet baseline</strong>, 10 s by default, 1 to 300 s). Every EEG task also records the microphone in parallel, and the sound level above that baseline becomes FIF annotations such as <code>SOUND_ABOVE_BASELINE_10_20_DB</code>. The levels are "dBFS (digital full scale), not absolute dB SPL" (README lines 479 to 490).</li>
+    <li><strong>A sensation-level (SL) calibration</strong> for the subject in this environment (task "SL calibration", <code>sl_task.py</code>). The participant hears a 200 ms burst every second and adjusts it with the arrow keys, in 2 dB steps from -60 dBFS, "until they can just barely hear it (detection threshold), then confirms with SPACE" (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/sl_task.py#L18-L20"><code>sl_task.py</code>, lines 18 to 20</a>). The task level is set 40 dB above that threshold by default (capped at 0 dBFS, with a warning), and the result is saved as <code>sl_calibration.json</code> in the subject folder. This is a single method-of-adjustment estimate, not a staircase.</li>
+  </ul>
+  <div class="callout warning"><span class="callout-title">Calibrate with the sound you will use</span>By default the SL task uses <strong>white</strong> noise (<code>"noise_type", "Noise color", "white"</code>, <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/config/task_protocols.py#L72-L86"><code>task_protocols.py</code>, line 74</a>), while the MMN stimuli are <strong>pink</strong> noise (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/config/multifeature.py#L61"><code>multifeature.py</code>, line 61</a>). The README itself says: "Changing a sound's spectrum, RMS, or duration can change its hearing threshold; redo SL calibration with a representative stimulus and the same sound output." (lines 222 to 223). Set the SL protocol's noise colour to pink if you use the default MMN sounds, or check with the author which was used for the published data.</div>
+
+  <h2 id="latency">Audio latency: why and how it is measured</h2>
+  <p>The laptop knows when it <em>asked</em> for a sound, not when the sound reached the ear. Between the two there are the audio buffers of the operating system and the sound card; and between the sound at the ear and the time stamp of the EEG sample that contains the response there is also the acquisition and streaming delay of the Portiloop. An ERP is an average of epochs cut at the event times: a constant error in those times shifts every latency you measure, and a variable error also smears and flattens the average. The add-on measures the whole chain once per laptop and output, and adds the mean to every auditory event time.</p>
+  <p><strong>How it measures it.</strong> The task "Computer audio latency calibration" (<code>audio_latency_task.py</code>) plays a pink-noise burst, records <code>pylsl.local_clock()</code> "immediately after PsychoPy Sound.play" as the trigger time, and looks for the first electrical transient of that sound on a Portiloop input, in the same LSL stream and time stamps as the EEG (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/tasks/audio_latency.py#L842-L910"><code>tmda_pav/tasks/audio_latency.py</code>, lines 842 to 910</a>). For this, the headphone output is wired, through an attenuator, to an electrode input. Its defaults:</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Setting</th><th>Default</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Trials</td><td>100, checkpoint every 10</td><td><code>task_protocols.py</code>, lines 87 to 98</td></tr>
+      <tr><td>Stimulus</td><td>pink noise, 1 s, 0.1% of digital full scale</td><td>same; <code>audio_latency.py</code>, lines 100 to 106</td></tr>
+      <tr><td>Detection filter</td><td>1 to 40 Hz (4th-order Butterworth, applied forward and backward)</td><td><code>tmda_pav/analysis/audio_latency.py</code>, lines 29 to 97</td></tr>
+      <tr><td>Threshold</td><td>8 robust standard deviations of a 200 ms baseline, at least 1 µV; onset searched in the first 80 ms</td><td><code>audio_latency.py</code>, lines 109 to 111; <code>detect_filtered_transient</code>, lines 408 to 425</td></tr>
+      <tr><td>Detection method</td><td>"Automatic: cable transient, then other channels" (or selected input only, or broadband on the other channels)</td><td><code>audio_latency.py</code>, lines 523 to 533</td></tr>
+      <tr><td>Accepted calibration</td><td>at least 10 detected onsets; warning if the delays span more than 10 ms</td><td>lines 1337, 1427; <code>analysis/audio_latency.py</code>, line 932</td></tr>
+    </tbody>
+  </table></div>
+  <p>The accepted result, with the mean, median, standard deviation and range of the delays, is saved as <code>Data/_laptops/&lt;Laptop ID&gt;/audio_latency.json</code>, with the instruction "Add mean_delay_ms to software sound-trigger timestamps before ERP epoching." Every run (accepted or not) keeps its trials, raw EEG and a summary figure under <code>latency_runs/</code>.</p>
+  <div class="callout danger"><span class="callout-title">Safety: no participant on the loopback</span>"This is an electrical fixture test only: no participant may be connected, and the headphone output must be appropriately isolated or attenuated before it is connected to an EEG input." (README lines 511 to 513). The task asks you to confirm "I confirm that no participant is connected and the test connection is safe." The repository does not describe the fixture (connector, attenuator values); we do not know what the author used, so ask before building one.</div>
+  <p><strong>How it is applied.</strong> In the MMN tasks every sound's event time is <code>actual_onset = pylsl.local_clock() + AUDIO_LATENCY_SEC</code>, taken right after <code>snd.play()</code>, the same definition of the trigger as in the calibration (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/oddball_paradigm_with_lsl.py#L2583-L2589"><code>oddball_paradigm_with_lsl.py</code>, lines 2583 to 2589</a>), and <code>AUDIO_LATENCY_SEC</code> is the calibration's <code>mean_delay_ms</code> for this laptop, output, backend and gain (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/oddball_paradigm_with_lsl.py#L906-L924">lines 906 to 924</a>). Reaction times are measured from that corrected time. If no matching calibration exists, the console asks before launching and the task uses zero correction; every FIF records what was applied (<code>TMDA_PAV_AUDIO_LATENCY_JSON</code> in its description). Older recordings can be corrected afterwards, into a new file, with <strong>EEG utility: apply laptop audio latency</strong> or <code>update_audio_latency.py ... --assume-uncorrected</code> (README lines 522 to 542).</p>
+
+  <div class="widget" id="lat">
+    <div class="widget-title">What a delay does to an ERP, and what the correction can and cannot fix</div>
+    <p class="widget-desc">What to try: raise the delay and watch the uncorrected average move later; raise the trial-to-trial jitter and watch every average become smaller and wider, corrected or not. <strong>Illustrative</strong>: the "true" response is an invented P1-N1-P2 shape and the delays are example values, not measurements of any laptop.</p>
+    <div class="controls">
+      <label for="lat-d">Constant delay (ms) <input type="range" id="lat-d" min="0" max="100" step="1" value="40"><output for="lat-d"></output></label>
+      <label for="lat-j">Jitter, SD (ms) <input type="range" id="lat-j" min="0" max="15" step="0.5" value="2"><output for="lat-j"></output></label>
+    </div>
+    <canvas class="plot lat" id="lat-plot" aria-label="True response, average on software triggers, and corrected average"></canvas>
+    <div class="readout">
+      <div><div class="k">N1 latency, true</div><div class="v" id="lat-t">…</div></div>
+      <div><div class="k">N1, uncorrected</div><div class="v" id="lat-u">…</div></div>
+      <div><div class="k">N1, corrected</div><div class="v" id="lat-c">…</div></div>
+      <div><div class="k">N1 amplitude kept</div><div class="v" id="lat-a">…</div></div>
+    </div>
+    <div class="status" id="lat-status"></div>
+  </div>
+  <p>The widget shows the two parts of the problem. The constant delay is what the calibration measures and removes. The jitter (the part of the delay that changes from sound to sound) cannot be removed by adding one number: it widens and lowers the average, which is why the calibration warns when the delays span more than 10 ms. Two limits of the measurement itself: the EEG is sampled every 4 ms at 250 Hz, and a filter applied forward and backward spreads a sudden change both later and earlier in time, so the first threshold crossing of the filtered trace may come slightly before the true onset. The repository does not quantify this, and we have not measured it.</p>
+
+  <h2 id="tasks">The tasks</h2>
+  <p>All recorded tasks run in a PsychoPy window, record the Portiloop stream in a background thread, write everything to a live SQLite recovery file at least once per second, and can be resumed after an interruption ("Resume", "Start new" or "Cancel"; README lines 544 to 563). The parameters come from presets: each task has <strong>Default settings</strong>, and you can save your own under <code>Shared/protocols/&lt;task-kind&gt;/</code>. The defaults below are those of <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/config/task_protocols.py#L48-L119"><code>task_protocols.py</code>, lines 48 to 119</a> and <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/config/multifeature.py#L46-L88"><code>multifeature.py</code>, lines 46 to 88</a>; the repository contains no other preset file for these tasks. The parameters of each run are frozen in <code>task_parameters.json</code>.</p>
+
+  <h3 id="mmn">Active and passive gap-deviant MMN</h3>
+  <p>The mismatch negativity (MMN) is a negative deflection of the ERP to a sound that breaks a regularity of the preceding sounds; it is recorded with an oddball sequence of frequent "standards" and rare "deviants" and is visible as the deviant-minus-standard difference wave [6]. Here every sound is a 200 ms burst of pink noise; a deviant is the same burst with a short silent gap starting 100 ms after its onset.</p>
+  <div class="scroll-x"><table>
+    <thead><tr><th>Parameter</th><th>Active MMN</th><th>Passive MMN</th></tr></thead>
+    <tbody>
+      <tr><td>Sound</td><td colspan="2">pink noise, 200 ms, RMS 0.20 before level scaling, 1 ms raised-cosine onset and offset ramps</td></tr>
+      <tr><td>Deviants</td><td colspan="2"><code>dev5</code>, <code>dev10</code>, <code>dev15</code>: silent gap of 5, 10 or 15 ms starting at 100 ms, with 1 ms linear ramps on each side (<code>min(1, gap/4)</code> ms)</td></tr>
+      <tr><td>Stimulus onset asynchrony</td><td colspan="2">600 ms (200 ms sound, 400 ms silence)</td></tr>
+      <tr><td>Standards before each deviant</td><td colspan="2">1, 2 or 3 with probabilities 35%, 40%, 25%; so deviants are never adjacent</td></tr>
+      <tr><td>Deviant balance</td><td colspan="2">blocks of 6 deviants, 2 of each type, shuffled</td></tr>
+      <tr><td>Duration</td><td colspan="2">900 s: round(900 / 0.6) = 1,500 sounds (or a trial count, if set)</td></tr>
+      <tr><td>Blocks and breaks</td><td>every 180 s: 300 sounds, 5 blocks</td><td>every 300 s: 500 sounds, 3 blocks</td></tr>
+      <tr><td>Habituation</td><td colspan="2">10 standards at the start of every block, marked and excluded from analysis</td></tr>
+      <tr><td>Response</td><td>SPACE when a change is heard; a hit is the first press 0.1 to 1.0 s after a deviant; every other press is a false alarm</td><td>none: "Listen to the sounds without making a response."</td></tr>
+      <tr><td>Rapid QC at the end</td><td colspan="2">yes; optional 180 s extensions</td></tr>
+    </tbody>
+  </table></div>
+  <p>The sequence is built by <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/experiment/trials.py#L15-L82"><code>build_trial_sequence</code> and <code>build_blocked_trial_sequence</code></a>: within each block, after the habituation standards, it repeats "draw a run of 1 to 3 standards, then take the next deviant from a shuffled block of six". The expected run length is 1 × 0.35 + 2 × 0.40 + 3 × 0.25 = 1.9 standards, so about 1 sound in 2.9 (34%) is a deviant. With our own re-implementation of these two functions (not the add-on's code) and 2,000 random draws, the active task has on average 498.5 deviants (476 to 516), about 166 of each type, among its 1,450 non-habituation sounds; the passive task 506.0 (485 to 525) among 1,470. The order of operations when the deviant is built matters: noise, outer ramps, RMS normalisation, then the gap, then the calibrated level; the gap is "deliberately inserted after normalization", because renormalising "would raise the level of its remaining noise and add a second cue besides the gap" (README lines 578 to 591).</p>
+  <p>The active and passive tasks are preceded, in the console, by <strong>Active MMN training</strong> (<code>oddball_active_training.py</code>): examples of each sound (2 repetitions by default) and 25 s of response practice with feedback, without EEG recording. At the end of an MMN recording, a <strong>rapid MMN review</strong> computes, while the EEG keeps recording, each deviant's mean difference in the 100 to 250 ms window at mean(Fz, Cz, FC1, FC2), its retention and its standardised measurement error (SME, Luck and colleagues' measure of the precision of a score [7]); the experimenter can then "stop and save or continue recording an additional extension" (README lines 396 to 403; defaults in <code>multifeature.py</code>, lines 81 to 87: SME criterion 0.5 µV, at least 10 clean pairs per deviant; band-pass 1 to 25 Hz, <code>oddball_paradigm_with_lsl.py</code>, lines 281 to 282).</p>
+
+  <div class="widget" id="odd">
+    <div class="widget-title">The oddball sequence and a schematic MMN</div>
+    <p class="widget-desc">What to try: switch between the active and passive tasks and between sections of a block; draw another random sequence; pick a sound to see its waveform and the gap. The sequence follows the add-on's rules and default parameters, drawn with this page's own random generator (the add-on uses NumPy's, so its exact order differs). The last plot is a <strong>schematic</strong>, invented to show what a difference wave (deviant minus standard) is, not data; its shaded band is the window the add-on scores offline (150 to 250 ms) and the vertical line marks the gap onset (100 ms).</p>
+    <div class="controls">
+      <label for="odd-task">Task <select id="odd-task"><option value="active">Active MMN</option><option value="passive">Passive MMN</option></select></label>
+      <label for="odd-view">Show <select id="odd-view"><option value="0">Start of block 1</option><option value="mid">Middle of block 1</option><option value="b2">End of block 1, start of block 2</option></select></label>
+      <label for="odd-seed">Random draw <input type="range" id="odd-seed" min="1" max="30" step="1" value="1"><output for="odd-seed"></output></label>
+    </div>
+    <div class="legend-row" aria-hidden="true"><span><i style="background:var(--fg-muted)"></i>habituation standard</span><span><i style="background:var(--plot-c1)"></i>standard</span><span><i style="background:var(--plot-c3)"></i>dev5</span><span><i style="background:var(--plot-c2)"></i>dev10</span><span><i style="background:var(--plot-c5)"></i>dev15</span></div>
+    <canvas class="plot seq" id="odd-seq" aria-label="Sequence of 40 sounds"></canvas>
+    <div class="readout">
+      <div><div class="k">Sounds in the task</div><div class="v" id="odd-n">…</div></div>
+      <div><div class="k">Blocks × sounds</div><div class="v" id="odd-b">…</div></div>
+      <div><div class="k">Deviants (this draw)</div><div class="v" id="odd-d">…</div></div>
+      <div><div class="k">dev5 / dev10 / dev15</div><div class="v" id="odd-t">…</div></div>
+    </div>
+    <div class="controls">
+      <label for="odd-snd">Sound <select id="odd-snd"><option value="0">standard</option><option value="5">dev5 (5 ms gap)</option><option value="10" selected>dev10 (10 ms gap)</option><option value="15">dev15 (15 ms gap)</option></select></label>
+      <label><input type="checkbox" id="odd-zoom" checked> Zoom on 90 to 130 ms</label>
+    </div>
+    <canvas class="plot token" id="odd-tok" aria-label="Waveform of one sound"></canvas>
+    <canvas class="plot erp" id="odd-erp" aria-label="Schematic standard and deviant ERPs and their difference"></canvas>
+    <div class="status" id="odd-status"></div>
+  </div>
+  <div class="callout neuro"><span class="callout-title">For neuroscientists</span>For a gap deviant, the deviance begins at the gap, 100 ms after the sound onset, and all epochs are time-locked to the sound onset. The offline MMN window, 150 to 250 ms after onset (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/analysis/erp_metrics.py#L16-L17"><code>erp_metrics.py</code>, lines 16 to 17</a>), is therefore 50 to 150 ms after the gap. The 5 ms gap is described in the engine as "near/below perceptual threshold for most listeners", the 15 ms gap as "clearly audible" (lines 235 to 237); the active task's hit rates per deviant tell you how detectable each one was for each participant. Note also that with about one deviant in three sounds (each deviant type about one in nine), deviants are more frequent here than in a classic oddball.</div>
+
+  <h3 id="rest">Eyes-closed resting state</h3>
+  <p><code>resting_state.py</code> records an eyes-closed rest of 180 s by default, after preparation screens (devices, posture, relaxation, blinking). The participant reads "Close your eyes now and sit quietly. Try not to move or blink. Keep your eyes CLOSED until you hear the gong." and a gong ends the rest (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/oddball_paradigm_with_lsl.py#L622-L669"><code>run_resting_state</code>, lines 622 to 669</a>). The gong is <code>assets/rest_end_gong.wav</code> by default, played at 40 dB above the participant's threshold. (The file <code>assets/GONG_FILE_INSTRUCTIONS.txt</code> says 28 dB SL, "12 dB below the 40 dB SL MMN stimulus setting"; the code's default is 40 dB SL. It also asks you to confirm that the WAV's license permits its use.) The rest is saved as <code>&lt;subject&gt;_&lt;session&gt;_&lt;run folder&gt;_rest_pre_raw.fif</code>; give the runs the suffixes <code>pre</code> and <code>post</code> to have them compared.</p>
+
+  <h3 id="sequencer">The sequencer</h3>
+  <p>The <strong>Sequence</strong> tab of the console stores an ordered list of steps, each with its task, its save suffix and an embedded copy of its parameters, saved as JSON under <code>Shared/protocols/sequences</code>. The example in the repository is a pre/post design:</p>
+<pre data-file="protocol_presets/sequence_example.json (steps, condensed)"><code class="language-json">{"name": "Example pre-post experiment",
+ "steps": [{"task_key": "rest",            "suffix": "pre"},
+           {"task_key": "active_training", "suffix": "pre"},
+           {"task_key": "active",          "suffix": "pre"},
+           {"task_key": "rest",            "suffix": "post"}]}</code></pre>
+  <p>When you press <strong>Start sequence</strong>, the selected environment, subject, session, laptop, audio output and microphone are fixed for the whole sequence; each step goes through the same checks as a single launch (calibration, baseline, signal check, audio latency, resume); a step that fails or is interrupted stops the sequence "instead of skipping ahead"; <strong>Start from selected step</strong> resumes from a chosen step (README lines 162 to 198). The signal check is not a step: it is "a parallel setup tool rather than a bounded experiment step". Each Session ID is associated with one saved sequence.</p>
+
+  <h2 id="outputs">The output files</h2>
+  <div class="callout disk"><span class="callout-title">On the hard drive: one MMN run</span>In <code>Data/&lt;Environment&gt;/&lt;Subject&gt;/&lt;Session&gt;/activemmn[_suffix]_NNN_YYYY-MM-DD/</code> (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/oddball_paradigm_with_lsl.py#L1096-L1111"><code>oddball_paradigm_with_lsl.py</code>, lines 1096 to 1111</a>):
+    <ul class="tight">
+      <li><code>&lt;subject&gt;_&lt;session&gt;_&lt;run folder&gt;_raw.fif</code>: the EEG in MNE's FIF format (volts), with the channel names and types of the montage, the events as annotations and as a <code>STI 014</code> trigger channel (codes STANDARD 1, STANDARD_PRE 2, DEV5 4, DEV10 8, DEV15 16, HIT 32, FALSE_ALARM 64, HABITUATION_STANDARD 128), and audit records of the audio latency and the reference in its description; readable by MNE and, as the header says, by Brainstorm;</li>
+      <li><code>oddball_eeg_raw.npz</code>: the same samples with their LSL time stamps and labels (a NumPy backup);</li>
+      <li><code>oddball_behavior.csv</code> (one row per sound: type, planned and actual onset, block, habituation, response, RT, outcome), <code>oddball_keypresses.csv</code>, <code>oddball_false_alarms.csv</code>, <code>oddball_summary.pdf</code>;</li>
+      <li><code>rapid_mmn_qc.json</code> and its figure; <code>checkpoints/</code> (one FIF per completed block); <code>oddball_eeg_live.sqlite3</code> (the recovery recording);</li>
+      <li><code>task_state.json</code>, <code>task_parameters.json</code> and <code>recording_montage.json</code> (the input map of this run);</li>
+      <li>the microphone recording of the run (WAV and JSON) and an <code>*_environment_audio_levels.png</code> overview.</li>
+    </ul>
+    Elsewhere: <code>sl_calibration.json</code> in the subject folder, <code>setup_quality_*.json</code> in the session folder, <code>Data/_laptops/&lt;Laptop ID&gt;/audio_latency.json</code>, and the analyses in <code>Data/_derivatives/</code>.</div>
+  <p>The engine also notes that the amplitudes are saved as received: "<code>CORRECTION_FACTOR</code> is currently applied uniformly to all 8 channels ... This has NOT been verified per-channel" (its value is 1.0; lines 207 and 215 to 217). Since the Portiloop already streams microvolts, a factor of 1.0 leaves them unchanged.</p>
+
+  <h2 id="analyses">The analyses</h2>
+  <p>Analyses run from the <strong>Analysis</strong> tab of the console (a recording table where you tick the files) or from the command line, for example <code>python mne_analysis.py --select --database-dir /path/to/Data</code>. Each run creates a new folder <code>Data/_derivatives/&lt;analysis-name&gt;/&lt;UTC-timestamp&gt;_&lt;token&gt;/</code> with <code>subjects_summary.csv</code> (exactly one row per Subject ID, with columns per suffix, environment and session), <code>recordings.csv</code>, <code>summary_columns.json</code>, <code>analysis_run.json</code> and one folder per recording; nothing earlier is overwritten (README lines 243 to 287). Read the subject column as text, as the README recommends: <code>pd.read_csv(path, dtype={"subject": str})</code>.</p>
+
+  <h3 id="a-mmn">MMN ERP and time-frequency (<code>mne_analysis.py</code>)</h3>
+  <ol class="tight">
+    <li>EOG1 minus EOG2 as a derived EOG channel; band-pass 1 to 25 Hz; Picard ICA to remove EOG-linked components when found (recordings of at least 30 s);</li>
+    <li>epochs -200 to +600 ms around each sound, linear detrend, baseline -200 to 0 ms;</li>
+    <li>rejection of epochs above 100 µV peak-to-peak on EEG or 500 µV on the derived EOG;</li>
+    <li>averages per condition; difference waves "Each deviant minus all retained STANDARD and STANDARD_PRE trials (habituation standards excluded)" at mean(Fz, Cz, FC1, FC2);</li>
+    <li>signed area and peaks in the MMN (150 to 250 ms) and P3 (250 to 350 ms) windows; Morlet time-frequency power from 4 to 25 Hz; first and second halves and per-block measures with SME, split-half waveform correlations over 50 to 350 ms and a bootstrap interval of the change (500 repetitions, fixed seed).</li>
+  </ol>
+  <p>Source: <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/mne_analysis.py#L8-L52">docstring, lines 8 to 52</a> and <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/mne_analysis.py#L103-L120">settings, lines 103 to 120</a>.</p>
+
+  <h3 id="a-p1n1p2">P1-N1-P2 to standards (<code>mmn_standard_erp_analysis.py</code>)</h3>
+  <p>The same preprocessing and epochs; the standards (and, separately, all stimuli) excluding habituation; local-peak amplitudes and latencies, window means, signed area and P1-to-N1 and N1-to-P2 peak-to-peak values at each electrode and at the cluster. Default windows (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/analysis_presets/mmn_erp_scoring.json"><code>analysis_presets/mmn_erp_scoring.json</code></a>): P1 30 to 80 ms, N1 80 to 150 ms, P2 150 to 250 ms, MMN 150 to 250 ms, P3 250 to 350 ms; "These windows are configurable, not universal physiological definitions." A peak needs two samples decreasing away on each side, following McArthur and colleagues [8] (README lines 345 to 371).</p>
+
+  <h3 id="a-behaviour">Active MMN behaviour (<code>mmn_behavior_analysis.py</code>)</h3>
+  <p>Hit rate, reaction time and d' overall, per block and per deviant. d' uses the log-linear correction of all four cells, hit rate (hits + 0.5)/(signals + 1) and false-alarm rate (false alarms + 0.5)/(noise trials + 1) (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/analysis/mmn_behavior.py#L41-L47"><code>mmn_behavior.py</code>, lines 41 to 47</a>; Hautus [9]). A false alarm counts "only once per eligible standard". Passive recordings are excluded.</p>
+
+  <h3 id="a-rest">Resting state (<code>mne_analysis.py --rest</code>)</h3>
+  <p>EEG band-pass 1 to 70 Hz and a 60 Hz notch; 4 s windows with 2 s overlap, rejected above 500 µV; Welch spectra; band power delta 1 to 4, theta 4 to 8, alpha 8 to 13, beta 13 to 30, gamma 30 to 55 Hz at Fz, Cz and Pz; the ratio Fz theta / Pz alpha; band RMS in 1 s windows over time; a FOOOF fit (fixed aperiodic mode, 1 to 55 Hz) for periodic band power and the aperiodic exponent; and pre/post differences within session when runs have the suffixes <code>pre</code> and <code>post</code> (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/mne_analysis.py#L139-L161"><code>mne_analysis.py</code>, lines 139 to 161</a>).</p>
+  <div class="callout warning"><span class="callout-title">The resting-state notch is fixed at 60 Hz</span><code>REST_NOTCH_HZ = 60.0</code> (line 149) has no command-line option. At a 50 Hz site, the mains frequency falls inside the gamma band (30 to 55 Hz) and inside the 1 to 70 Hz band-pass. Change this constant (and check the gamma results) before analysing 50 Hz recordings.</div>
+
+  <h3 id="stats">Statistics</h3>
+  <p>The README summarises:</p>
+  <blockquote class="quote">"Permutation reports give two-sided sign-flip p-values and Benjamini-Hochberg adjusted p-values across component/condition tests within each report (within each context for pre/post). They assume exchangeable signs under the null; strong serial dependence or order effects warrant caution. These are window-level tests, not evidence that an individual peak or time point is significant."<cite>README.md, lines 80 to 85 [1]</cite></blockquote>
+  <p>In the code (<a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/analysis/erp_permutation.py"><code>tmda_pav/analysis/erp_permutation.py</code></a>; SciPy's <code>permutation_test</code>, 4,999 resamples, seed 2026; false discovery rate with <code>mne.stats.fdr_correction</code>, whose default is the Benjamini-Hochberg procedure [10]):</p>
+  <ul>
+    <li><strong>P1-N1-P2</strong>: within each recording, the trial window means of a component are tested against zero by sign flips.</li>
+    <li><strong>MMN, within a recording</strong>: the deviant trials' window means are compared with the window means of all retained standards by permuting the condition labels ("Independent-label permutation, not sign flips of shared-reference trials", line 17), for each deviant and for all deviants pooled, in the MMN and P3 windows.</li>
+    <li><strong>MMN, group pre/post</strong> ("Create MMN grand average and matched pre/post CI95 plots"): participants with both <code>pre</code> and <code>post</code>; pointwise Student-t 95% intervals across participants ("not simultaneous bands"), and sign-flip tests of post minus pre per participant.</li>
+  </ul>
+  <div class="callout danger"><span class="callout-title">README and code disagree on the MMN reference</span>The README says the paired permutation CSV tests each deviant "using its own preceding retained standard in the same block" (lines 65 to 67), that halves and blocks pair "each deviant ... with its immediately preceding non-habituation standard" (lines 324 to 326), and that the rapid review analyses each deviant "against its immediately preceding standard" (lines 397 to 398). The code at this commit does otherwise: the reference is the mean of all retained standards excluding habituation (<code>REFERENCE_METHOD = "all_retained_task_standards_excluding_habituation"</code>, <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/tmda_pav/analysis/mmn_reference.py#L8-L23"><code>mmn_reference.py</code>, lines 8 to 23</a>), used by the halves and blocks, the rapid review and the permutation test, and the within-recording MMN test permutes labels rather than flipping signs. Report the method from the code (and the commit) in a paper, or ask the author.</div>
+  <p>These are tests within one recording (are this participant's deviant trials different from their standards?) or, for pre/post, across participants. For a group study, the usual approach is to take one value per participant and condition from <code>subjects_summary.csv</code> and test it across participants, as in <a href="09-study.html">tutorial 09</a>.</p>
+
+  <h2 id="session">A session, step by step</h2>
+  <ol class="steps">
+    <li><strong>Once per laptop and audio output</strong>: run the audio-latency calibration on the loopback fixture, with no participant.</li>
+    <li><strong>Once per environment</strong>: create the Environment ID and record the quiet baseline with the microphone you will use.</li>
+    <li><strong>Participant</strong>: generate or select the Subject ID and Session ID; place the electrodes; set the montage if the wiring differs from the default.</li>
+    <li><strong>Portiloop</strong>: Check tab with all electrodes, "Acquisition only", "Stream LSL", Start (<a href="#portiloop-settings">above</a>).</li>
+    <li><strong>Signal check</strong>: traces and flags, the three guided checks, Save QC Report.</li>
+    <li><strong>SL calibration</strong> (once per subject and environment), with the stimulus you will use.</li>
+    <li><strong>Tasks</strong>: launch them one by one, or start the session's sequence. Do not touch the volume.</li>
+    <li><strong>End</strong>: Stop on the Portiloop after the last task; copy <code>Data</code> (and the Portiloop's CSV backup, if any).</li>
+  </ol>
+
+  <h2 id="verified">What is verified and what is not</h2>
+  <div class="scroll-x"><table class="verified">
+    <thead><tr><th>Statement</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Stream names published by Portiloop v2.3 and the stream used by the add-on</td><td>Read in both codes (output.py; montage.py line 14). Not tested with a device.</td></tr>
+      <tr><td>Portiloop settings for a wake session ("Acquisition only", "Stream LSL", Start)</td><td>Our deduction from the Portiloop code; not documented by the add-on; not tested.</td></tr>
+      <tr><td>Task parameters, sequence rules, output names, analysis settings, statistics</td><td>Read in the code at commit 49356cd, with links. Trial counts computed with our re-implementation of the sequence functions, not with the add-on.</td></tr>
+      <tr><td>The add-on runs, its windows look as described, its tests pass</td><td><strong>Not verified</strong>: we did not install or run it (downloaded code, not executed).</td></tr>
+      <tr><td>Timing precision of the sounds; size of the audio delay on any laptop</td><td><strong>Unknown</strong>. The widget values are illustrative.</td></tr>
+      <tr><td>Effect of the zero-phase detection filter on the measured delay</td><td><strong>Unknown</strong>; not quantified in the repository.</td></tr>
+      <tr><td>Failure with NumPy 2.4 or later</td><td>Inferred from the code and NumPy's release notes [5]; not reproduced.</td></tr>
+      <tr><td><code>examples/portiloop_check_standalone.py</code> is an older build</td><td>Compared source text without running it (7 embedded modules versus 13; features listed above).</td></tr>
+      <tr><td>Which parameters (for example the SL noise colour) were used for the published data</td><td><strong>Unknown</strong>.</td></tr>
+      <tr><td>The license that applies</td><td>The LICENSE file says MIT; the README, CITATION.cff and file headers say PolyForm Noncommercial. Not resolved.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="issues">Other inconsistencies in the add-on's documentation</h3>
+  <p>The header comment of <code>oddball_paradigm_with_lsl.py</code> is partly older than its settings: it gives standard run-length probabilities ".50/.35/.15" (line 29) where the code uses 35/40/25% (line 247 and <code>multifeature.py</code>, line 68); a hit window of "200-1000 ms" (line 34) where the code uses 100 to 1000 ms (line 272); a ramp comment "2 ms is enough" next to a value of 1.0 ms (lines 242 to 243). The fallback sensation level is 50 dB (line 255, used only without an SL calibration) where the SL task's default is 40 dB. <code>CITATION.cff</code>'s abstract lists "FFR, PVT, cMSIT, resting-state, and questionnaire tasks", most of which are not in this release. Trust the parameters saved in each run's <code>task_parameters.json</code>.</p>
+
+  <h2 id="exercises">Exercises</h2>
+  <details class="exercise"><summary>Counting trials</summary><p>With the default active MMN settings, how many sounds are played, how many blocks are there, and roughly how many deviants of each type? How do the numbers change for the passive task?</p></details>
+  <details class="solution"><summary>Answer</summary><p>Active: round(900 / 0.6) = 1,500 sounds, blocks of round(180 / 0.6) = 300 sounds, so 5 blocks and 50 habituation standards. About 1 sound in 2.9 of the remaining 1,450 is a deviant: about 500 deviants, about 166 of each type (our re-implementation gives 476 to 516 over 2,000 draws). Passive: also 1,500 sounds, but in 3 blocks of 500, so 30 habituation standards and about 506 deviants. Breaks and the rapid review add time to the 15 minutes of sounds.</p></details>
+
+  <details class="exercise"><summary>Overnight wiring for a wake session</summary><p>A participant comes for a wake session wearing the CLAS overnight montage (tutorial 02). What must you change in the Field Console before recording, and which parts of the signal check and of the analyses will not work?</p></details>
+  <details class="solution"><summary>Answer</summary><p>In <strong>Edit EEG montage...</strong>: CH1 ECG1 and CH2 ECG2 (type ecg), CH3 EOG1 and CH4 EOG2 (type eog), CH5 EMG (type emg), CH6 Cz, CH7 Fz, CH8 Fpz (type eeg), and the Hardware REF field set to the right mastoid (TP10 in 10-10 names). Then run a new signal check. The blink check works (two EOG channels); the eyes-closed check does not (no channel named Pz). The MMN cluster becomes mean(Fz, Cz), since only the existing names are used; the resting analysis has no Pz, so the Fz theta / Pz alpha ratio is not available. The recording keeps its input map in <code>recording_montage.json</code>.</p></details>
+
+  <details class="exercise"><summary>A forgotten calibration</summary><p>You recorded three participants on a new laptop before running the audio-latency calibration. What did the add-on do with the event times, and how do you fix the recordings?</p></details>
+  <details class="solution"><summary>Answer</summary><p>Without a matching calibration the console asks before launching and, if you continue, the task uses zero correction; the FIF records that no correction was applied. Run the calibration with the same laptop, output, backend and gain, then use <strong>EEG utility: apply laptop audio latency</strong> (or <code>update_audio_latency.py</code>), which writes a new <code>_latency_&lt;value&gt;ms_raw.fif</code> with the annotations and STI 014 markers shifted by the new correction minus the previous one. Files without the audit metadata need <code>--assume-uncorrected</code>. The originals are kept.</p></details>
+
+  <details class="exercise"><summary>A site with 50 Hz mains</summary><p>The study runs where the mains are at 50 Hz. List what you would change or watch in the Field Console.</p></details>
+  <details class="solution"><summary>Answer</summary><p>Set the display notch to 50 Hz in the montage editor's filter settings; do not rely on the "60 Hz dominates" flag, which looks only at 58 to 62 Hz, and inspect the spectrum instead; change <code>REST_NOTCH_HZ</code> in <code>mne_analysis.py</code> to 50 before the resting-state analysis (otherwise 50 Hz mains fall in the gamma band and inside the 1 to 70 Hz band-pass). The MMN analysis is low-passed at 25 Hz, so the mains matter less there. The Portiloop's own notch setting does not change the raw stream used by the add-on.</p></details>
+
+  <h2 id="references">References</h2>
+  <ol class="refs">
+    <li>Augereau TMD. Portiloop Field Console (TMDA-PAV), commit 49356cd, 26 November 2026. <a href="https://github.com/TomsCoder/Portiloop-Field-Console/tree/49356cdcb1b06dd464e9a9ba372a41d141ca1685">github.com/TomsCoder/Portiloop-Field-Console</a>. All file and line references on this page are to this commit.</li>
+    <li>Portiloop Field Console, <code>CITATION.cff</code>, version 1.0.0. <a href="https://github.com/TomsCoder/Portiloop-Field-Console/blob/49356cdcb1b06dd464e9a9ba372a41d141ca1685/CITATION.cff">CITATION.cff</a>.</li>
+    <li>Lab Streaming Layer documentation, "LSL configuration files". <a href="https://labstreaminglayer.readthedocs.io/info/lslapicfg.html">labstreaminglayer.readthedocs.io/info/lslapicfg.html</a>.</li>
+    <li>liblsl source, <code>src/api_config.cpp</code> (order of the configuration files). <a href="https://github.com/sccn/liblsl/blob/master/src/api_config.cpp">github.com/sccn/liblsl</a>.</li>
+    <li>NumPy 2.4.0 release notes, "Removal of deprecated functions and arguments". <a href="https://numpy.org/devdocs/release/2.4.0-notes.html">numpy.org/devdocs/release/2.4.0-notes.html</a>.</li>
+    <li>Näätänen R, Paavilainen P, Rinne T, Alho K (2007). The mismatch negativity (MMN) in basic research of central auditory processing: a review. <em>Clinical Neurophysiology</em> 118(12): 2544-2590. <a href="https://doi.org/10.1016/j.clinph.2007.04.026">doi:10.1016/j.clinph.2007.04.026</a></li>
+    <li>Luck SJ, Stewart AX, Simmons AM, Rhemtulla M (2021). Standardized measurement error: a universal metric of data quality for averaged event-related potentials. <em>Psychophysiology</em> 58(6): e13793. <a href="https://doi.org/10.1111/psyp.13793">doi:10.1111/psyp.13793</a></li>
+    <li>McArthur GM, Bishop DVM, Proudfoot M (2003). Do video sounds interfere with auditory event-related potentials? <em>Behavior Research Methods, Instruments, &amp; Computers</em> 35(2): 329-333. <a href="https://doi.org/10.3758/BF03202561">doi:10.3758/BF03202561</a></li>
+    <li>Hautus MJ (1995). Corrections for extreme proportions and their biasing effects on estimated values of d'. <em>Behavior Research Methods, Instruments, &amp; Computers</em> 27(1): 46-51. <a href="https://doi.org/10.3758/BF03203619">doi:10.3758/BF03203619</a></li>
+    <li>Benjamini Y, Hochberg Y (1995). Controlling the false discovery rate: a practical and powerful approach to multiple testing. <em>Journal of the Royal Statistical Society, Series B</em> 57(1): 289-300. <a href="https://doi.org/10.1111/j.2517-6161.1995.tb02031.x">doi:10.1111/j.2517-6161.1995.tb02031.x</a></li>
+  </ol>
+
+</article>
+</main>
+
+<script src="../assets/js/portiloop.js"></script>
+<script src="../assets/js/data.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = PL.ui.$;
+
+  /* ---------------- Widget 1: oddball sequence (rules of tmda_pav/experiment/trials.py, default parameters) */
+  const RUN_PROBS = [[1, 0.35], [2, 0.40], [3, 0.25]];      // multifeature.py line 68
+  const DEV_TYPES = ["dev5", "dev10", "dev15"];               // task_protocols.py lines 113-117
+  const BLOCK6 = 2 * DEV_TYPES.length;                         // parameters.py line 74
+  const SOA = 0.6, STIM = 0.2, DURATION = 900, HAB = 10;      // multifeature.py lines 51-58
+  const BLOCK_SEC = { active: 180, passive: 300 };            // task_protocols.py line 111
+
+  function shuffle(a, r) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r.uniform() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function runLength(r) { const u = r.uniform(); let c = 0; for (const [k, p] of RUN_PROBS) { c += p; if (u < c) return k; } return 3; }
+  function trialSequence(n, r) {
+    const seq = []; let pool = [];
+    while (seq.length < n) {
+      if (!pool.length) {
+        pool = [];
+        DEV_TYPES.forEach((t) => { for (let k = 0; k < BLOCK6 / DEV_TYPES.length; k++) pool.push(t); });
+        shuffle(pool, r);
+        if (seq.length && seq[seq.length - 1] === pool[0]) {
+          for (let i = 1; i < pool.length; i++) if (pool[i] !== pool[0]) { const t = pool[0]; pool[0] = pool[i]; pool[i] = t; break; }
+        }
+      }
+      const k = runLength(r);
+      for (let i = 0; i < k; i++) seq.push("standard");
+      seq.push(pool.shift());
+    }
+    return seq.slice(0, n);
+  }
+  function blockedSequence(task, seed) {
+    const r = PL.rng(seed * 7919 + (task === "passive" ? 17 : 3));
+    const n = Math.round(DURATION / SOA), per = Math.max(1, Math.round(BLOCK_SEC[task] / SOA));
+    const seq = [], hab = [];
+    while (seq.length < n) {
+      const L = Math.min(per, n - seq.length), hc = Math.min(HAB, L), oc = L - hc;
+      for (let i = 0; i < hc; i++) { seq.push("standard"); hab.push(true); }
+      if (oc) trialSequence(oc, r).forEach((s) => { seq.push(s); hab.push(false); });
+    }
+    return { seq, hab, n, per, blocks: Math.ceil(n / per) };
+  }
+  const COL = { hab: "text", standard: "c1", dev5: "c3", dev10: "c2", dev15: "c5" };
+
+  let S = null;
+  function computeSeq() { S = blockedSequence($("#odd-task").value, parseInt($("#odd-seed").value, 10)); }
+  function drawSeq() {
+    const cv = $("#odd-seq"), view = $("#odd-view").value, N = 40;
+    let start = 0;
+    if (view === "mid") start = Math.floor(S.per / 2) - 20;
+    if (view === "b2") start = S.per - 20;
+    const dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 600, H = cv.clientHeight || 150;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    const ml = 8, mr = 8, top = 26, base = H - 30, span = N * SOA;
+    const X = (t) => ml + t / span * (W - ml - mr);
+    ctx.font = "12px " + (getComputedStyle(document.documentElement).getPropertyValue("--font-sans") || "system-ui");
+    ctx.strokeStyle = PL.color("grid"); ctx.beginPath(); ctx.moveTo(ml, base + 0.5); ctx.lineTo(W - mr, base + 0.5); ctx.stroke();
+    ctx.fillStyle = PL.color("text"); ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let s = 0; s <= span + 1e-9; s += 6) { const px = X(s); ctx.fillText(s.toFixed(0) + " s", Math.min(Math.max(px, 14), W - 14), base + 6); }
+    for (let i = 0; i < N; i++) {
+      const idx = start + i; if (idx >= S.seq.length) break;
+      const typ = S.seq[idx], isHab = S.hab[idx];
+      const x0 = X(i * SOA), x1 = X(i * SOA + STIM);
+      const h = typ === "standard" ? 34 : 60;
+      ctx.fillStyle = PL.color(isHab ? COL.hab : COL[typ]);
+      ctx.globalAlpha = isHab ? 0.55 : 1;
+      ctx.fillRect(x0, base - h, Math.max(2, x1 - x0), h);
+      ctx.globalAlpha = 1;
+      if (typ !== "standard" && W > 420) { ctx.fillStyle = PL.color("text"); ctx.textBaseline = "bottom"; ctx.fillText(typ.slice(3), (x0 + x1) / 2, base - h - 2); ctx.textBaseline = "top"; }
+      if (idx % S.per === 0) {
+        ctx.strokeStyle = PL.color("warn"); ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(x0 - 2, 4); ctx.lineTo(x0 - 2, base); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = PL.color("warn"); ctx.textAlign = "left"; ctx.textBaseline = "top";
+        ctx.fillText("block " + (Math.floor(idx / S.per) + 1) + (idx > 0 ? " (after a break)" : ""), x0 + 2, 4);
+        ctx.textAlign = "center";
+      }
+    }
+    ctx.textAlign = "left"; ctx.fillStyle = PL.color("text"); ctx.textBaseline = "top";
+    if (!(start % S.per === 0)) ctx.fillText("sounds " + (start + 1) + " to " + (start + N) + " of " + S.n, ml, 4);
+    // readouts over the whole task
+    const counts = DEV_TYPES.map((t) => S.seq.filter((s) => s === t).length);
+    const nd = counts.reduce((a, b) => a + b, 0), nonHab = S.hab.filter((h) => !h).length;
+    $("#odd-n").textContent = S.n.toLocaleString("en-US") + " (" + (S.n * SOA / 60).toFixed(0) + " min)";
+    $("#odd-b").textContent = S.blocks + " × " + S.per;
+    $("#odd-d").textContent = nd + " (" + (100 * nd / nonHab).toFixed(1) + "%)";
+    $("#odd-t").textContent = counts.join(" / ");
+  }
+
+  // one sound: noise -> 1 ms raised-cosine outer ramps -> RMS 0.20 -> gap (linear ramps of min(1, gap/4) ms) [stimuli.py, multifeature.py]
+  const FSA = 44100;
+  let tok = null;
+  function makeToken(gapMs) {
+    const r = PL.rng(424242), n = Math.round(STIM * FSA), x = new Float64Array(n);
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0; // pink-noise approximation (P. Kellet's filter)
+    for (let i = 0; i < n; i++) {
+      const w = r.gaussian();
+      b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.96900 * b2 + w * 0.1538520;
+      b3 = 0.86650 * b3 + w * 0.3104856; b4 = 0.55000 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.0168980;
+      x[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362; b6 = w * 0.115926;
+    }
+    const rs = Math.round(0.001 * FSA);
+    for (let i = 0; i < rs; i++) { const g = 0.5 * (1 - Math.cos(Math.PI * i / (rs - 1))); x[i] *= g; x[n - 1 - i] *= g; }
+    let ss = 0; for (let i = 0; i < n; i++) ss += x[i] * x[i];
+    const k = 0.2 / Math.sqrt(ss / n); for (let i = 0; i < n; i++) x[i] *= k;
+    if (gapMs > 0) {
+      const st = Math.round(0.1 * FSA), sp = Math.min(st + Math.round(gapMs / 1000 * FSA), n), gr = Math.round(Math.min(1, gapMs / 4) / 1000 * FSA);
+      for (let i = 0; i < gr; i++) x[st - gr + i] *= 1 - i / (gr - 1);
+      for (let i = st; i < sp; i++) x[i] = 0;
+      for (let i = 0; i < gr; i++) x[sp + i] *= i / (gr - 1);
+    }
+    const t = new Float64Array(n); for (let i = 0; i < n; i++) t[i] = i / FSA * 1000;
+    return { t, x };
+  }
+  function drawToken() {
+    const g = parseInt($("#odd-snd").value, 10), zoom = $("#odd-zoom").checked;
+    tok = makeToken(g);
+    const regions = g ? [{ x0: 100, x1: 100 + g, color: "rgba(196,86,29,0.18)", label: "silent gap (" + g + " ms)" }] : [];
+    PL.plot($("#odd-tok"), {
+      xRange: zoom ? [90, 130] : [0, 200], yRange: [-1, 1], xLabel: "Time from sound onset (ms)", yLabel: "Amplitude",
+      title: g ? "dev" + g + ": the same noise with a gap at 100 ms" : "Standard: 200 ms of noise",
+      series: [{ x: Array.from(tok.t), y: Array.from(tok.x), color: PL.color("c1"), width: 1 }], regions,
+    });
+  }
+  // schematic ERPs (invented shapes, for illustration only)
+  function gauss(t, mu, sd, a) { return a * Math.exp(-0.5 * Math.pow((t - mu) / sd, 2)); }
+  function drawErp() {
+    const t = [], s = [], d = [], diff = [];
+    for (let ms = -100; ms <= 500; ms += 2) {
+      const std = gauss(ms, 50, 12, 1.0) + gauss(ms, 100, 18, -2.0) + gauss(ms, 180, 30, 1.5);
+      const mmn = gauss(ms, 200, 35, -1.6);
+      t.push(ms); s.push(std); d.push(std + mmn); diff.push(mmn);
+    }
+    PL.plot($("#odd-erp"), {
+      xRange: [-100, 500], yRange: [-4, window.innerWidth < 600 ? 6 : 3.5], xLabel: "Time from sound onset (ms)", yLabel: "µV (schematic)",
+      title: "Schematic ERPs, not data",
+      regions: [{ x0: 150, x1: 250, color: "rgba(107,70,193,0.13)", label: "MMN window" }],
+      markers: [{ x: 100, color: PL.color("warn") }],
+      series: [
+        { x: t, y: s, color: PL.color("c1"), width: 1.4, label: "standard" },
+        { x: t, y: d, color: PL.color("c2"), width: 1.4, label: "deviant" },
+        { x: t, y: diff, color: PL.color("c4"), width: 2.2, label: "difference" },
+      ],
+    });
+  }
+  function redrawOdd() { if (!S) computeSeq(); drawSeq(); drawToken(); drawErp(); }
+  PL.ui.bind("#odd-task", () => { computeSeq(); drawSeq(); });
+  PL.ui.bind("#odd-view", () => drawSeq());
+  PL.ui.bind("#odd-seed", () => { computeSeq(); drawSeq(); });
+  PL.ui.bind("#odd-snd", () => drawToken());
+  PL.ui.bind("#odd-zoom", () => drawToken());
+  $("#odd-status").textContent = "Rules and defaults from trials.py, multifeature.py and task_protocols.py (commit 49356cd). Noise drawn with an approximate pink-noise filter; the add-on shapes white noise by 1/√f in the frequency domain.";
+
+  /* ---------------- Widget 2: audio latency (illustrative) */
+  function trueErp(ms) { return gauss(ms, 50, 10, 1.5) + gauss(ms, 100, 14, -4.0) + gauss(ms, 180, 25, 2.5); }
+  function averaged(shiftMs, sdMs) {
+    const t = [], y = [];
+    const K = sdMs > 0 ? Math.ceil(4 * sdMs) : 0;
+    for (let ms = -100; ms <= 400; ms += 1) {
+      let acc = 0, wsum = 0;
+      if (K === 0) { acc = trueErp(ms - shiftMs); wsum = 1; }
+      else for (let e = -K; e <= K; e += 0.5) { const w = Math.exp(-0.5 * (e / sdMs) * (e / sdMs)); acc += w * trueErp(ms - shiftMs - e); wsum += w; }
+      t.push(ms); y.push(acc / wsum);
+    }
+    return { t, y };
+  }
+  function n1(c) { let bi = 0; for (let i = 0; i < c.t.length; i++) if (c.t[i] > 0 && c.t[i] < 300 && c.y[i] < c.y[bi]) bi = i; return { lat: c.t[bi], amp: c.y[bi] }; }
+  function drawLat() {
+    const D = parseFloat($("#lat-d").value), J = parseFloat($("#lat-j").value);
+    const tr = averaged(0, 0), un = averaged(D, J), co = averaged(0, J);
+    PL.plot($("#lat-plot"), {
+      xRange: [-100, 400], yRange: [-5, window.innerWidth < 600 ? 6.5 : 4], xLabel: "Time from the event time used for epoching (ms)", yLabel: "µV (illustrative)",
+      markers: [{ x: 0, color: PL.color("text") }],
+      series: [
+        { x: un.t, y: un.y, color: PL.color("c2"), width: 1.8, label: "software trigger" },
+        { x: co.t, y: co.y, color: PL.color("c1"), width: 2.4, label: "corrected by the mean delay" },
+        { x: tr.t, y: tr.y, color: PL.color("text"), width: 1.4, dash: [4, 4], label: "true response" },
+      ],
+    });
+    const a = n1(tr), b = n1(un), c = n1(co);
+    $("#lat-t").textContent = a.lat + " ms";
+    $("#lat-u").textContent = b.lat + " ms";
+    $("#lat-c").textContent = c.lat + " ms";
+    $("#lat-a").textContent = (100 * c.amp / a.amp).toFixed(0) + "%";
+    $("#lat-status").textContent = "The correction adds the measured mean delay (here assumed exact) to every event time: it removes the shift, not the jitter. With 100 calibration trials, the mean itself is uncertain by about SD/10 = " + (J / 10).toFixed(2) + " ms (standard error).";
+  }
+  PL.ui.bind("#lat-d", drawLat, (v) => v.toFixed(0));
+  PL.ui.bind("#lat-j", drawLat, (v) => v.toFixed(1));
+
+  function all() { redrawOdd(); drawLat(); }
+  PL.onRedraw(all);
+  computeSeq(); all();
+})();
+</script>
+</body>
+</html>
